@@ -73,7 +73,6 @@ func (s *Service) isFailed(key string) bool {
 	return bad
 }
 
-// Bounded so a stream of distinct broken files can't grow this without limit.
 func (s *Service) markFailed(key string) {
 	s.mu.Lock()
 	if len(s.failed) >= maxFailed {
@@ -130,11 +129,6 @@ func (s *Service) Serve(w http.ResponseWriter, r *http.Request, v *vol.Volume, r
 
 // The source is handed to ffmpeg as fd 3 so it never resolves the path itself;
 // resolving it would follow symlinks out of the volume.
-//
-// ctx only governs how long this call is willing to wait for a semaphore slot
-// or another goroutine's in-flight render; once rendering itself starts it
-// runs to its own timeout so a shared render still finishes for other waiters
-// even after the caller that kicked it off gives up.
 func (s *Service) render(ctx context.Context, key string, src *os.File, kind, out string) error {
 	s.mu.Lock()
 	if ch, ok := s.inflight[key]; ok {
