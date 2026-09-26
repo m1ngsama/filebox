@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"strings"
 
+	"github.com/m1ngsama/filebox/internal/api"
 	"github.com/m1ngsama/filebox/internal/auth"
 	"github.com/m1ngsama/filebox/internal/db"
 	"github.com/m1ngsama/filebox/internal/httpx"
@@ -25,6 +26,7 @@ type App struct {
 func (a *App) Handler() http.Handler {
 	mux := http.NewServeMux()
 	mux.Handle("GET /raw/{vol}/{path...}", a.Auth.RequireAny(http.HandlerFunc(a.raw)))
+	(&api.API{Vols: a.Vols, DB: a.DB, Auth: a.Auth, Jobs: api.NewJobs()}).Register(mux)
 	mux.Handle("/", a.spa())
 	return common(http.NewCrossOriginProtection().Handler(mux))
 }
