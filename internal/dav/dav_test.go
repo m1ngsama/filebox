@@ -147,3 +147,52 @@ func TestDavMove(t *testing.T) {
 		t.Fatal(err)
 	}
 }
+
+func TestDavInfiniteDepth(t *testing.T) {
+	e := setup(t)
+	for _, d := range []string{"infinity", ""} {
+		r, _ := http.NewRequest("PROPFIND", e.srv.URL+"/dav/v/", nil)
+		r.SetBasicAuth("me", e.rw)
+		if d != "" {
+			r.Header.Set("Depth", d)
+		}
+		res, err := http.DefaultClient.Do(r)
+		if err != nil {
+			t.Fatal(err)
+		}
+		b, _ := io.ReadAll(res.Body)
+		res.Body.Close()
+		if res.StatusCode != 403 || !strings.Contains(string(b), "propfind-finite-depth") {
+			t.Errorf("depth %q: %d %s", d, res.StatusCode, b)
+		}
+	}
+}
+
+func TestDavReadOnlyMethods(t *testing.T) {
+	e := setup(t)
+	os.WriteFile(filepath.Join(e.dir, "a.txt"), []byte("x"), 0o644)
+	dst := []string{"Destination", e.srv.URL + "/dav/v/b.txt"}
+	cases := []struct {
+		method, path string
+		hdr          []string
+		want         int
+	}{
+		{"PUT", "/dav/v/n.txt", nil, 403},
+		{"MKCOL", "/dav/v/d", nil, 403},
+		{"MOVE", "/dav/v/a.txt", dst, 403},
+		{"COPY", "/dav/v/a.txt", dst, 403},
+		{"DELETE", "/dav/v/a.txt", nil, 403},
+		{"PROPPATCH", "/dav/v/a.txt", nil, 403},
+		{"LOCK", "/dav/v/a.txt", nil, 403},
+		{"GET", "/dav/v/a.txt", nil, 200},
+		{"PROPFIND", "/dav/v/", []string{"Depth", "1"}, 207},
+	}
+	for _, c := range cases {
+		if res, _ := e.req(t, e.ro, c.method, c.path, "", c.hdr...); res.StatusCode != c.want {
+			t.Errorf("%s %s = %d, want %d", c.method, c.path, res.StatusCode, c.want)
+		}
+	}
+	if _, err := os.Stat(filepath.Join(e.dir, "a.txt")); err != nil {
+		t.Fatal("read-only token changed the volume")
+	}
+}

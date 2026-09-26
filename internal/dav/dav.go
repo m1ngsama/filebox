@@ -35,8 +35,13 @@ func Handler(vols *vol.Set, a *auth.Auth) http.Handler {
 			http.Error(w, "read-only token", http.StatusForbidden)
 			return
 		}
-		// A browser holding cached Basic credentials would otherwise render
-		// uploaded HTML on this origin.
+		if d := r.Header.Get("Depth"); r.Method == "PROPFIND" && (d == "" || d == "infinity") {
+			w.Header().Set("Content-Type", `application/xml; charset="utf-8"`)
+			w.WriteHeader(http.StatusForbidden)
+			io.WriteString(w, `<?xml version="1.0" encoding="utf-8"?><D:error xmlns:D="DAV:"><D:propfind-finite-depth/></D:error>`)
+			return
+		}
+		// Browsers with cached Basic credentials would otherwise render uploaded HTML on this origin.
 		serve.SafeHeaders(w.Header(), "")
 		h.ServeHTTP(w, r)
 	}))
