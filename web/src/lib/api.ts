@@ -15,7 +15,7 @@ export type Loc = { vol: string; path: string }
 export type Share = { id: number; token: string; vol: string; path: string; mode: 'read' | 'upload' | 'drop'; has_password: boolean; expires: number; created: number; hits: number }
 export type Token = { id: number; label: string; readonly: boolean; created: number; last_used: number }
 export type TrashItem = { id: string; name: string; path: string; dir: boolean; size: number; deleted: number }
-export type ShareInfo = { name: string; dir: boolean; mode: Share['mode']; locked: boolean; size?: number }
+export type ShareInfo = { locked: true; mode: Share['mode'] } | { locked: false; mode: Share['mode']; name: string; dir: boolean; size?: number }
 
 export const session = { lost: () => {} }
 
@@ -41,9 +41,11 @@ export const enc = (p: string) => p.split('/').filter(Boolean).map(encodeURIComp
 export const filesURL = (vol: string, path: string) => `/files/${encodeURIComponent(vol)}/${enc(path)}${path ? '/' : ''}`
 export const rawURL = (vol: string, path: string, dl = false) => `/raw/${encodeURIComponent(vol)}/${enc(path)}${dl ? '?dl' : ''}`
 export const thumbURL = (vol: string, path: string) => `/thumb/${encodeURIComponent(vol)}/${enc(path)}`
-export const shareLink = (tok: string) => `${location.origin}/s/${tok}`
-export const shareRawURL = (tok: string, path: string, dl = false) => `/s/${tok}/raw/${enc(path)}${dl ? '?dl' : ''}`
-export const shareThumbURL = (tok: string, path: string) => `/s/${tok}/thumb/${enc(path)}`
+export const validShareToken = (tok: string) => /^[A-Za-z0-9_-]{22}$/.test(tok)
+export const shareURL = (tok: string) => `/s/${encodeURIComponent(tok)}`
+export const shareLink = (tok: string) => location.origin + shareURL(tok)
+export const shareRawURL = (tok: string, path: string, dl = false) => `${shareURL(tok)}/raw/${enc(path)}${dl ? '?dl' : ''}`
+export const shareThumbURL = (tok: string, path: string) => `${shareURL(tok)}/thumb/${enc(path)}`
 const q = (o: Record<string, string>) => new URLSearchParams(o).toString()
 
 export type JobStatus = { state: 'running' | 'done' | 'error'; code?: string; total: number; done: number }
@@ -77,7 +79,7 @@ export const api = {
   newShare: (s: { vol: string; path: string; mode: string; password: string; expires_in: number }) =>
     req<{ id: number; token: string }>('POST', '/api/shares', s),
   delShare: (id: number) => req<void>('DELETE', `/api/shares/${id}`),
-  shareInfo: (tok: string) => req<ShareInfo>('GET', `/s/${tok}/info`),
-  unlock: (tok: string, password: string) => req<void>('POST', `/s/${tok}/unlock`, { password }),
-  shareLs: (tok: string, path: string) => req<{ entries: Entry[] }>('GET', `/s/${tok}/ls?${q({ path })}`),
+  shareInfo: (tok: string) => req<ShareInfo>('GET', `${shareURL(tok)}/info`),
+  unlock: (tok: string, password: string) => req<void>('POST', `${shareURL(tok)}/unlock`, { password }),
+  shareLs: (tok: string, path: string) => req<{ entries: Entry[] }>('GET', `${shareURL(tok)}/ls?${q({ path })}`),
 }

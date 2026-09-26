@@ -116,12 +116,23 @@ test('password share opens anonymously', async ({ page, browser }) => {
   const url = await shareDocs(page, 'read', 'secret-pass')
   const anon = await browser.newPage()
   await anon.goto(url)
+  await expect(anon.getByPlaceholder(t.password)).toBeVisible()
+  await expect(anon.locator('body')).not.toContainText('docs')
   await anon.getByPlaceholder(t.password).fill('secret-pass')
   await anon.getByRole('button', { name: t.unlock, exact: true }).click()
   await row(anon, 'readme.txt').locator('button.name').click()
   await expect(anon.locator('.viewer pre')).toHaveText('hello\n')
   expect((await anon.request.get(`${url}/raw/readme.txt`)).status()).toBe(200)
   await anon.close()
+})
+
+test('malformed share token never reaches the API', async ({ page }) => {
+  await login(page)
+  const paths: string[] = []
+  page.on('request', (r) => paths.push(new URL(r.url()).pathname))
+  await page.goto('/s/..%2Fapi%2Flogout%3F')
+  await expect(page.getByText(t.shareGone)).toBeVisible()
+  expect(paths.filter((p) => p.startsWith('/api/'))).toEqual([])
 })
 
 test('drop share accepts uploads and hides contents', async ({ page, browser }) => {

@@ -1,6 +1,7 @@
 package app
 
 import (
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -247,5 +248,17 @@ func TestShareUploadRelativePath(t *testing.T) {
 		if c, _, _ := anon(f, "POST", up, "", "Tus-Resumable", "1.0.0", "Upload-Length", "0", "Upload-Metadata", md(rp)); c != 400 {
 			t.Errorf("%s → %d", rp, c)
 		}
+	}
+}
+
+func TestShareLockedInfoHidesName(t *testing.T) {
+	f := newTestApp(t)
+	f.write(t, "hidden-name.txt", "x")
+	tok := mkShare(t, f, `{"vol":"v","path":"hidden-name.txt","mode":"read","password":"open sesame"}`)
+	c, b, _ := anon(f, "GET", "/s/"+tok+"/info", "")
+	var got map[string]any
+	json.Unmarshal([]byte(b), &got)
+	if c != 200 || len(got) != 2 || got["locked"] != true || got["mode"] != "read" {
+		t.Fatalf("locked info %d %s", c, b)
 	}
 }

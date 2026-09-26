@@ -186,12 +186,15 @@ func (s *Service) info(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	locked := o.sh.PasswordHash != "" && !s.Auth.ShareUnlocked(r, o.sh.ID)
-	out := map[string]any{"name": path.Base(o.sh.Path), "dir": o.dir, "mode": o.sh.Mode, "locked": locked}
+	if o.sh.PasswordHash != "" && !s.Auth.ShareUnlocked(r, o.sh.ID) {
+		httpx.JSON(w, 200, map[string]any{"locked": true, "mode": o.sh.Mode})
+		return
+	}
+	out := map[string]any{"name": path.Base(o.sh.Path), "dir": o.dir, "mode": o.sh.Mode, "locked": false}
 	if o.sh.Path == "." {
 		out["name"] = o.v.Name
 	}
-	if !locked && !o.dir {
+	if !o.dir {
 		if e, err := api.Stat(o.v.Root, o.sh.Path); err == nil {
 			out["size"] = e.Size
 		}

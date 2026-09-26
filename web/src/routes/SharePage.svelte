@@ -8,7 +8,7 @@
   import EntryList, { type Action } from '../components/EntryList.svelte'
   import FileIcon from '../components/FileIcon.svelte'
   import Preview from '../components/Preview.svelte'
-  import { api, HttpError, shareRawURL, shareThumbURL, type Entry, type ShareInfo } from '../lib/api'
+  import { api, HttpError, shareRawURL, shareThumbURL, shareURL, validShareToken, type Entry, type ShareInfo } from '../lib/api'
   import { route, link, navigate } from '../lib/router.svelte'
   import { enqueue } from '../lib/uploads.svelte'
   import { arrange, size, thumbable, type Sort } from '../lib/format'
@@ -31,18 +31,23 @@
   let picker = $state<HTMLInputElement>()
   let broken = $state(false)
 
-  const base = $derived(`/s/${encodeURIComponent(token)}`)
+  const base = $derived(shareURL(token))
   const p = $derived(new URLSearchParams(route.search).get('p') ?? '')
   const crumbs = $derived(p ? p.split('/') : [])
   const join = (n: string) => (p ? `${p}/${n}` : n)
   const here = (sub: string) => (sub ? `${base}?${new URLSearchParams({ p: sub })}` : base)
   const shown = $derived(arrange(at === p ? entries : [], '', sort, desc))
-  const canUpload = $derived(info?.mode === 'upload' || info?.mode === 'drop')
-  const listed = $derived(!!info?.dir && !info.locked && info.mode !== 'drop')
-  const file = $derived<Entry | null>(info && !info.dir ? { name: info.name, dir: false, size: info.size ?? 0, mtime: 0 } : null)
+  const shared = $derived(info?.locked === false ? info : null)
+  const canUpload = $derived(shared?.mode === 'upload' || shared?.mode === 'drop')
+  const listed = $derived(!!shared?.dir && shared.mode !== 'drop')
+  const file = $derived<Entry | null>(shared && !shared.dir ? { name: shared.name, dir: false, size: shared.size ?? 0, mtime: 0 } : null)
 
   async function load() {
     fatal = ''
+    if (!validShareToken(token)) {
+      fatal = t.shareGone
+      return
+    }
     try {
       info = await api.shareInfo(token)
     } catch (e) {
@@ -89,7 +94,7 @@
     const sub = info?.mode === 'upload' ? p : ''
     enqueue(
       [...list].map((f) => ({ file: f, rel: sub ? `${sub}/${f.name}` : '' })),
-      `/s/${token}/upload/`,
+      `${base}/upload/`,
       {},
       () => listed && refresh(),
     )
@@ -120,7 +125,7 @@
   const hasFiles = (e: DragEvent) => !!e.dataTransfer?.types.includes('Files')
 </script>
 
-<svelte:head><title>{info?.name ?? t.brand}</title></svelte:head>
+<svelte:head><title>{shared?.name ?? t.brand}</title></svelte:head>
 <svelte:window ondragover={(e) => e.preventDefault()} ondrop={(e) => e.preventDefault()} />
 
 <div
@@ -145,22 +150,22 @@
 >
   <header class="bar public-bar">
     <span class="brand">{t.brand}</span>
-    {#if info}
+    {#if shared}
       {#if listed}
         <nav class="crumbs" aria-label={t.breadcrumb}>
-          <a href={here('')} onclick={link} aria-current={crumbs.length ? undefined : 'page'}>{info.name}</a>
+          <a href={here('')} onclick={link} aria-current={crumbs.length ? undefined : 'page'}>{shared.name}</a>
           {#each crumbs as c, i}
             <ChevronRight size={16} />
             <a href={here(crumbs.slice(0, i + 1).join('/'))} onclick={link} aria-current={i === crumbs.length - 1 ? 'page' : undefined}>{c}</a>
           {/each}
         </nav>
       {:else}
-        <h1 class="public-name" title={info.name}>{info.name}</h1>
+        <h1 class="public-name" title={shared.name}>{shared.name}</h1>
       {/if}
       <span class="grow"></span>
-      {#if file && !info.locked}
+      {#if file}
         <a class="button primary" href={shareRawURL(token, '', true)} download><Download size={18} />{t.download}</a>
-      {:else if listed && info.mode === 'upload'}
+      {:else if listed && shared.mode === 'upload'}
         <button class="primary" onclick={() => picker?.click()}><Upload size={18} />{t.upload}</button>
       {/if}
     {/if}
