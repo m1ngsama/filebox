@@ -173,6 +173,27 @@ func (s *Server) Handler(prefix string, p Policy) http.Handler {
 			httpx.Fail(w, 404, "not found")
 			return
 		}
+		if r.Method == http.MethodHead || r.Method == http.MethodPatch {
+			size, err := s.settle(ctx, u, id)
+			if err != nil {
+				httpx.Fail(w, 500, "internal error")
+				return
+			}
+			if size >= 0 {
+				n := strconv.FormatInt(size, 10)
+				h := w.Header()
+				h.Set("Tus-Resumable", "1.0.0")
+				h.Set("Cache-Control", "no-store")
+				h.Set("Upload-Offset", n)
+				h.Set("Upload-Length", n)
+				if r.Method == http.MethodHead {
+					w.WriteHeader(200)
+				} else {
+					w.WriteHeader(204)
+				}
+				return
+			}
+		}
 		r = r.Clone(ctx)
 		r.URL.Path, r.URL.RawPath = "/"+id, ""
 		u.h.ServeHTTP(&rewriter{ResponseWriter: w, prefix: prefix}, r)
@@ -220,6 +241,28 @@ func create(idx int, hook handler.HookEvent) (handler.HTTPResponse, handler.File
 		ID:       strconv.Itoa(idx) + "-" + rand.Text(),
 		MetaData: handler.MetaData{keyOwner: c.owner, keyDir: c.t.Dir, keyName: c.t.Name},
 	}, nil
+}
+
+func complete(ctx context.Context, u *volume, id string) (handler.FileInfo, bool) {
+	up, err := u.store.FileStore.GetUpload(ctx, id)
+	if err != nil {
+		return handler.FileInfo{}, false
+	}
+	info, err := up.GetInfo(ctx)
+	return info, err == nil && !info.SizeIsDeferred && info.Offset == info.Size
+}
+
+func (s *Server) settle(ctx context.Context, u *volume, id string) (int64, error) {
+	lk, _ := u.locker.NewLock(id)
+	if err := lk.Lock(ctx, nil); err != nil {
+		return -1, err
+	}
+	defer lk.Unlock()
+	info, ok := complete(ctx, u, id)
+	if !ok {
+		return -1, nil
+	}
+	return info.Size, s.finish(u, info)
 }
 
 func (s *Server) finish(u *volume, info handler.FileInfo) error {
@@ -272,7 +315,7 @@ func (s *Server) Sweep(maxAge time.Duration) {
 		}
 		for id := range ids {
 			if u.stale(id, cutoff) {
-				u.sweep(id, cutoff)
+				s.sweep(u, id, cutoff)
 			}
 		}
 	}
@@ -286,7 +329,7 @@ func (u *volume) stale(id string, cutoff time.Time) bool {
 	return err == nil && fi.ModTime().Before(cutoff)
 }
 
-func (u *volume) sweep(id string, cutoff time.Time) {
+func (s *Server) sweep(u *volume, id string, cutoff time.Time) {
 	lock, _ := u.locker.NewLock(id)
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 	defer cancel()
@@ -294,6 +337,10 @@ func (u *volume) sweep(id string, cutoff time.Time) {
 		return
 	}
 	defer lock.Unlock()
+	if info, ok := complete(ctx, u, id); ok {
+		s.finish(u, info)
+		return
+	}
 	if u.stale(id, cutoff) {
 		u.v.Root.Remove(path.Join(vol.UploadsDir, id))
 		u.v.Root.Remove(path.Join(vol.UploadsDir, id+".info"))

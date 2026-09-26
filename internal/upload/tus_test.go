@@ -350,3 +350,45 @@ func TestTusStorageErrorHidden(t *testing.T) {
 		t.Fatalf("%d %q", w.StatusCode, b)
 	}
 }
+
+func TestTusFinalizeFailureNotComplete(t *testing.T) {
+	e := setup(t)
+	os.WriteFile(filepath.Join(e.dir, "blocker"), []byte("file"), 0o644)
+	w := e.do("POST", "/up/", "", "Upload-Length", "3", "Upload-Metadata", meta("filename", "x.txt", "relativePath", "blocker/x.txt"))
+	loc := w.Header.Get("Location")
+	if w := e.patch(loc, 0, "abc"); w.StatusCode < 500 {
+		t.Fatalf("patch with failing finalize %d", w.StatusCode)
+	}
+	if w := e.do("HEAD", loc, ""); w.StatusCode < 300 {
+		t.Fatalf("head reported a stored upload: %d offset %q", w.StatusCode, w.Header.Get("Upload-Offset"))
+	}
+	if w := e.patch(loc, 3, ""); w.StatusCode < 300 {
+		t.Fatalf("patch at the end reported success: %d", w.StatusCode)
+	}
+	e.srv.Now = func() time.Time { return time.Now().Add(25 * time.Hour) }
+	e.srv.Sweep(24 * time.Hour)
+	id := strings.TrimPrefix(loc, "/up/")
+	if _, err := os.Stat(filepath.Join(e.dir, vol.UploadsDir, id)); err != nil {
+		t.Fatalf("sweep deleted a complete upload: %v", err)
+	}
+	os.Remove(filepath.Join(e.dir, "blocker"))
+	if w := e.do("HEAD", loc, ""); w.StatusCode != 200 || w.Header.Get("Upload-Offset") != "3" {
+		t.Fatalf("head after the cause is fixed %d %q", w.StatusCode, w.Header.Get("Upload-Offset"))
+	}
+	if b, _ := os.ReadFile(filepath.Join(e.dir, "blocker/x.txt")); string(b) != "abc" {
+		t.Fatalf("stored %q", b)
+	}
+}
+
+func TestTusSweepFinalizesComplete(t *testing.T) {
+	e := setup(t)
+	os.WriteFile(filepath.Join(e.dir, "blocker"), []byte("file"), 0o644)
+	w := e.do("POST", "/up/", "", "Upload-Length", "2", "Upload-Metadata", meta("filename", "y.txt", "relativePath", "blocker/y.txt"))
+	e.patch(w.Header.Get("Location"), 0, "hi")
+	os.Remove(filepath.Join(e.dir, "blocker"))
+	e.srv.Now = func() time.Time { return time.Now().Add(25 * time.Hour) }
+	e.srv.Sweep(24 * time.Hour)
+	if b, _ := os.ReadFile(filepath.Join(e.dir, "blocker/y.txt")); string(b) != "hi" {
+		t.Fatalf("sweep did not finalize the complete upload: %q", b)
+	}
+}
