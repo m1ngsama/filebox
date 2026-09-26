@@ -29,7 +29,7 @@ func Error(w http.ResponseWriter, err error) {
 	switch {
 	case errors.Is(err, fs.ErrNotExist) || errors.Is(err, db.ErrNotFound):
 		Fail(w, 404, "not found")
-	case errors.Is(err, fs.ErrExist):
+	case errors.Is(err, fs.ErrExist) || errors.Is(err, db.ErrConflict):
 		Fail(w, 409, "already exists")
 	case errors.Is(err, vol.ErrBadPath):
 		Fail(w, 400, "bad path")

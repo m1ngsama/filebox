@@ -5,7 +5,7 @@
   import ConfirmDialog from '../components/ConfirmDialog.svelte'
   import NameDialog from '../components/NameDialog.svelte'
   import { api, type Passkey, type Token } from '../lib/api'
-  import { addPasskey, deviceName, passkeyError } from '../lib/passkey'
+  import { addPasskey, deviceName, passkeyError, validPasskeyName } from '../lib/passkey'
   import { date, ago } from '../lib/format'
   import { t } from '../lib/i18n'
 
@@ -18,7 +18,9 @@
   let error = $state('')
   let busy = $state(false)
   let revoking = $state<Token | null>(null)
+  let passkeysOn = $state(false)
   let passkeys = $state<Passkey[] | null>(null)
+  let passkeysError = $state('')
   let adding = $state(false)
   let renaming = $state<Passkey | null>(null)
   let removing = $state<Passkey | null>(null)
@@ -36,8 +38,12 @@
 
   async function loadPasskeys() {
     try {
-      if ((await api.passkeysEnabled()).enabled) passkeys = (await api.passkeys()).passkeys
-    } catch {}
+      passkeysOn = (await api.passkeysEnabled()).enabled
+      if (passkeysOn) passkeys = (await api.passkeys()).passkeys
+      passkeysError = ''
+    } catch (e) {
+      passkeysError = (e as Error).message
+    }
   }
   loadPasskeys()
 
@@ -58,10 +64,13 @@
 </script>
 
 <section class="settings">
-  {#if passkeys}
+  {#if passkeysOn}
     <h2>{t.passkeys}</h2>
     <p class="hint">{t.passkeysHint}</p>
     <div><button class="primary" onclick={() => (adding = true)}>{t.addPasskey}</button></div>
+    {#if passkeysError}<p class="error">{passkeysError}</p>{/if}
+  {/if}
+  {#if passkeysOn && passkeys}
     <ul class="rows">
       {#each passkeys as k (k.id)}
         <li>
@@ -161,6 +170,7 @@
     action={t.add}
     value={deviceName()}
     fresh
+    valid={validPasskeyName}
     onsave={async (name) => {
       try {
         await addPasskey(name)
@@ -180,6 +190,7 @@
     label={t.name}
     action={t.rename}
     value={k.name}
+    valid={validPasskeyName}
     onsave={async (name) => {
       await api.renamePasskey(k.id, name)
       await loadPasskeys()

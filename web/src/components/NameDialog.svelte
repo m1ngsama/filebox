@@ -10,6 +10,7 @@
     value = '',
     stem = false,
     fresh = false,
+    valid = (n) => !n.includes('/'),
     onsave,
     onclose,
   }: {
@@ -19,6 +20,7 @@
     value?: string
     stem?: boolean
     fresh?: boolean
+    valid?: (name: string) => boolean
     onsave: (name: string) => Promise<unknown>
     onclose: () => void
   } = $props()
@@ -27,6 +29,7 @@
   let error = $state('')
   let busy = $state(false)
   let input = $state<HTMLInputElement>()
+  const ok = $derived(!!name.trim() && valid(name.trim()))
 
   function focus(e: Event) {
     e.preventDefault()
@@ -37,7 +40,7 @@
 
   async function submit() {
     const n = name.trim()
-    if (!n || n.includes('/')) return
+    if (!ok) return
     if (n === value && !fresh) return onclose()
     busy = true
     try {
@@ -58,6 +61,6 @@
   {#if error}<p class="error">{error}</p>{/if}
   {#snippet footer()}
     <button type="button" onclick={onclose}>{t.cancel}</button>
-    <button class="primary" disabled={busy || !name.trim()}>{action}</button>
+    <button class="primary" disabled={busy || !ok}>{action}</button>
   {/snippet}
 </Modal>

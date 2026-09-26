@@ -163,7 +163,7 @@ test('passkey registration and login', async ({ page, context }) => {
     options: { protocol: 'ctap2', transport: 'internal', hasResidentKey: true, hasUserVerification: true, isUserVerified: true, automaticPresenceSimulation: true },
   })
   const presence = (enabled: boolean) => cdp.send('WebAuthn.setAutomaticPresenceSimulation', { authenticatorId, enabled })
-  const name = `e2e key ${Date.now()}`
+  const name = `e2e / ${Date.now()}`
   const row = page.locator('.rows li', { hasText: name })
   await page.goto('http://localhost:5298/')
   await page.getByPlaceholder(t.username).fill('admin')

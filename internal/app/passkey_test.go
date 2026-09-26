@@ -30,6 +30,7 @@ type softKey struct {
 	id, handle     []byte
 	count          uint32
 	origin, rpHost string
+	noUV           bool
 }
 
 func newSoftKey(t *testing.T) *softKey {
@@ -46,6 +47,9 @@ func (k *softKey) clientData(typ, challenge string) []byte {
 }
 
 func (k *softKey) authData(flags byte, extra ...byte) []byte {
+	if k.noUV {
+		flags &^= 0x04
+	}
 	rp := sha256.Sum256([]byte(k.rpHost))
 	b := append(rp[:], flags)
 	b = binary.BigEndian.AppendUint32(b, k.count)
@@ -97,12 +101,19 @@ func withPasskeys(t *testing.T) (*fixture, *passkey.Service) {
 }
 
 func (f *fixture) pk(method, url string, body any, c *http.Cookie) *httptest.ResponseRecorder {
+	return f.pkFrom("", method, url, body, c)
+}
+
+func (f *fixture) pkFrom(ip, method, url string, body any, c *http.Cookie) *httptest.ResponseRecorder {
 	var s string
 	if body != nil {
 		b, _ := json.Marshal(body)
 		s = string(b)
 	}
 	r := httptest.NewRequest(method, "https://"+pkHost+url, strings.NewReader(s))
+	if ip != "" {
+		r.RemoteAddr = ip + ":1234"
+	}
 	if c != nil {
 		r.AddCookie(c)
 	}
@@ -187,7 +198,7 @@ func TestPasskeyOriginMustMatch(t *testing.T) {
 	if w.Code != 404 {
 		t.Fatalf("plain http begin %d", w.Code)
 	}
-	for _, bad := range []string{"http://files.test", "https://1.2.3.4", "ftp://x", "https://a.test/path", "localhost"} {
+	for _, bad := range []string{"http://files.test", "https://1.2.3.4", "ftp://x", "https://a.test/path", "localhost", "https://a.test:443", "http://localhost:80"} {
 		if _, err := passkey.New(f.App.DB, f.App.Auth, []string{bad}); err == nil {
 			t.Errorf("origin %q accepted", bad)
 		}
@@ -209,7 +220,7 @@ func TestPasskeyRoundTrip(t *testing.T) {
 	if !strings.Contains(w.Body.String(), `"excludeCredentials":[{"type":"public-key","id":"`+b64u.EncodeToString(k.id)) {
 		t.Fatalf("existing credential not excluded: %s", w.Body)
 	}
-	if !strings.Contains(w.Body.String(), `"residentKey":"required"`) || !strings.Contains(w.Body.String(), `"userVerification":"preferred"`) {
+	if !strings.Contains(w.Body.String(), `"residentKey":"required"`) || !strings.Contains(w.Body.String(), `"userVerification":"required"`) {
 		t.Fatalf("authenticator selection: %s", w.Body)
 	}
 	k.count = 1
@@ -234,13 +245,19 @@ func TestPasskeyRoundTrip(t *testing.T) {
 		t.Fatal("last_used not updated")
 	}
 	id := l.Passkeys[0].ID
-	if w := f.pk("PATCH", "/api/passkeys/"+itoa(id), map[string]string{"name": "iPhone"}, sess); w.Code != 204 {
+	if w := f.pk("PATCH", "/api/passkeys/"+itoa(id), map[string]string{"name": strings.Repeat("长", 65)}, sess); w.Code != 400 {
+		t.Fatalf("long rename %d", w.Code)
+	}
+	if w := f.pk("PATCH", "/api/passkeys/"+itoa(id), map[string]string{"name": strings.Repeat("长", 64)}, sess); w.Code != 204 {
+		t.Fatalf("64-char rename %d", w.Code)
+	}
+	if w := f.pk("PATCH", "/api/passkeys/"+itoa(id), map[string]string{"name": "iPhone / Safari"}, sess); w.Code != 204 {
 		t.Fatalf("rename %d %s", w.Code, w.Body)
 	}
 	if w := f.pk("PATCH", "/api/passkeys/"+itoa(id), map[string]string{"name": " "}, sess); w.Code != 400 {
 		t.Fatalf("blank rename %d", w.Code)
 	}
-	if l := decode[passkeyList](t, f.pk("GET", "/api/passkeys", nil, sess)); l.Passkeys[0].Name != "iPhone" {
+	if l := decode[passkeyList](t, f.pk("GET", "/api/passkeys", nil, sess)); l.Passkeys[0].Name != "iPhone / Safari" {
 		t.Fatalf("%+v", l)
 	}
 	if w := f.pk("DELETE", "/api/passkeys/"+itoa(id), nil, sess); w.Code != 204 {
@@ -358,6 +375,62 @@ func TestPasskeyFailuresHitLimiter(t *testing.T) {
 	}
 	if w := f.pk("POST", "/api/login", map[string]string{"name": "admin", "password": "pw-pw-pw-pw"}, nil); w.Code != 429 {
 		t.Fatalf("password login after passkey failures %d", w.Code)
+	}
+}
+
+func TestPasskeyRequiresUserVerification(t *testing.T) {
+	f, _ := withPasskeys(t)
+	if w := f.pk("POST", "/api/passkeys/login/begin", nil, nil); !strings.Contains(w.Body.String(), `"userVerification":"required"`) {
+		t.Fatalf("login options %s", w.Body)
+	}
+	weak := newSoftKey(t)
+	weak.noUV = true
+	b := decode[begun](t, f.pk("POST", "/api/passkeys/register/begin", nil, f.Cookie))
+	body := map[string]any{"ceremony": b.Ceremony, "name": "x", "response": weak.create(t, b.Options.Challenge)}
+	if w := f.pk("POST", "/api/passkeys/register/finish", body, f.Cookie); w.Code != 400 {
+		t.Fatalf("registration without UV %d", w.Code)
+	}
+	k := newSoftKey(t)
+	f.register(t, k, f.Cookie, "a")
+	k.count, k.noUV = 1, true
+	if w := f.finish(f.assertion(t, k)); w.Code != 401 {
+		t.Fatalf("assertion without UV %d", w.Code)
+	}
+	k.count, k.noUV = 2, false
+	if w := f.finish(f.assertion(t, k)); w.Code != 204 {
+		t.Fatalf("assertion with UV %d", w.Code)
+	}
+}
+
+func TestPasskeyDuplicateCredential(t *testing.T) {
+	f, _ := withPasskeys(t)
+	k := newSoftKey(t)
+	f.register(t, k, f.Cookie, "a")
+	b := decode[begun](t, f.pk("POST", "/api/passkeys/register/begin", nil, f.Cookie))
+	body := map[string]any{"ceremony": b.Ceremony, "name": "b", "response": k.create(t, b.Options.Challenge)}
+	if w := f.pk("POST", "/api/passkeys/register/finish", body, f.Cookie); w.Code != 409 {
+		t.Fatalf("duplicate credential %d %s", w.Code, w.Body)
+	}
+}
+
+func TestPasskeyCeremonyFloodIsPerIP(t *testing.T) {
+	f, _ := withPasskeys(t)
+	k := newSoftKey(t)
+	f.register(t, k, f.Cookie, "a")
+	first := decode[begun](t, f.pkFrom("198.51.100.7", "POST", "/api/passkeys/login/begin", nil, nil))
+	for range 1100 {
+		if w := f.pkFrom("198.51.100.7", "POST", "/api/passkeys/login/begin", nil, nil); w.Code != 200 {
+			t.Fatalf("flooding begin %d", w.Code)
+		}
+	}
+	k.count = 1
+	body := map[string]any{"ceremony": first.Ceremony, "response": k.get(t, first.Options.Challenge)}
+	if w := f.pkFrom("198.51.100.7", "POST", "/api/passkeys/login/finish", body, nil); w.Code != 401 {
+		t.Fatalf("evicted ceremony %d", w.Code)
+	}
+	k.count = 2
+	if w := f.finish(f.assertion(t, k)); w.Code != 204 {
+		t.Fatalf("other IP blocked by flood: %d %s", w.Code, w.Body)
 	}
 }
 

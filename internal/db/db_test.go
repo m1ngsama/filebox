@@ -222,7 +222,7 @@ func TestPasskeys(t *testing.T) {
 	if err := d.InsertPasskey(pk); err != nil {
 		t.Fatal(err)
 	}
-	if err := d.InsertPasskey(&Passkey{UserID: uid, CredentialID: []byte{1, 2}, Credential: "{}", Name: "dup", CreatedAt: 5}); err == nil {
+	if err := d.InsertPasskey(&Passkey{UserID: uid, CredentialID: []byte{1, 2}, Credential: "{}", Name: "dup", CreatedAt: 5}); !errors.Is(err, ErrConflict) {
 		t.Fatal("duplicate credential id accepted")
 	}
 	if err := d.UsePasskey(pk.ID, `{"a":1}`, 9); err != nil {
@@ -246,5 +246,17 @@ func TestPasskeys(t *testing.T) {
 	}
 	if ps, _ := d.ListPasskeys(uid); len(ps) != 0 {
 		t.Fatalf("%+v", ps)
+	}
+}
+
+func TestUserNames(t *testing.T) {
+	d := open(t)
+	if ns, err := d.UserNames(); err != nil || len(ns) != 0 {
+		t.Fatalf("%v %v", ns, err)
+	}
+	d.SetPassword("m1ng", "h")
+	d.SetPassword("bob", "h")
+	if ns, _ := d.UserNames(); len(ns) != 2 || ns[0] != "bob" || ns[1] != "m1ng" {
+		t.Fatalf("%v", ns)
 	}
 }

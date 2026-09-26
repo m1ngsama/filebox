@@ -9,7 +9,10 @@ import (
 	_ "modernc.org/sqlite"
 )
 
-var ErrNotFound = errors.New("not found")
+var (
+	ErrNotFound = errors.New("not found")
+	ErrConflict = errors.New("conflict")
+)
 
 var migrations = []string{
 	`CREATE TABLE users (
@@ -141,6 +144,23 @@ func (d *DB) UserByName(name string) (User, error) {
 	err := d.QueryRow(`SELECT id, name, password_hash FROM users WHERE name = ?`, name).
 		Scan(&u.ID, &u.Name, &u.PasswordHash)
 	return u, notFound(err)
+}
+
+func (d *DB) UserNames() ([]string, error) {
+	rows, err := d.Query(`SELECT name FROM users ORDER BY name`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []string
+	for rows.Next() {
+		var n string
+		if err := rows.Scan(&n); err != nil {
+			return nil, err
+		}
+		out = append(out, n)
+	}
+	return out, rows.Err()
 }
 
 func (d *DB) UserByID(id int64) (User, error) {
@@ -290,9 +310,13 @@ func (d *DB) UserByWebAuthnID(h []byte) (User, error) {
 }
 
 func (d *DB) InsertPasskey(p *Passkey) error {
-	return d.QueryRow(`INSERT INTO passkeys (user_id, credential_id, credential, name, created_at)
-		VALUES (?, ?, ?, ?, ?) RETURNING id`,
+	err := d.QueryRow(`INSERT INTO passkeys (user_id, credential_id, credential, name, created_at)
+		VALUES (?, ?, ?, ?, ?) ON CONFLICT(credential_id) DO NOTHING RETURNING id`,
 		p.UserID, p.CredentialID, p.Credential, p.Name, p.CreatedAt).Scan(&p.ID)
+	if errors.Is(err, sql.ErrNoRows) {
+		return ErrConflict
+	}
+	return err
 }
 
 func (d *DB) ListPasskeys(userID int64) ([]Passkey, error) {

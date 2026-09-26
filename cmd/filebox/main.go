@@ -30,9 +30,11 @@ import (
 
 const usage = `usage:
   filebox serve   -data DIR -listen ADDR -vol name=path [-vol ...] [-origin https://host ...]
-  filebox passwd  -data DIR [-user admin]      (reads the password from stdin)
-  filebox token   -data DIR [-user admin] new LABEL [-ro] | ls | rm ID
-  filebox passkey -data DIR [-user admin] ls | rm ID`
+  filebox passwd  -data DIR [-user NAME]      (reads the password from stdin)
+  filebox token   -data DIR [-user NAME] new LABEL [-ro] | ls | rm ID
+  filebox passkey -data DIR [-user NAME] ls | rm ID
+
+-user may be omitted when the database has exactly one user; passwd creates "admin" in an empty one.`
 
 type multi []string
 
@@ -139,8 +141,17 @@ func serveCmd(args []string) error {
 func passwdCmd(args []string) error {
 	fl := flag.NewFlagSet("passwd", flag.ExitOnError)
 	data := fl.String("data", "./data", "data directory")
-	user := fl.String("user", "admin", "user name")
+	user := fl.String("user", "", "user name")
 	fl.Parse(args)
+	d, err := openDB(*data)
+	if err != nil {
+		return err
+	}
+	defer d.Close()
+	name, err := pickUser(d, *user, "admin")
+	if err != nil {
+		return err
+	}
 	fmt.Fprint(os.Stderr, "new password: ")
 	line, err := bufio.NewReader(os.Stdin).ReadString('\n')
 	if err != nil && line == "" {
@@ -154,12 +165,7 @@ func passwdCmd(args []string) error {
 	if err != nil {
 		return err
 	}
-	d, err := openDB(*data)
-	if err != nil {
-		return err
-	}
-	defer d.Close()
-	id, err := d.SetPassword(*user, h)
+	id, err := d.SetPassword(name, h)
 	if err != nil {
 		return err
 	}
@@ -171,17 +177,38 @@ func passwdCmd(args []string) error {
 	return nil
 }
 
+func pickUser(d *db.DB, name, ifNone string) (string, error) {
+	if name != "" {
+		return name, nil
+	}
+	ns, err := d.UserNames()
+	switch {
+	case err != nil:
+		return "", err
+	case len(ns) == 1:
+		return ns[0], nil
+	case len(ns) == 0 && ifNone != "":
+		return ifNone, nil
+	case len(ns) == 0:
+		return "", errors.New("no users yet (run filebox passwd first)")
+	}
+	return "", fmt.Errorf("pass -user NAME, one of: %s", strings.Join(ns, ", "))
+}
+
 func openUser(data, name string) (*db.DB, db.User, error) {
 	d, err := openDB(data)
 	if err != nil {
 		return nil, db.User{}, err
 	}
-	u, err := d.UserByName(name)
-	if err != nil {
-		d.Close()
-		return nil, db.User{}, fmt.Errorf("user %q: %w (run filebox passwd first)", name, err)
+	if name, err = pickUser(d, name, ""); err == nil {
+		var u db.User
+		if u, err = d.UserByName(name); err == nil {
+			return d, u, nil
+		}
+		err = fmt.Errorf("user %q: %w (run filebox passwd first)", name, err)
 	}
-	return d, u, nil
+	d.Close()
+	return nil, db.User{}, err
 }
 
 func used(at int64) string {
@@ -194,7 +221,7 @@ func used(at int64) string {
 func tokenCmd(args []string) error {
 	fl := flag.NewFlagSet("token", flag.ExitOnError)
 	data := fl.String("data", "./data", "data directory")
-	user := fl.String("user", "admin", "user name")
+	user := fl.String("user", "", "user name")
 	ro := fl.Bool("ro", false, "read-only token (new only)")
 	fl.Parse(args)
 	rest := fl.Args()
@@ -242,7 +269,7 @@ func tokenCmd(args []string) error {
 func passkeyCmd(args []string) error {
 	fl := flag.NewFlagSet("passkey", flag.ExitOnError)
 	data := fl.String("data", "./data", "data directory")
-	user := fl.String("user", "admin", "user name")
+	user := fl.String("user", "", "user name")
 	fl.Parse(args)
 	rest := fl.Args()
 	if len(rest) == 0 {

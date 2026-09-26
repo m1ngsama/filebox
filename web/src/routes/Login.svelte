@@ -10,6 +10,9 @@
   let password = $state('')
   let error = $state('')
   let passkeys = $state(false)
+  let autofill = false
+  let live = true
+  let since = 0
 
   async function submit(e: SubmitEvent) {
     e.preventDefault()
@@ -22,22 +25,34 @@
     }
   }
 
-  async function passkey(autofill = false) {
+  async function passkey(conditional = false) {
+    if (conditional) since = Date.now()
     try {
-      await passkeyLogin(autofill)
+      await passkeyLogin(conditional)
       onok()
     } catch (err) {
       const msg = passkeyError(err)
-      if (!autofill || msg !== t.passkeyCancelled) error = msg
+      if (conditional && msg === t.passkeyCancelled) return
+      error = msg
+      if (conditional) since = 0
+      else startAutofill()
     }
   }
 
+  function startAutofill() {
+    if (autofill && live) passkey(true)
+  }
+
+  function refreshAutofill() {
+    if (Date.now() - since > 4 * 60_000) startAutofill()
+  }
+
   $effect(() => {
-    let live = true
     api.passkeysEnabled().then(
       async ({ enabled }) => {
         passkeys = enabled && browserSupportsWebAuthn()
-        if (passkeys && (await browserSupportsWebAuthnAutofill()) && live) passkey(true)
+        autofill = passkeys && (await browserSupportsWebAuthnAutofill())
+        startAutofill()
       },
       () => {},
     )
@@ -50,7 +65,7 @@
 
 <form class="login" onsubmit={submit}>
   <h1>{t.brand}</h1>
-  <input bind:value={name} placeholder={t.username} aria-label={t.username} autocomplete="username webauthn" autocapitalize="none" spellcheck="false" required />
+  <input bind:value={name} placeholder={t.username} aria-label={t.username} autocomplete="username webauthn" onfocus={refreshAutofill} autocapitalize="none" spellcheck="false" required />
   <input type="password" bind:value={password} placeholder={t.password} aria-label={t.password} autocomplete="current-password" required />
   <button type="submit">{t.login}</button>
   {#if passkeys}<button type="button" onclick={() => passkey()}>{t.passkeyLogin}</button>{/if}

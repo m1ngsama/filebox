@@ -27,6 +27,7 @@ import (
 const (
 	ceremonyTTL   = 5 * time.Minute
 	maxCeremonies = 1000
+	maxPerIP      = 8
 )
 
 type Service struct {
@@ -44,10 +45,13 @@ type Service struct {
 type ceremony struct {
 	data    webauthn.SessionData
 	userID  int64
+	ip      string
 	expires time.Time
 }
 
 type rp struct{ id, origin string }
+
+var defaultPorts = map[string]string{"https": "443", "http": "80"}
 
 func New(d *db.DB, a *auth.Auth, origins []string) (*Service, error) {
 	s := &Service{DB: d, Auth: a, Now: time.Now, origins: map[string]rp{}, ceremonies: map[string]ceremony{}}
@@ -55,6 +59,7 @@ func New(d *db.DB, a *auth.Auth, origins []string) (*Service, error) {
 		u, err := url.Parse(o)
 		if err != nil || u.Host == "" || strings.TrimSuffix(u.Path, "/") != "" || u.RawQuery != "" ||
 			!(u.Scheme == "https" || u.Scheme == "http" && u.Hostname() == "localhost") ||
+			u.Port() == defaultPorts[u.Scheme] ||
 			protocol.ValidateRPID(u.Hostname()) != nil {
 			return nil, fmt.Errorf("bad origin %q: want https://host, or http://localhost for testing", o)
 		}
@@ -108,18 +113,28 @@ func (s *Service) expire(now time.Time) {
 	maps.DeleteFunc(s.ceremonies, func(_ string, c ceremony) bool { return !now.Before(c.expires) })
 }
 
-func (s *Service) put(data *webauthn.SessionData, userID int64) (string, bool) {
+func (s *Service) put(data *webauthn.SessionData, userID int64, ip string) (string, bool) {
 	now := s.Now()
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	if len(s.ceremonies) >= maxCeremonies {
-		s.expire(now)
+	s.expire(now)
+	n, oldest := 0, ""
+	for id, c := range s.ceremonies {
+		if c.ip == ip {
+			n++
+			if oldest == "" || c.expires.Before(s.ceremonies[oldest].expires) {
+				oldest = id
+			}
+		}
+	}
+	if n >= maxPerIP {
+		delete(s.ceremonies, oldest)
 	}
 	if len(s.ceremonies) >= maxCeremonies {
 		return "", false
 	}
 	id := rand.Text()
-	s.ceremonies[id] = ceremony{data: *data, userID: userID, expires: now.Add(ceremonyTTL)}
+	s.ceremonies[id] = ceremony{data: *data, userID: userID, ip: ip, expires: now.Add(ceremonyTTL)}
 	return id, true
 }
 
@@ -189,12 +204,12 @@ func (s *Service) loginBegin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	opts, data, err := s.wa.BeginDiscoverableLogin(webauthn.WithLoginRelyingPartyID(p.id), webauthn.WithLoginOrigin(p.origin),
-		webauthn.WithUserVerification(protocol.VerificationPreferred))
+		webauthn.WithUserVerification(protocol.VerificationRequired))
 	if err != nil {
 		httpx.Error(w, err)
 		return
 	}
-	id, ok := s.put(data, 0)
+	id, ok := s.put(data, 0, auth.ClientIP(r))
 	if !ok {
 		httpx.Fail(w, 429, "too many attempts")
 		return
@@ -246,7 +261,7 @@ func (s *Service) verify(id string, resp []byte, ok bool) (int64, bool) {
 		}
 		return u, nil
 	}, data, parsed)
-	if err != nil || cred.Authenticator.CloneWarning {
+	if err != nil || cred.Authenticator.CloneWarning || !parsed.Response.AuthenticatorData.Flags.HasUserVerified() {
 		return 0, false
 	}
 	i := slices.IndexFunc(u.rows, func(p db.Passkey) bool { return bytes.Equal(p.CredentialID, cred.ID) })
@@ -273,13 +288,13 @@ func (s *Service) registerBegin(w http.ResponseWriter, r *http.Request) {
 		webauthn.WithRegistrationRelyingPartyID(p.id), webauthn.WithRegistrationOrigin(p.origin),
 		webauthn.WithAuthenticatorSelection(protocol.AuthenticatorSelection{
 			ResidentKey: protocol.ResidentKeyRequirementRequired, RequireResidentKey: protocol.ResidentKeyRequired(),
-			UserVerification: protocol.VerificationPreferred}),
+			UserVerification: protocol.VerificationRequired}),
 		webauthn.WithExclusions(webauthn.Credentials(u.creds).CredentialDescriptors()))
 	if err != nil {
 		httpx.Error(w, err)
 		return
 	}
-	id, ok := s.put(data, pr.UserID)
+	id, ok := s.put(data, pr.UserID, auth.ClientIP(r))
 	if !ok {
 		httpx.Fail(w, 429, "too many attempts")
 		return

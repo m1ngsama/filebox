@@ -48,6 +48,13 @@ func TestLogin(t *testing.T) {
 	if w := f.do("GET", "/api/nope", nil); w.Code != 404 || !strings.Contains(w.Body.String(), "error") {
 		t.Fatalf("unknown api route %d %s", w.Code, w.Body)
 	}
+	f.App.DB.SetPassword("bob", "h")
+	if w := f.do("POST", "/api/login", body(`{"password":"pw-pw-pw-pw"}`), "X-No-Auth", "1"); w.Code != 401 {
+		t.Fatalf("nameless login with two users = %d", w.Code)
+	}
+	if w := f.do("POST", "/api/login", body(`{"name":"admin","password":"pw-pw-pw-pw"}`), "X-No-Auth", "1"); w.Code != 204 {
+		t.Fatalf("named login %d", w.Code)
+	}
 }
 
 func TestList(t *testing.T) {

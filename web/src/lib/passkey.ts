@@ -21,6 +21,8 @@ export function passkeyError(e: unknown) {
   return t.passkeyInvalid
 }
 
+export const validPasskeyName = (n: string) => [...n].length <= 64
+
 const devices = ['iPhone', 'iPad', 'Android', 'Mac', 'Windows', 'Linux']
 
 export function deviceName() {

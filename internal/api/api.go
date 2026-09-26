@@ -123,7 +123,9 @@ func (a *API) login(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if in.Name == "" {
-		in.Name = "admin"
+		if ns, _ := a.DB.UserNames(); len(ns) == 1 {
+			in.Name = ns[0]
+		}
 	}
 	tok, err := a.Auth.Login(in.Name, in.Password, auth.ClientIP(r))
 	switch {
