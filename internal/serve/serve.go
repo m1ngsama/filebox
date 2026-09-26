@@ -29,8 +29,7 @@ var dangerous = map[string]bool{
 
 func SafeHeaders(h http.Header, contentType string) {
 	h.Set("X-Content-Type-Options", "nosniff")
-	// Chrome refuses to render PDFs inside a sandboxed document; nosniff plus
-	// the exact type already keeps a PDF from being treated as HTML.
+	// Chrome will not render a PDF in a sandboxed document; nosniff already keeps it from being HTML.
 	if strings.HasPrefix(contentType, "application/pdf") {
 		h.Set("Content-Security-Policy", "frame-ancestors 'self'")
 	} else {

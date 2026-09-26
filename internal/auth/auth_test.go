@@ -103,7 +103,6 @@ func TestAppTokens(t *testing.T) {
 	if _, ok := a.App(r); ok {
 		t.Fatal("revoked token accepted")
 	}
-	// a session token must not work as an app token
 	st, _ := a.Login("admin", "correct horse", "1.1.1.1")
 	r.Header.Set("Authorization", "Bearer "+st)
 	if _, ok := a.App(r); ok {

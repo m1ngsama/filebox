@@ -38,14 +38,11 @@ function bigFile(mb: number) {
   return p
 }
 
-// docs is a directory, so its "..." menu carries a 分享 action that opens the
-// details sidebar (both the 'share' and 'details' action ids route there).
 async function shareDocs(page: Page, mode: 'read' | 'upload' | 'drop', password = '') {
   await row(page, 'docs').locator('button.more').click()
   await page.getByRole('menuitem', { name: t.share, exact: true }).click()
   await page.getByRole('radio', { name: t.modes[mode], exact: true }).check()
   if (password) await page.getByLabel(t.passwordOptional).fill(password)
-  // .shares renders a placeholder <li> (no <a>) when empty, so count links, not <li>s.
   const before = await page.locator('.details .shares li a').count()
   await page.getByRole('button', { name: t.newShare, exact: true }).click()
   const links = page.locator('.details .shares li a')
@@ -77,7 +74,6 @@ test('resumable upload survives a dropped connection and a page reload', async (
   const src = bigFile(200)
   const total = statSync(src).size
   await login(page)
-  // Keyed by Upload-Offset, not PATCH count, so this stays meaningful regardless of chunkSize.
   let aborted = false
   let stalled = false
   await page.route('**/upload/*', (route) => {
@@ -85,10 +81,8 @@ test('resumable upload survives a dropped connection and a page reload', async (
     const offset = Number(route.request().headers()['upload-offset'])
     if (!aborted && offset > 0) {
       aborted = true
-      return route.abort('connectionreset') // dropped connection: the client retries
+      return route.abort('connectionreset')
     }
-    // Never resolve so the upload is still mid-flight (offset > 0, not done) when the page
-    // reloads below; a real stalled connection likewise never completes.
     if (!stalled && offset >= total * 0.3) {
       stalled = true
       return new Promise<void>(() => {})
