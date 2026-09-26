@@ -1,3 +1,4 @@
+import type { PublicKeyCredentialCreationOptionsJSON, PublicKeyCredentialRequestOptionsJSON } from '@simplewebauthn/browser'
 import { t } from './i18n'
 
 export const errorText = (status: number): string | undefined =>
@@ -14,6 +15,8 @@ export type Me = { name: string; vols: string[] }
 export type Loc = { vol: string; path: string }
 export type Share = { id: number; token: string; vol: string; path: string; mode: 'read' | 'upload' | 'drop'; has_password: boolean; expires: number; created: number; hits: number }
 export type Token = { id: number; label: string; readonly: boolean; created: number; last_used: number }
+export type Passkey = { id: number; name: string; created: number; last_used: number }
+type Begun<T> = { ceremony: string; options: T }
 export type TrashItem = { id: string; name: string; path: string; dir: boolean; size: number; deleted: number }
 export type ShareInfo = { locked: true; mode: Share['mode'] } | { locked: false; mode: Share['mode']; name: string; dir: boolean; size?: number }
 
@@ -75,6 +78,15 @@ export const api = {
   tokens: () => req<{ tokens: Token[] }>('GET', '/api/tokens'),
   newToken: (label: string, readonly: boolean) => req<{ token: string }>('POST', '/api/tokens', { label, readonly }),
   delToken: (id: number) => req<void>('DELETE', `/api/tokens/${id}`),
+  passkeysEnabled: () => req<{ enabled: boolean }>('GET', '/api/passkeys/enabled'),
+  passkeys: () => req<{ passkeys: Passkey[] }>('GET', '/api/passkeys'),
+  passkeyRegisterBegin: () => req<Begun<PublicKeyCredentialCreationOptionsJSON>>('POST', '/api/passkeys/register/begin'),
+  passkeyRegisterFinish: (ceremony: string, name: string, response: unknown) =>
+    req<{ id: number }>('POST', '/api/passkeys/register/finish', { ceremony, name, response }),
+  passkeyLoginBegin: () => req<Begun<PublicKeyCredentialRequestOptionsJSON>>('POST', '/api/passkeys/login/begin'),
+  passkeyLoginFinish: (ceremony: string, response: unknown) => req<void>('POST', '/api/passkeys/login/finish', { ceremony, response }),
+  renamePasskey: (id: number, name: string) => req<void>('PATCH', `/api/passkeys/${id}`, { name }),
+  delPasskey: (id: number) => req<void>('DELETE', `/api/passkeys/${id}`),
   shares: () => req<{ shares: Share[] }>('GET', '/api/shares'),
   newShare: (s: { vol: string; path: string; mode: string; password: string; expires_in: number }) =>
     req<{ id: number; token: string }>('POST', '/api/shares', s),

@@ -11,6 +11,7 @@ import (
 	"github.com/m1ngsama/filebox/internal/dav"
 	"github.com/m1ngsama/filebox/internal/db"
 	"github.com/m1ngsama/filebox/internal/httpx"
+	"github.com/m1ngsama/filebox/internal/passkey"
 	"github.com/m1ngsama/filebox/internal/serve"
 	"github.com/m1ngsama/filebox/internal/share"
 	"github.com/m1ngsama/filebox/internal/thumb"
@@ -22,12 +23,13 @@ const spaCSP = "default-src 'self'; img-src 'self' blob: data:; media-src 'self'
 	"frame-src 'self'; object-src 'none'; base-uri 'none'; frame-ancestors 'none'; form-action 'self'"
 
 type App struct {
-	Vols    *vol.Set
-	DB      *db.DB
-	Auth    *auth.Auth
-	Web     fs.FS
-	Uploads *upload.Server
-	Thumbs  *thumb.Service
+	Vols     *vol.Set
+	DB       *db.DB
+	Auth     *auth.Auth
+	Web      fs.FS
+	Uploads  *upload.Server
+	Thumbs   *thumb.Service
+	Passkeys *passkey.Service
 }
 
 func (a *App) Handler() http.Handler {
@@ -35,6 +37,7 @@ func (a *App) Handler() http.Handler {
 	mux.Handle("GET /raw/{vol}/{path...}", a.Auth.RequireAny(http.HandlerFunc(a.raw)))
 	mux.Handle("GET /thumb/{vol}/{path...}", a.Auth.RequireAny(http.HandlerFunc(a.thumb)))
 	(&api.API{Vols: a.Vols, DB: a.DB, Auth: a.Auth, Jobs: api.NewJobs()}).Register(mux)
+	a.Passkeys.Register(mux)
 	d := dav.Handler(a.Vols, a.Auth)
 	mux.Handle("/dav", d)
 	mux.Handle("/dav/", d)

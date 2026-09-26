@@ -14,7 +14,7 @@ async function login(page: Page) {
   await page.goto('/')
   await page.getByPlaceholder(t.username).fill('admin')
   await page.getByPlaceholder(t.password).fill('pw-pw-pw-pw')
-  await page.getByRole('button', { name: t.login }).click()
+  await page.getByRole('button', { name: t.login, exact: true }).click()
   await expect(page).toHaveURL(/\/files\/v\/$/)
 }
 
@@ -57,7 +57,7 @@ test('wrong password is rejected', async ({ page }) => {
   await page.goto('/')
   await page.getByPlaceholder(t.username).fill('admin')
   await page.getByPlaceholder(t.password).fill('nope-nope')
-  await page.getByRole('button', { name: t.login }).click()
+  await page.getByRole('button', { name: t.login, exact: true }).click()
   await expect(page.getByText(t.wrongLogin)).toBeVisible()
 })
 
@@ -154,4 +154,33 @@ test('delete and restore from trash', async ({ page }) => {
   await page.getByRole('link', { name: t.trash, exact: true }).click()
   await page.getByRole('button', { name: t.restore, exact: true }).click()
   await expect.poll(() => existsSync(join(VOL, 'tmp.txt'))).toBe(true)
+})
+
+test('passkey registration and login', async ({ page, context }) => {
+  const cdp = await context.newCDPSession(page)
+  await cdp.send('WebAuthn.enable')
+  const { authenticatorId } = await cdp.send('WebAuthn.addVirtualAuthenticator', {
+    options: { protocol: 'ctap2', transport: 'internal', hasResidentKey: true, hasUserVerification: true, isUserVerified: true, automaticPresenceSimulation: true },
+  })
+  const presence = (enabled: boolean) => cdp.send('WebAuthn.setAutomaticPresenceSimulation', { authenticatorId, enabled })
+  const name = `e2e key ${Date.now()}`
+  const row = page.locator('.rows li', { hasText: name })
+  await page.goto('http://localhost:5298/')
+  await page.getByPlaceholder(t.username).fill('admin')
+  await page.getByPlaceholder(t.password).fill('pw-pw-pw-pw')
+  await page.getByRole('button', { name: t.login, exact: true }).click()
+  await page.getByRole('link', { name: t.settings }).click()
+  await page.getByRole('button', { name: t.addPasskey }).click()
+  const dialog = page.getByRole('dialog')
+  await dialog.getByLabel(t.name).fill(name)
+  await dialog.getByRole('button', { name: t.add }).click()
+  await expect(dialog).toBeHidden()
+  await expect(row).toContainText(t.neverUsed)
+  await presence(false)
+  await page.getByRole('button', { name: t.logout }).click()
+  const button = page.getByRole('button', { name: t.passkeyLogin })
+  await expect(button).toBeVisible()
+  await presence(true)
+  await button.click()
+  await expect(row).not.toContainText(t.neverUsed)
 })

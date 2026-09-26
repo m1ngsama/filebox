@@ -41,6 +41,17 @@ var migrations = []string{
 		created_at INTEGER NOT NULL,
 		hits INTEGER NOT NULL DEFAULT 0
 	);`,
+	`ALTER TABLE users ADD COLUMN webauthn_id BLOB;
+	CREATE UNIQUE INDEX users_webauthn_id ON users(webauthn_id);
+	CREATE TABLE passkeys (
+		id INTEGER PRIMARY KEY AUTOINCREMENT,
+		user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+		credential_id BLOB NOT NULL UNIQUE,
+		credential TEXT NOT NULL,
+		name TEXT NOT NULL,
+		created_at INTEGER NOT NULL,
+		last_used_at INTEGER NOT NULL DEFAULT 0
+	);`,
 }
 
 type DB struct{ *sql.DB }
@@ -54,6 +65,13 @@ type Token struct {
 	ID, UserID                       int64
 	Kind, Hash, Label, Scope         string
 	CreatedAt, LastUsedAt, ExpiresAt int64
+}
+
+type Passkey struct {
+	ID, UserID            int64
+	CredentialID          []byte
+	Credential, Name      string
+	CreatedAt, LastUsedAt int64
 }
 
 type Share struct {
@@ -255,6 +273,65 @@ func (d *DB) DeleteShare(userID, id int64) error {
 func (d *DB) HitShare(id int64) error {
 	_, err := d.Exec(`UPDATE shares SET hits = hits + 1 WHERE id = ?`, id)
 	return err
+}
+
+func (d *DB) WebAuthnID(userID int64, fresh []byte) ([]byte, error) {
+	var h []byte
+	err := d.QueryRow(`UPDATE users SET webauthn_id = coalesce(webauthn_id, ?) WHERE id = ? RETURNING webauthn_id`,
+		fresh, userID).Scan(&h)
+	return h, notFound(err)
+}
+
+func (d *DB) UserByWebAuthnID(h []byte) (User, error) {
+	var u User
+	err := d.QueryRow(`SELECT id, name, password_hash FROM users WHERE webauthn_id = ?`, h).
+		Scan(&u.ID, &u.Name, &u.PasswordHash)
+	return u, notFound(err)
+}
+
+func (d *DB) InsertPasskey(p *Passkey) error {
+	return d.QueryRow(`INSERT INTO passkeys (user_id, credential_id, credential, name, created_at)
+		VALUES (?, ?, ?, ?, ?) RETURNING id`,
+		p.UserID, p.CredentialID, p.Credential, p.Name, p.CreatedAt).Scan(&p.ID)
+}
+
+func (d *DB) ListPasskeys(userID int64) ([]Passkey, error) {
+	rows, err := d.Query(`SELECT id, user_id, credential_id, credential, name, created_at, last_used_at
+		FROM passkeys WHERE user_id = ? ORDER BY id`, userID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []Passkey
+	for rows.Next() {
+		var p Passkey
+		if err := rows.Scan(&p.ID, &p.UserID, &p.CredentialID, &p.Credential, &p.Name, &p.CreatedAt, &p.LastUsedAt); err != nil {
+			return nil, err
+		}
+		out = append(out, p)
+	}
+	return out, rows.Err()
+}
+
+func (d *DB) UsePasskey(id int64, credential string, now int64) error {
+	_, err := d.Exec(`UPDATE passkeys SET credential = ?, last_used_at = ? WHERE id = ?`, credential, now, id)
+	return err
+}
+
+func one(res sql.Result, err error) error {
+	n, err := affected(res, err)
+	if err == nil && n == 0 {
+		err = ErrNotFound
+	}
+	return err
+}
+
+func (d *DB) RenamePasskey(userID, id int64, name string) error {
+	return one(d.Exec(`UPDATE passkeys SET name = ? WHERE user_id = ? AND id = ?`, name, userID, id))
+}
+
+func (d *DB) DeletePasskey(userID, id int64) error {
+	return one(d.Exec(`DELETE FROM passkeys WHERE user_id = ? AND id = ?`, userID, id))
 }
 
 func (d *DB) Check() error {

@@ -7,7 +7,7 @@ RequiresMountsFor=/mnt/backup1t
 [Service]
 User=m1ng
 Group=m1ng
-ExecStart=/usr/local/bin/filebox serve -data /srv/data/filebox -listen :5280 -ffmpeg /usr/bin/ffmpeg \
+ExecStart=/usr/local/bin/filebox serve -data /srv/data/filebox -listen :5280 -ffmpeg /usr/bin/ffmpeg -origin https://cloud.m1ng.space \
   -vol downloads=/mnt/backup1t/downloads -vol archive=/mnt/backup1t/archive -vol library=/mnt/backup1t/library
 Restart=always
 RestartSec=2

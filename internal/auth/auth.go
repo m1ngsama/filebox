@@ -90,21 +90,28 @@ func (a *Auth) issue(userID int64, kind, label, scope, tok string, ttl time.Dura
 }
 
 func (a *Auth) Login(name, pw, ip string) (string, error) {
+	return a.LoginWith(ip, func() (int64, bool) {
+		u, err := a.DB.UserByName(name)
+		hash := u.PasswordHash
+		if err != nil {
+			hash = dummyHash()
+		}
+		return u.ID, CheckPassword(hash, pw) && err == nil
+	})
+}
+
+func (a *Auth) LoginWith(ip string, verify func() (userID int64, ok bool)) (string, error) {
 	if !a.lim.allow(ip, a.Now()) {
 		return "", ErrRateLimited
 	}
-	u, err := a.DB.UserByName(name)
-	hash := u.PasswordHash
-	if err != nil {
-		hash = dummyHash()
-	}
-	if !CheckPassword(hash, pw) || err != nil {
+	uid, ok := verify()
+	if !ok {
 		a.lim.fail(ip, a.Now())
 		return "", ErrBadLogin
 	}
 	a.lim.ok(ip)
 	tok := base64.RawURLEncoding.EncodeToString(random(32))
-	return tok, a.issue(u.ID, "session", "", "", tok, SessionTTL)
+	return tok, a.issue(uid, "session", "", "", tok, SessionTTL)
 }
 
 func (a *Auth) Logout(tok string) error { return a.DB.DeleteTokenByHash(Hash(tok)) }

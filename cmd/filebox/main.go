@@ -21,6 +21,7 @@ import (
 	"github.com/m1ngsama/filebox/internal/app"
 	"github.com/m1ngsama/filebox/internal/auth"
 	"github.com/m1ngsama/filebox/internal/db"
+	"github.com/m1ngsama/filebox/internal/passkey"
 	"github.com/m1ngsama/filebox/internal/thumb"
 	"github.com/m1ngsama/filebox/internal/upload"
 	"github.com/m1ngsama/filebox/internal/vol"
@@ -28,9 +29,10 @@ import (
 )
 
 const usage = `usage:
-  filebox serve  -data DIR -listen ADDR -vol name=path [-vol ...]
-  filebox passwd -data DIR [-user admin]      (reads the password from stdin)
-  filebox token  -data DIR new LABEL [-ro] | ls | rm ID`
+  filebox serve   -data DIR -listen ADDR -vol name=path [-vol ...] [-origin https://host ...]
+  filebox passwd  -data DIR [-user admin]      (reads the password from stdin)
+  filebox token   -data DIR [-user admin] new LABEL [-ro] | ls | rm ID
+  filebox passkey -data DIR [-user admin] ls | rm ID`
 
 type multi []string
 
@@ -50,6 +52,8 @@ func main() {
 		err = passwdCmd(os.Args[2:])
 	case "token":
 		err = tokenCmd(os.Args[2:])
+	case "passkey":
+		err = passkeyCmd(os.Args[2:])
 	default:
 		fmt.Fprintln(os.Stderr, usage)
 		os.Exit(2)
@@ -72,8 +76,9 @@ func serveCmd(args []string) error {
 	data := fl.String("data", "./data", "data directory")
 	listen := fl.String("listen", ":5280", "listen address")
 	ffmpeg := fl.String("ffmpeg", "", "path to ffmpeg for thumbnails; empty disables them")
-	var vols multi
+	var vols, origins multi
 	fl.Var(&vols, "vol", "volume as name=path, repeatable")
+	fl.Var(&origins, "origin", "public origin that may use passkeys, e.g. https://files.example.com; repeatable")
 	fl.Parse(args)
 	if len(vols) == 0 {
 		return errors.New("at least one -vol is required")
@@ -97,14 +102,20 @@ func serveCmd(args []string) error {
 	if err != nil {
 		return err
 	}
+	au := auth.New(d)
+	pk, err := passkey.New(d, au, origins)
+	if err != nil {
+		return err
+	}
 	go func() {
 		for {
 			up.Sweep(24 * time.Hour)
 			d.PurgeTokens(time.Now().Unix())
+			pk.Sweep()
 			time.Sleep(time.Hour)
 		}
 	}()
-	a := &app.App{Vols: set, DB: d, Auth: auth.New(d), Web: webFS, Uploads: up, Thumbs: thumb.New(*ffmpeg, filepath.Join(*data, "thumbs"))}
+	a := &app.App{Vols: set, DB: d, Auth: au, Web: webFS, Uploads: up, Thumbs: thumb.New(*ffmpeg, filepath.Join(*data, "thumbs")), Passkeys: pk}
 
 	srv := &http.Server{Addr: *listen, Handler: a.Handler(), ReadHeaderTimeout: 10 * time.Second, IdleTimeout: 2 * time.Minute}
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
@@ -160,6 +171,26 @@ func passwdCmd(args []string) error {
 	return nil
 }
 
+func openUser(data, name string) (*db.DB, db.User, error) {
+	d, err := openDB(data)
+	if err != nil {
+		return nil, db.User{}, err
+	}
+	u, err := d.UserByName(name)
+	if err != nil {
+		d.Close()
+		return nil, db.User{}, fmt.Errorf("user %q: %w (run filebox passwd first)", name, err)
+	}
+	return d, u, nil
+}
+
+func used(at int64) string {
+	if at == 0 {
+		return "never used"
+	}
+	return "last used " + time.Unix(at, 0).Format(time.DateTime)
+}
+
 func tokenCmd(args []string) error {
 	fl := flag.NewFlagSet("token", flag.ExitOnError)
 	data := fl.String("data", "./data", "data directory")
@@ -170,15 +201,11 @@ func tokenCmd(args []string) error {
 	if len(rest) == 0 {
 		return errors.New(usage)
 	}
-	d, err := openDB(*data)
+	d, u, err := openUser(*data, *user)
 	if err != nil {
 		return err
 	}
 	defer d.Close()
-	u, err := d.UserByName(*user)
-	if err != nil {
-		return fmt.Errorf("user %q: %w (run filebox passwd first)", *user, err)
-	}
 	switch rest[0] {
 	case "new":
 		if len(rest) < 2 {
@@ -195,11 +222,7 @@ func tokenCmd(args []string) error {
 			return err
 		}
 		for _, t := range ts {
-			used := "never used"
-			if t.LastUsedAt > 0 {
-				used = "last used " + time.Unix(t.LastUsedAt, 0).Format(time.DateTime)
-			}
-			fmt.Printf("%d\t%s\t%s\t%s\n", t.ID, t.Label, t.Scope, used)
+			fmt.Printf("%d\t%s\t%s\t%s\n", t.ID, t.Label, t.Scope, used(t.LastUsedAt))
 		}
 	case "rm":
 		if len(rest) < 2 {
@@ -210,6 +233,44 @@ func tokenCmd(args []string) error {
 			return err
 		}
 		return d.DeleteToken(u.ID, id)
+	default:
+		return errors.New(usage)
+	}
+	return nil
+}
+
+func passkeyCmd(args []string) error {
+	fl := flag.NewFlagSet("passkey", flag.ExitOnError)
+	data := fl.String("data", "./data", "data directory")
+	user := fl.String("user", "admin", "user name")
+	fl.Parse(args)
+	rest := fl.Args()
+	if len(rest) == 0 {
+		return errors.New(usage)
+	}
+	d, u, err := openUser(*data, *user)
+	if err != nil {
+		return err
+	}
+	defer d.Close()
+	switch rest[0] {
+	case "ls":
+		ps, err := d.ListPasskeys(u.ID)
+		if err != nil {
+			return err
+		}
+		for _, p := range ps {
+			fmt.Printf("%d\t%s\tadded %s\t%s\n", p.ID, p.Name, time.Unix(p.CreatedAt, 0).Format(time.DateTime), used(p.LastUsedAt))
+		}
+	case "rm":
+		if len(rest) < 2 {
+			return errors.New("passkey rm needs an ID")
+		}
+		id, err := strconv.ParseInt(rest[1], 10, 64)
+		if err != nil {
+			return err
+		}
+		return d.DeletePasskey(u.ID, id)
 	default:
 		return errors.New(usage)
 	}

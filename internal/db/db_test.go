@@ -1,6 +1,7 @@
 package db
 
 import (
+	"database/sql"
 	"errors"
 	"path/filepath"
 	"strconv"
@@ -166,5 +167,84 @@ func TestDeleteTokensOfKind(t *testing.T) {
 		if _, err := d.TokenByHash(h, 2); (err == nil) != want {
 			t.Errorf("%s present=%v", h, err == nil)
 		}
+	}
+}
+
+func TestMigrateFromV1(t *testing.T) {
+	p := filepath.Join(t.TempDir(), "t.db")
+	s, err := sql.Open("sqlite", "file:"+p)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, q := range []string{migrations[0], `PRAGMA user_version = 1`, `INSERT INTO users (name, password_hash) VALUES ('admin', 'h')`} {
+		if _, err := s.Exec(q); err != nil {
+			t.Fatal(err)
+		}
+	}
+	s.Close()
+	d, err := Open(p)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer d.Close()
+	var v int
+	d.QueryRow(`PRAGMA user_version`).Scan(&v)
+	if v != len(migrations) {
+		t.Fatalf("user_version = %d", v)
+	}
+	u, err := d.UserByName("admin")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := d.ListPasskeys(u.ID); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestPasskeys(t *testing.T) {
+	d := open(t)
+	uid, _ := d.SetPassword("admin", "h")
+	other, _ := d.SetPassword("bob", "h")
+	h1, err := d.WebAuthnID(uid, []byte("first"))
+	if err != nil || string(h1) != "first" {
+		t.Fatalf("%q %v", h1, err)
+	}
+	if h, _ := d.WebAuthnID(uid, []byte("second")); string(h) != "first" {
+		t.Fatalf("handle changed to %q", h)
+	}
+	if u, err := d.UserByWebAuthnID([]byte("first")); err != nil || u.ID != uid {
+		t.Fatalf("%+v %v", u, err)
+	}
+	if _, err := d.UserByWebAuthnID([]byte("nope")); !errors.Is(err, ErrNotFound) {
+		t.Fatalf("err = %v", err)
+	}
+	pk := &Passkey{UserID: uid, CredentialID: []byte{1, 2}, Credential: "{}", Name: "Mac", CreatedAt: 5}
+	if err := d.InsertPasskey(pk); err != nil {
+		t.Fatal(err)
+	}
+	if err := d.InsertPasskey(&Passkey{UserID: uid, CredentialID: []byte{1, 2}, Credential: "{}", Name: "dup", CreatedAt: 5}); err == nil {
+		t.Fatal("duplicate credential id accepted")
+	}
+	if err := d.UsePasskey(pk.ID, `{"a":1}`, 9); err != nil {
+		t.Fatal(err)
+	}
+	if err := d.RenamePasskey(other, pk.ID, "x"); !errors.Is(err, ErrNotFound) {
+		t.Fatalf("foreign rename err = %v", err)
+	}
+	if err := d.DeletePasskey(other, pk.ID); !errors.Is(err, ErrNotFound) {
+		t.Fatalf("foreign delete err = %v", err)
+	}
+	if err := d.RenamePasskey(uid, pk.ID, "Phone"); err != nil {
+		t.Fatal(err)
+	}
+	ps, _ := d.ListPasskeys(uid)
+	if len(ps) != 1 || ps[0].Name != "Phone" || ps[0].Credential != `{"a":1}` || ps[0].LastUsedAt != 9 || ps[0].CreatedAt != 5 {
+		t.Fatalf("%+v", ps)
+	}
+	if err := d.DeletePasskey(uid, pk.ID); err != nil {
+		t.Fatal(err)
+	}
+	if ps, _ := d.ListPasskeys(uid); len(ps) != 0 {
+		t.Fatalf("%+v", ps)
 	}
 }

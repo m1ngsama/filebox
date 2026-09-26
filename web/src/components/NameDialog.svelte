@@ -9,6 +9,7 @@
     action,
     value = '',
     stem = false,
+    fresh = false,
     onsave,
     onclose,
   }: {
@@ -17,6 +18,7 @@
     action: string
     value?: string
     stem?: boolean
+    fresh?: boolean
     onsave: (name: string) => Promise<unknown>
     onclose: () => void
   } = $props()
@@ -36,7 +38,7 @@
   async function submit() {
     const n = name.trim()
     if (!n || n.includes('/')) return
-    if (n === value) return onclose()
+    if (n === value && !fresh) return onclose()
     busy = true
     try {
       await onsave(n)

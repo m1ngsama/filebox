@@ -7,6 +7,7 @@ A self-hosted file server in one binary. Browse, preview, upload and share files
 - Share links with password, expiry, and upload or drop-box modes.
 - WebP thumbnails via ffmpeg (optional).
 - Deletes from the web UI go to a per-volume trash.
+- Passkey login next to the password.
 
 ## Build
 
@@ -21,12 +22,16 @@ make test e2e
 
 ```sh
 echo 'your-password' | filebox passwd -data /srv/data/filebox
-filebox serve -data /srv/data/filebox -listen :5280 -ffmpeg /usr/bin/ffmpeg \
+filebox serve -data /srv/data/filebox -listen :5280 -ffmpeg /usr/bin/ffmpeg -origin https://files.example.com \
   -vol downloads=/mnt/disk/downloads -vol archive=/mnt/disk/archive
 filebox token -data /srv/data/filebox new "laptop"         # app password for WebDAV and CLI
 ```
 
 Behind a reverse proxy, turn off request and response buffering (nginx: `proxy_request_buffering off; proxy_buffering off;`) and forward `X-Real-IP` and `X-Forwarded-Proto` from loopback.
+
+## Passkeys
+
+Passkeys ([WebAuthn](https://www.w3.org/TR/webauthn-3/)) work only on origins passed with `-origin https://files.example.com` (repeatable). The relying party ID is that host, so a reverse proxy must pass the original `Host` header. Browsers require HTTPS, so plain-HTTP LAN access shows no passkey UI; `http://localhost` is allowed for testing. Add passkeys under Settings. The password always keeps working, and `filebox passkey -data DIR ls | rm ID` removes a lost one.
 
 ## Command line
 
