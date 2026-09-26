@@ -227,3 +227,14 @@ func (d *DB) HitShare(id int64) error {
 	_, err := d.Exec(`UPDATE shares SET hits = hits + 1 WHERE id = ?`, id)
 	return err
 }
+
+func (d *DB) Check() error {
+	var res string
+	if err := d.QueryRow(`PRAGMA quick_check`).Scan(&res); err != nil {
+		return err
+	}
+	if res != "ok" {
+		return fmt.Errorf("database integrity check: %s", res)
+	}
+	return nil
+}

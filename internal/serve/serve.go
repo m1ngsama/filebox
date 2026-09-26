@@ -1,0 +1,72 @@
+package serve
+
+import (
+	"fmt"
+	"mime"
+	"net/http"
+	"os"
+	"path"
+	"strings"
+
+	"github.com/m1ngsama/filebox/internal/httpx"
+)
+
+// Distros ship different mime.types files; previews depend on these being stable.
+func init() {
+	for ext, t := range map[string]string{
+		".txt": "text/plain; charset=utf-8", ".md": "text/plain; charset=utf-8", ".log": "text/plain; charset=utf-8",
+		".mp4": "video/mp4", ".m4v": "video/mp4", ".webm": "video/webm", ".mkv": "video/x-matroska", ".mov": "video/quicktime",
+		".mp3": "audio/mpeg", ".m4a": "audio/mp4", ".flac": "audio/flac", ".ogg": "audio/ogg", ".opus": "audio/ogg", ".wav": "audio/wav",
+	} {
+		mime.AddExtensionType(ext, t)
+	}
+}
+
+var dangerous = map[string]bool{
+	".html": true, ".htm": true, ".xhtml": true, ".shtml": true, ".svg": true, ".svgz": true,
+	".xml": true, ".xsl": true, ".mht": true, ".mhtml": true,
+}
+
+func SafeHeaders(h http.Header, contentType string) {
+	h.Set("X-Content-Type-Options", "nosniff")
+	// Chrome refuses to render PDFs inside a sandboxed document; nosniff plus
+	// the exact type already keeps a PDF from being treated as HTML.
+	if strings.HasPrefix(contentType, "application/pdf") {
+		h.Set("Content-Security-Policy", "frame-ancestors 'self'")
+	} else {
+		h.Set("Content-Security-Policy", "sandbox; frame-ancestors 'self'")
+	}
+}
+
+func File(w http.ResponseWriter, r *http.Request, root *os.Root, rel string, download bool) {
+	f, err := root.Open(rel)
+	if err != nil {
+		httpx.Error(w, err)
+		return
+	}
+	defer f.Close()
+	st, err := f.Stat()
+	if err != nil {
+		httpx.Error(w, err)
+		return
+	}
+	if st.IsDir() {
+		httpx.Fail(w, 400, "is a directory")
+		return
+	}
+	name := path.Base(rel)
+	ext := strings.ToLower(path.Ext(name))
+	ct := mime.TypeByExtension(ext)
+	if ct == "" || dangerous[ext] {
+		ct = "application/octet-stream"
+	}
+	h := w.Header()
+	h.Set("Content-Type", ct)
+	SafeHeaders(h, ct)
+	h.Set("ETag", fmt.Sprintf(`"%x-%x"`, st.Size(), st.ModTime().UnixNano()))
+	h.Set("Cache-Control", "private, no-cache")
+	if download || dangerous[ext] {
+		h.Set("Content-Disposition", mime.FormatMediaType("attachment", map[string]string{"filename": name}))
+	}
+	http.ServeContent(w, r, name, st.ModTime(), f)
+}
