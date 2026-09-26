@@ -148,8 +148,16 @@ func passwdCmd(args []string) error {
 		return err
 	}
 	defer d.Close()
-	_, err = d.SetPassword(*user, h)
-	return err
+	id, err := d.SetPassword(*user, h)
+	if err != nil {
+		return err
+	}
+	n, err := d.DeleteTokens(id, "session")
+	if err != nil {
+		return err
+	}
+	fmt.Printf("password set, %d sessions revoked\n", n)
+	return nil
 }
 
 func tokenCmd(args []string) error {

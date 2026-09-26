@@ -150,3 +150,21 @@ func TestPurgeExpiredTokens(t *testing.T) {
 		t.Fatalf("%d tokens left", left)
 	}
 }
+
+func TestDeleteTokensOfKind(t *testing.T) {
+	d := open(t)
+	uid, _ := d.SetPassword("admin", "h")
+	other, _ := d.SetPassword("bob", "h")
+	d.InsertToken(&Token{UserID: uid, Kind: "session", Hash: "s1", CreatedAt: 1})
+	d.InsertToken(&Token{UserID: uid, Kind: "session", Hash: "s2", CreatedAt: 1})
+	d.InsertToken(&Token{UserID: uid, Kind: "app", Hash: "a1", CreatedAt: 1})
+	d.InsertToken(&Token{UserID: other, Kind: "session", Hash: "s3", CreatedAt: 1})
+	if n, err := d.DeleteTokens(uid, "session"); err != nil || n != 2 {
+		t.Fatalf("deleted %d %v", n, err)
+	}
+	for h, want := range map[string]bool{"s1": false, "s2": false, "a1": true, "s3": true} {
+		if _, err := d.TokenByHash(h, 2); (err == nil) != want {
+			t.Errorf("%s present=%v", h, err == nil)
+		}
+	}
+}

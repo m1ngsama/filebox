@@ -166,12 +166,19 @@ func (d *DB) DeleteTokenByHash(hash string) error {
 	return err
 }
 
-func (d *DB) PurgeTokens(now int64) (int64, error) {
-	res, err := d.Exec(`DELETE FROM tokens WHERE expires_at != 0 AND expires_at <= ?`, now)
+func affected(res sql.Result, err error) (int64, error) {
 	if err != nil {
 		return 0, err
 	}
 	return res.RowsAffected()
+}
+
+func (d *DB) PurgeTokens(now int64) (int64, error) {
+	return affected(d.Exec(`DELETE FROM tokens WHERE expires_at != 0 AND expires_at <= ?`, now))
+}
+
+func (d *DB) DeleteTokens(userID int64, kind string) (int64, error) {
+	return affected(d.Exec(`DELETE FROM tokens WHERE user_id = ? AND kind = ?`, userID, kind))
 }
 
 func (d *DB) ListTokens(userID int64, kind string) ([]Token, error) {
