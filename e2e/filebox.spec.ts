@@ -75,15 +75,24 @@ test('browse and preview', async ({ page }) => {
 
 test('resumable upload survives a dropped connection and a page reload', async ({ page }) => {
   const src = bigFile(200)
+  const total = statSync(src).size
   await login(page)
-  let patches = 0
+  // Keyed by Upload-Offset, not PATCH count, so this stays meaningful regardless of chunkSize.
+  let aborted = false
+  let stalled = false
   await page.route('**/upload/*', (route) => {
     if (route.request().method() !== 'PATCH') return route.continue()
-    patches++
-    if (patches === 2) return route.abort('connectionreset') // dropped connection: the client retries
-    // Never resolve the 4th PATCH so the upload is still mid-flight (offset > 0, not done)
-    // when the page reloads below; a real stalled connection likewise never completes.
-    if (patches === 4) return new Promise<void>(() => {})
+    const offset = Number(route.request().headers()['upload-offset'])
+    if (!aborted && offset > 0) {
+      aborted = true
+      return route.abort('connectionreset') // dropped connection: the client retries
+    }
+    // Never resolve so the upload is still mid-flight (offset > 0, not done) when the page
+    // reloads below; a real stalled connection likewise never completes.
+    if (!stalled && offset >= total * 0.3) {
+      stalled = true
+      return new Promise<void>(() => {})
+    }
     return route.continue()
   })
   const offsets: number[] = []
@@ -91,7 +100,7 @@ test('resumable upload survives a dropped connection and a page reload', async (
     if (r.method() === 'PATCH') offsets.push(Number(r.headers()['upload-offset']))
   })
   await fileInput(page).setInputFiles(src)
-  await expect.poll(() => patches).toBeGreaterThanOrEqual(4)
+  await expect.poll(() => stalled).toBe(true)
   await expect(page.locator('.uploads li.uploading')).toHaveCount(1)
   await page.unrouteAll()
   await page.reload()

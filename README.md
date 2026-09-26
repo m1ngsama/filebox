@@ -40,8 +40,7 @@ Resumable upload — rerun the same command after an interruption. `fbput` speak
 
 ```sh
 fbput() { # fbput FILE VOLUME [DIR]
-  f=$1 vol=$2 dir=${3:-/}
-  b64() { printf %s "$1" | base64 | tr -d '\n'; }
+  local f=$1 vol=$2 dir=${3:-/} size state loc off meta
   size=$(wc -c < "$f" | tr -d ' ')
   state="$HOME/.cache/fbput/$(printf %s "$FILEBOX_URL|$vol|$dir|$(realpath "$f")|$size" | shasum | cut -c1-40)"
   mkdir -p "${state%/*}"
@@ -49,8 +48,8 @@ fbput() { # fbput FILE VOLUME [DIR]
   loc=$(cat "$state" 2>/dev/null)
   off=$([ -n "$loc" ] && curl -sfI "$@" "$FILEBOX_URL$loc" | tr -d '\r' | awk -F': ' 'tolower($1)=="upload-offset"{print $2}')
   if [ -z "$off" ]; then
-    loc=$(curl -sf -D - -o /dev/null -X POST "$@" -H "Upload-Length: $size" \
-      -H "Upload-Metadata: vol $(b64 "$vol"),dir $(b64 "$dir"),filename $(b64 "${f##*/}")" "$FILEBOX_URL/upload/" \
+    meta="vol $(printf %s "$vol" | base64 | tr -d '\n'),dir $(printf %s "$dir" | base64 | tr -d '\n'),filename $(printf %s "${f##*/}" | base64 | tr -d '\n')"
+    loc=$(curl -sf -D - -o /dev/null -X POST "$@" -H "Upload-Length: $size" -H "Upload-Metadata: $meta" "$FILEBOX_URL/upload/" \
       | tr -d '\r' | awk -F': ' 'tolower($1)=="location"{print $2}') || return 1
     [ "$size" = 0 ] && return 0
     echo "$loc" > "$state"; off=0
