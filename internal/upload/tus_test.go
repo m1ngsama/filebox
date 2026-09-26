@@ -392,3 +392,31 @@ func TestTusSweepFinalizesComplete(t *testing.T) {
 		t.Fatalf("sweep did not finalize the complete upload: %q", b)
 	}
 }
+
+func TestTusLockContention(t *testing.T) {
+	e := setup(t)
+	loc := e.create(t, 10, "l.bin")
+	id := strings.TrimPrefix(loc, "/up/")
+	u := e.srv.vols[0]
+	lk, _ := u.locker.NewLock(id)
+	if err := lk.Lock(t.Context(), func() {}); err != nil {
+		t.Fatal(err)
+	}
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		e.srv.settle(t.Context(), u, id)
+		e.srv.sweep(u, id, time.Now().Add(-time.Hour))
+		e.do("HEAD", loc, "")
+	}()
+	time.Sleep(50 * time.Millisecond)
+	lk.Unlock()
+	<-done
+	held, _ := u.locker.NewLock(id)
+	held.Lock(t.Context(), func() {})
+	go func() { time.Sleep(50 * time.Millisecond); held.Unlock() }()
+	e.srv.sweep(u, id, time.Now().Add(-time.Hour))
+	if w := e.do("HEAD", loc, ""); w.StatusCode != 200 {
+		t.Fatalf("head %d", w.StatusCode)
+	}
+}

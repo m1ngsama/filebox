@@ -253,7 +253,7 @@ func complete(ctx context.Context, u *volume, id string) (handler.FileInfo, bool
 
 func (s *Server) settle(ctx context.Context, u *volume, id string) (int64, error) {
 	lk, _ := u.locker.NewLock(id)
-	if err := lk.Lock(ctx, nil); err != nil {
+	if err := lk.Lock(ctx, func() {}); err != nil {
 		return -1, err
 	}
 	defer lk.Unlock()
@@ -332,7 +332,7 @@ func (s *Server) sweep(u *volume, id string, cutoff time.Time) {
 	lock, _ := u.locker.NewLock(id)
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 	defer cancel()
-	if lock.Lock(ctx, nil) != nil {
+	if lock.Lock(ctx, func() {}) != nil {
 		return
 	}
 	defer lock.Unlock()
