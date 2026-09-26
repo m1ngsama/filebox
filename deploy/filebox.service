@@ -1,0 +1,30 @@
+[Unit]
+Description=filebox
+After=network-online.target
+Wants=network-online.target
+RequiresMountsFor=/mnt/backup1t
+
+[Service]
+User=m1ng
+Group=m1ng
+ExecStart=/usr/local/bin/filebox serve -data /srv/data/filebox -listen :5280 -ffmpeg /usr/bin/ffmpeg \
+  -vol downloads=/mnt/backup1t/downloads -vol archive=/mnt/backup1t/archive -vol library=/mnt/backup1t/library
+Restart=always
+RestartSec=2
+UMask=0022
+NoNewPrivileges=yes
+PrivateTmp=yes
+ProtectSystem=strict
+ProtectHome=read-only
+ReadWritePaths=/mnt/backup1t /srv/data/filebox
+CapabilityBoundingSet=
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectControlGroups=yes
+RestrictSUIDSGID=yes
+RestrictNamespaces=yes
+LockPersonality=yes
+SystemCallArchitectures=native
+
+[Install]
+WantedBy=multi-user.target
