@@ -1,14 +1,13 @@
 package upload
 
 import (
+	"context"
 	"crypto/rand"
-	"encoding/base64"
-	"encoding/hex"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
 	"io/fs"
+	"log/slog"
 	"net/http"
 	"os"
 	"path"
@@ -18,6 +17,11 @@ import (
 	"sync"
 	"syscall"
 	"time"
+
+	"github.com/tus/tusd/v2/pkg/filestore"
+	"github.com/tus/tusd/v2/pkg/handler"
+	"github.com/tus/tusd/v2/pkg/memorylocker"
+	xslog "golang.org/x/exp/slog"
 
 	"github.com/m1ngsama/filebox/internal/httpx"
 	"github.com/m1ngsama/filebox/internal/vol"
@@ -53,23 +57,70 @@ func TargetFor(v *vol.Volume, dir string, meta map[string]string) (Target, error
 	return Target{Vol: v, Dir: dir, Name: name}, nil
 }
 
-type Server struct {
-	Vols *vol.Set
-	Dir  string
-	Now  func() time.Time
+const (
+	keyOwner = "owner"
+	keyDir   = "dir"
+	keyName  = "filename"
+)
 
-	locks    sync.Map
+var (
+	errNoSpace  = handler.NewError("ERR_INSUFFICIENT_STORAGE", "insufficient storage", http.StatusInsufficientStorage)
+	errFinalize = handler.NewError("ERR_FINALIZE", "cannot store the upload", http.StatusInternalServerError)
+)
+
+type Server struct {
+	Now func() time.Time
+
+	vols     []*volume
 	finalize sync.Mutex
 }
 
-type info struct {
-	ID      string `json:"id"`
-	Owner   string `json:"owner"`
-	Vol     string `json:"vol"`
-	Dir     string `json:"dir"`
-	Name    string `json:"name"`
-	Length  int64  `json:"length"`
-	Created int64  `json:"created"`
+type volume struct {
+	v      *vol.Volume
+	h      *handler.Handler
+	store  store
+	locker locker
+}
+
+type creation struct {
+	t     Target
+	owner string
+}
+
+type creationKey struct{}
+
+func New(vols *vol.Set) (*Server, error) {
+	s := &Server{}
+	logger := xslog.New(xslog.NewTextHandler(os.Stderr, &xslog.HandlerOptions{Level: xslog.LevelWarn}))
+	for i, v := range vols.All() {
+		if err := v.Root.MkdirAll(vol.UploadsDir, 0o700); err != nil {
+			return nil, err
+		}
+		u := &volume{v: v, store: store{filestore.New(filepath.Join(v.Path, vol.UploadsDir))}, locker: locker{memorylocker.New()}}
+		c := handler.NewStoreComposer()
+		c.UseCore(u.store)
+		c.UseTerminater(u.store)
+		c.UseLocker(u.locker)
+		h, err := handler.NewHandler(handler.Config{
+			StoreComposer:   c,
+			BasePath:        "/upload/" + v.Name + "/",
+			DisableDownload: true,
+			Cors:            &handler.CorsConfig{Disable: true},
+			Logger:          logger,
+			PreUploadCreateCallback: func(hook handler.HookEvent) (handler.HTTPResponse, handler.FileInfoChanges, error) {
+				return create(i, hook)
+			},
+			PreFinishResponseCallback: func(hook handler.HookEvent) (handler.HTTPResponse, error) {
+				return handler.HTTPResponse{}, s.finish(u, hook.Upload)
+			},
+		})
+		if err != nil {
+			return nil, err
+		}
+		u.h = h
+		s.vols = append(s.vols, u)
+	}
+	return s, nil
 }
 
 func (s *Server) now() time.Time {
@@ -79,49 +130,19 @@ func (s *Server) now() time.Time {
 	return time.Now()
 }
 
-func (s *Server) infoPath(id string) string { return filepath.Join(s.Dir, id+".json") }
-
-func partPath(id string) string { return path.Join(vol.UploadsDir, id) }
-
-func (s *Server) load(id string) (info, *vol.Volume, error) {
-	var in info
-	if len(id) != 32 || strings.Trim(id, "0123456789abcdef") != "" {
-		return in, nil, fs.ErrNotExist
+func (s *Server) lookup(id string) (*volume, bool) {
+	idx, tail, _ := strings.Cut(id, "-")
+	i, err := strconv.Atoi(idx)
+	if err != nil || i < 0 || i >= len(s.vols) || len(tail) != 26 || strings.Trim(tail, "ABCDEFGHIJKLMNOPQRSTUVWXYZ234567") != "" {
+		return nil, false
 	}
-	b, err := os.ReadFile(s.infoPath(id))
-	if err != nil {
-		return in, nil, fs.ErrNotExist
-	}
-	if err := json.Unmarshal(b, &in); err != nil {
-		return in, nil, err
-	}
-	v, ok := s.Vols.Get(in.Vol)
-	if !ok {
-		return in, nil, fs.ErrNotExist
-	}
-	return in, v, nil
-}
-
-func (s *Server) lock(id string) func() {
-	m, _ := s.locks.LoadOrStore(id, &sync.Mutex{})
-	mu := m.(*sync.Mutex)
-	mu.Lock()
-	return mu.Unlock
+	return s.vols[i], true
 }
 
 func (s *Server) Handler(prefix string, p Policy) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		h := w.Header()
-		h.Set("Tus-Resumable", "1.0.0")
 		if r.Method == http.MethodOptions {
-			h.Set("Tus-Version", "1.0.0")
-			h.Set("Tus-Extension", "creation,creation-with-upload,termination")
-			w.WriteHeader(204)
-			return
-		}
-		if r.Header.Get("Tus-Resumable") != "1.0.0" {
-			h.Set("Tus-Version", "1.0.0")
-			httpx.Fail(w, 412, "unsupported tus version")
+			s.vols[0].h.ServeHTTP(w, r)
 			return
 		}
 		owner, ok := p.Owner(r)
@@ -130,188 +151,93 @@ func (s *Server) Handler(prefix string, p Policy) http.Handler {
 			return
 		}
 		id := strings.TrimPrefix(r.URL.Path, prefix)
-		switch {
-		case r.Method == http.MethodPost && id == "":
-			s.create(w, r, prefix, owner, p)
-		case id == "" || strings.Contains(id, "/"):
-			httpx.Fail(w, 404, "not found")
-		default:
-			in, v, err := s.load(id)
-			if err == nil && in.Owner != owner {
-				err = fs.ErrNotExist
-			}
+		ctx := r.Context()
+		var u *volume
+		if r.Method == http.MethodPost && id == "" {
+			t, err := p.Resolve(r, handler.ParseMetadataHeader(r.Header.Get("Upload-Metadata")))
 			if err != nil {
 				httpx.Error(w, err)
 				return
 			}
-			switch r.Method {
-			case http.MethodHead:
-				s.head(w, in, v)
-			case http.MethodPatch:
-				s.patch(w, r, in, v)
-			case http.MethodDelete:
-				unlock := s.lock(id)
-				s.remove(in, v)
-				unlock()
-				w.WriteHeader(204)
-			default:
-				httpx.Fail(w, 405, "method not allowed")
+			for _, c := range s.vols {
+				if c.v == t.Vol {
+					u = c
+				}
 			}
+			ctx = context.WithValue(ctx, creationKey{}, creation{t, owner})
+		} else if u, ok = s.lookup(id); ok && u.owner(ctx, id) != owner {
+			u = nil
 		}
+		if u == nil {
+			httpx.Fail(w, 404, "not found")
+			return
+		}
+		r = r.Clone(ctx)
+		r.URL.Path, r.URL.RawPath = "/"+id, ""
+		u.h.ServeHTTP(&rewriter{ResponseWriter: w, prefix: prefix}, r)
 	})
 }
 
-func parseMeta(s string) map[string]string {
-	m := map[string]string{}
-	for _, kv := range strings.Split(s, ",") {
-		k, v, _ := strings.Cut(strings.TrimSpace(kv), " ")
-		if k == "" {
-			continue
-		}
-		b, err := base64.StdEncoding.DecodeString(v)
-		if err != nil {
-			continue
-		}
-		m[k] = string(b)
+func (u *volume) owner(ctx context.Context, id string) string {
+	up, err := u.store.FileStore.GetUpload(ctx, id)
+	if err != nil {
+		return ""
 	}
-	return m
+	info, err := up.GetInfo(ctx)
+	if err != nil {
+		return ""
+	}
+	return info.MetaData[keyOwner]
 }
 
-func (s *Server) create(w http.ResponseWriter, r *http.Request, prefix, owner string, p Policy) {
-	length, err := strconv.ParseInt(r.Header.Get("Upload-Length"), 10, 64)
-	if err != nil || length < 0 {
-		httpx.Fail(w, 400, "bad Upload-Length")
-		return
-	}
-	t, err := p.Resolve(r, parseMeta(r.Header.Get("Upload-Metadata")))
-	if err != nil {
-		httpx.Error(w, err)
-		return
-	}
-	if free, err := t.Vol.Free(); err != nil || uint64(length) > free {
-		httpx.Error(w, httpx.ErrNoSpace)
-		return
-	}
-	b := make([]byte, 16)
-	rand.Read(b)
-	in := info{ID: hex.EncodeToString(b), Owner: owner, Vol: t.Vol.Name, Dir: t.Dir, Name: t.Name,
-		Length: length, Created: s.now().Unix()}
-	if err := t.Vol.Root.MkdirAll(vol.UploadsDir, 0o700); err != nil {
-		httpx.Error(w, err)
-		return
-	}
-	f, err := t.Vol.Root.OpenFile(partPath(in.ID), os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0o644)
-	if err != nil {
-		httpx.Error(w, err)
-		return
-	}
-	f.Close()
-	js, _ := json.Marshal(in)
-	if err := os.MkdirAll(s.Dir, 0o700); err == nil {
-		err = os.WriteFile(s.infoPath(in.ID), js, 0o600)
-	}
-	if err != nil {
-		t.Vol.Root.Remove(partPath(in.ID))
-		httpx.Error(w, err)
-		return
-	}
-	if length == 0 {
-		if err := s.finish(in, t.Vol); err != nil {
-			httpx.Error(w, err)
-			return
-		}
-	}
-	w.Header().Set("Location", prefix+in.ID)
-	w.Header().Set("Upload-Offset", "0")
-	w.WriteHeader(201)
+type rewriter struct {
+	http.ResponseWriter
+	prefix string
 }
 
-func (s *Server) head(w http.ResponseWriter, in info, v *vol.Volume) {
-	fi, err := v.Root.Stat(partPath(in.ID))
-	if err != nil {
-		httpx.Error(w, err)
-		return
-	}
+func (w *rewriter) WriteHeader(code int) {
 	h := w.Header()
-	h.Set("Upload-Offset", strconv.FormatInt(fi.Size(), 10))
-	h.Set("Upload-Length", strconv.FormatInt(in.Length, 10))
-	h.Set("Cache-Control", "no-store")
-	w.WriteHeader(200)
+	if loc := h.Get("Location"); loc != "" {
+		h.Set("Location", w.prefix+path.Base(loc))
+	}
+	h.Del("Upload-Metadata")
+	w.ResponseWriter.WriteHeader(code)
 }
 
-func (s *Server) patch(w http.ResponseWriter, r *http.Request, in info, v *vol.Volume) {
-	if r.Header.Get("Content-Type") != "application/offset+octet-stream" {
-		httpx.Fail(w, 415, "bad content type")
-		return
+func (w *rewriter) Unwrap() http.ResponseWriter { return w.ResponseWriter }
+
+func create(idx int, hook handler.HookEvent) (handler.HTTPResponse, handler.FileInfoChanges, error) {
+	var none handler.FileInfoChanges
+	c, ok := hook.Context.Value(creationKey{}).(creation)
+	if !ok {
+		return handler.HTTPResponse{}, none, errors.New("upload created without a policy")
 	}
-	off, err := strconv.ParseInt(r.Header.Get("Upload-Offset"), 10, 64)
-	if err != nil {
-		httpx.Fail(w, 400, "bad Upload-Offset")
-		return
+	if free, err := c.t.Vol.Free(); err != nil || uint64(hook.Upload.Size) > free {
+		return handler.HTTPResponse{}, none, errNoSpace
 	}
-	defer s.lock(in.ID)()
-	f, err := v.Root.OpenFile(partPath(in.ID), os.O_WRONLY|os.O_APPEND, 0)
-	if err != nil {
-		httpx.Error(w, err)
-		return
-	}
-	fi, err := f.Stat()
-	if err != nil {
-		f.Close()
-		httpx.Error(w, err)
-		return
-	}
-	if fi.Size() != off {
-		f.Close()
-		w.Header().Set("Upload-Offset", strconv.FormatInt(fi.Size(), 10))
-		httpx.Fail(w, 409, "offset mismatch")
-		return
-	}
-	n, err := io.CopyN(f, r.Body, in.Length-off)
-	if err == nil {
-		if extra, _ := r.Body.Read(make([]byte, 1)); extra > 0 {
-			f.Truncate(off)
-			f.Close()
-			httpx.Fail(w, 413, "more data than Upload-Length")
-			return
-		}
-	}
-	if cerr := f.Close(); err == nil || errors.Is(err, io.EOF) {
-		err = cerr
-	}
-	if err != nil && !errors.Is(err, io.EOF) {
-		if errors.Is(err, syscall.ENOSPC) {
-			err = httpx.ErrNoSpace
-		}
-		httpx.Error(w, fmt.Errorf("upload %s: %w", in.ID, err))
-		return
-	}
-	off += n
-	if off == in.Length {
-		if err := s.finish(in, v); err != nil {
-			httpx.Error(w, err)
-			return
-		}
-	}
-	w.Header().Set("Upload-Offset", strconv.FormatInt(off, 10))
-	w.WriteHeader(204)
+	return handler.HTTPResponse{}, handler.FileInfoChanges{
+		ID:       strconv.Itoa(idx) + "-" + rand.Text(),
+		MetaData: handler.MetaData{keyOwner: c.owner, keyDir: c.t.Dir, keyName: c.t.Name},
+	}, nil
 }
 
-func (s *Server) finish(in info, v *vol.Volume) error {
+func (s *Server) finish(u *volume, info handler.FileInfo) error {
 	s.finalize.Lock()
 	defer s.finalize.Unlock()
-	if err := v.Root.MkdirAll(in.Dir, 0o755); err != nil {
-		return err
+	dir := info.MetaData[keyDir]
+	err := u.v.Root.MkdirAll(dir, 0o755)
+	var name string
+	if err == nil {
+		name, err = unique(u.v.Root, dir, info.MetaData[keyName])
 	}
-	name, err := unique(v.Root, in.Dir, in.Name)
+	if err == nil {
+		err = u.v.Root.Rename(path.Join(vol.UploadsDir, info.ID), path.Join(dir, name))
+	}
 	if err != nil {
-		return err
+		slog.Error("finalize upload", "id", info.ID, "err", err)
+		return errFinalize
 	}
-	if err := v.Root.Rename(partPath(in.ID), path.Join(in.Dir, name)); err != nil {
-		return err
-	}
-	os.Remove(s.infoPath(in.ID))
-	s.locks.Delete(in.ID)
+	u.v.Root.Remove(path.Join(vol.UploadsDir, info.ID+".info"))
 	return nil
 }
 
@@ -330,55 +256,95 @@ func unique(root *os.Root, dir, name string) (string, error) {
 	return "", fs.ErrExist
 }
 
-func (s *Server) remove(in info, v *vol.Volume) {
-	v.Root.Remove(partPath(in.ID))
-	os.Remove(s.infoPath(in.ID))
-	s.locks.Delete(in.ID)
-}
-
 func (s *Server) Sweep(maxAge time.Duration) {
 	cutoff := s.now().Add(-maxAge)
-	known := map[string]bool{}
-	if ents, err := os.ReadDir(s.Dir); err == nil {
-		for _, e := range ents {
-			id, ok := strings.CutSuffix(e.Name(), ".json")
-			if !ok {
-				continue
-			}
-			in, v, err := s.load(id)
-			if err != nil {
-				continue
-			}
-			unlock := s.lock(id)
-			fi, err := v.Root.Stat(partPath(id))
-			stale := err != nil || fi.ModTime().Before(cutoff)
-			if stale {
-				s.remove(in, v)
-			}
-			unlock()
-			if !stale {
-				known[id] = true
-			}
-		}
-	}
-	for _, v := range s.Vols.All() {
-		f, err := v.Root.Open(vol.UploadsDir)
+	for _, u := range s.vols {
+		f, err := u.v.Root.Open(vol.UploadsDir)
 		if err != nil {
 			continue
 		}
-		ents, _ := f.ReadDir(-1)
+		names, _ := f.Readdirnames(-1)
 		f.Close()
-		for _, e := range ents {
-			name := e.Name()
-			if known[name] {
-				continue
+		ids := map[string]bool{}
+		for _, n := range names {
+			ids[strings.TrimSuffix(n, ".info")] = true
+		}
+		for id := range ids {
+			if u.stale(id, cutoff) {
+				u.sweep(id, cutoff)
 			}
-			unlock := s.lock(name)
-			if fi, err := v.Root.Stat(partPath(name)); err == nil && fi.ModTime().Before(cutoff) {
-				v.Root.Remove(partPath(name))
-				s.locks.Delete(name)
-			}
-			unlock()
 		}
 	}
 }
+
+func (u *volume) stale(id string, cutoff time.Time) bool {
+	fi, err := u.v.Root.Stat(path.Join(vol.UploadsDir, id))
+	if err != nil {
+		fi, err = u.v.Root.Stat(path.Join(vol.UploadsDir, id+".info"))
+	}
+	return err == nil && fi.ModTime().Before(cutoff)
+}
+
+func (u *volume) sweep(id string, cutoff time.Time) {
+	lock, _ := u.locker.NewLock(id)
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+	if lock.Lock(ctx, nil) != nil {
+		return
+	}
+	defer lock.Unlock()
+	if u.stale(id, cutoff) {
+		u.v.Root.Remove(path.Join(vol.UploadsDir, id))
+		u.v.Root.Remove(path.Join(vol.UploadsDir, id+".info"))
+	}
+}
+
+type store struct{ filestore.FileStore }
+
+type upload struct{ handler.Upload }
+
+func noSpace(err error) error {
+	if errors.Is(err, syscall.ENOSPC) {
+		return errNoSpace
+	}
+	return err
+}
+
+func (s store) NewUpload(ctx context.Context, info handler.FileInfo) (handler.Upload, error) {
+	up, err := s.FileStore.NewUpload(ctx, info)
+	if err != nil {
+		return nil, noSpace(err)
+	}
+	return upload{up}, nil
+}
+
+func (s store) GetUpload(ctx context.Context, id string) (handler.Upload, error) {
+	up, err := s.FileStore.GetUpload(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+	return upload{up}, nil
+}
+
+func (s store) AsTerminatableUpload(up handler.Upload) handler.TerminatableUpload {
+	return s.FileStore.AsTerminatableUpload(up.(upload).Upload)
+}
+
+func (u upload) WriteChunk(ctx context.Context, offset int64, src io.Reader) (int64, error) {
+	n, err := u.Upload.WriteChunk(ctx, offset, src)
+	return n, noSpace(err)
+}
+
+// tusd v2.10.1 races on its request body when a lock interrupts its holder, so locks wait instead.
+type locker struct{ *memorylocker.MemoryLocker }
+
+type lock struct{ l handler.Lock }
+
+func (l locker) NewLock(id string) (handler.Lock, error) {
+	lk, err := l.MemoryLocker.NewLock(id)
+	return lock{lk}, err
+}
+
+func (l lock) Lock(ctx context.Context, _ func()) error { return l.l.Lock(ctx, func() {}) }
+
+func (l lock) Unlock() error { return l.l.Unlock() }

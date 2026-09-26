@@ -91,7 +91,10 @@ func serveCmd(args []string) error {
 	}
 	defer set.Close()
 	webFS, _ := fs.Sub(web.Dist, "dist")
-	up := &upload.Server{Vols: set, Dir: filepath.Join(*data, "uploads")}
+	up, err := upload.New(set)
+	if err != nil {
+		return err
+	}
 	go func() {
 		for {
 			up.Sweep(24 * time.Hour)

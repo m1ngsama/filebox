@@ -3,7 +3,9 @@ module github.com/m1ngsama/filebox
 go 1.26.0
 
 require (
+	github.com/tus/tusd/v2 v2.10.1
 	golang.org/x/crypto v0.57.0
+	golang.org/x/exp v0.0.0-20260611194520-c48552f49976
 	golang.org/x/net v0.59.0
 	modernc.org/sqlite v1.59.0
 )

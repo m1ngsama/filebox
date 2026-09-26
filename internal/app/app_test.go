@@ -48,7 +48,11 @@ func newTestApp(t *testing.T) *fixture {
 		"index.html":      {Data: []byte("<!doctype html>app")},
 		"assets/app-1.js": {Data: []byte("js")},
 	}
-	ap := &App{Vols: vols, DB: d, Auth: a, Web: web, Uploads: &upload.Server{Vols: vols, Dir: t.TempDir()}, Thumbs: thumb.New("", t.TempDir())}
+	up, err := upload.New(vols)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ap := &App{Vols: vols, DB: d, Auth: a, Web: web, Uploads: up, Thumbs: thumb.New("", t.TempDir())}
 	return &fixture{App: ap, H: ap.Handler(), Dir: dir, Dir2: dir2, Bearer: bearer,
 		Cookie: &http.Cookie{Name: auth.CookieName, Value: sess}, UserID: uid}
 }

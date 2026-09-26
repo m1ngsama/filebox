@@ -122,6 +122,28 @@ func TestShareDrop(t *testing.T) {
 	if c != 400 {
 		t.Fatalf("relativePath escape %d", c)
 	}
+	up := "/s/" + tok + "/upload/"
+	w := f.do("POST", up, nil, "X-No-Auth", "1", "Tus-Resumable", "1.0.0", "Upload-Length", "2",
+		"Upload-Metadata", "filename "+b64("d.txt"))
+	loc := w.Header().Get("Location")
+	if id, ok := strings.CutPrefix(loc, up); w.Code != 201 || !ok || strings.Contains(id, "/") {
+		t.Fatalf("create %d %q", w.Code, loc)
+	}
+	if w := f.do("HEAD", loc, nil, "X-No-Auth", "1", "Tus-Resumable", "1.0.0"); w.Code != 200 || w.Header().Get("Upload-Metadata") != "" {
+		t.Fatalf("head %d %v", w.Code, w.Header())
+	}
+	other := mkShare(t, f, `{"vol":"v","path":"inbox","mode":"upload"}`)
+	if w := f.do("HEAD", strings.Replace(loc, tok, other, 1), nil, "X-No-Auth", "1", "Tus-Resumable", "1.0.0"); w.Code != 404 {
+		t.Fatalf("upload visible through another share %d", w.Code)
+	}
+	if w := f.do("HEAD", "/upload/"+strings.TrimPrefix(loc, up), nil, "Tus-Resumable", "1.0.0"); w.Code != 404 {
+		t.Fatalf("share upload visible to the user route %d", w.Code)
+	}
+	w = f.do("PATCH", loc, strings.NewReader("hi"), "X-No-Auth", "1", "Tus-Resumable", "1.0.0",
+		"Upload-Offset", "0", "Content-Type", "application/offset+octet-stream")
+	if b, _ := os.ReadFile(filepath.Join(f.Dir, "inbox/d.txt")); w.Code != 204 || string(b) != "hi" {
+		t.Fatalf("patch %d %q", w.Code, b)
+	}
 }
 
 func TestShareSingleFile(t *testing.T) {
