@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"log/slog"
 	"net/http/httptest"
 	"os"
 	"os/exec"
@@ -166,5 +167,44 @@ func TestSymlinkEscape(t *testing.T) {
 	os.Symlink(filepath.Join(out, "x.png"), filepath.Join(dir, "x.png"))
 	if w := get(s, v, "x.png"); w.Code == 200 {
 		t.Fatal("thumbnail rendered through escaping symlink")
+	}
+}
+
+func TestProtocolWhitelist(t *testing.T) {
+	bin := t.TempDir()
+	log := filepath.Join(bin, "args")
+	for _, n := range []string{"ffmpeg", "ffprobe"} {
+		script := "#!/bin/sh\necho " + n + " \"$@\" >> " + log + "\nexit 1\n"
+		os.WriteFile(filepath.Join(bin, n), []byte(script), 0o755)
+	}
+	s, v, dir := setup(t, filepath.Join(bin, "ffmpeg"))
+	os.WriteFile(filepath.Join(dir, "a.mp4"), []byte("x"), 0o644)
+	get(s, v, "a.mp4")
+	b, _ := os.ReadFile(log)
+	lines := strings.Split(strings.TrimSpace(string(b)), "\n")
+	if len(lines) != 2 {
+		t.Fatalf("calls %q", b)
+	}
+	for _, l := range lines {
+		if !strings.Contains(l, "-protocol_whitelist file ") || strings.Index(l, "-protocol_whitelist") > strings.Index(l, "/dev/fd/3") {
+			t.Errorf("no whitelist before the input: %s", l)
+		}
+	}
+}
+
+func TestSymlinkEscapeQuiet(t *testing.T) {
+	s, v, dir := setup(t, "/nonexistent-ffmpeg")
+	out := t.TempDir()
+	os.WriteFile(filepath.Join(out, "x.png"), []byte("x"), 0o644)
+	os.Symlink(filepath.Join(out, "x.png"), filepath.Join(dir, "x.png"))
+	var buf bytes.Buffer
+	prev := slog.Default()
+	slog.SetDefault(slog.New(slog.NewTextHandler(&buf, nil)))
+	t.Cleanup(func() { slog.SetDefault(prev) })
+	if w := get(s, v, "x.png"); w.Code != 404 {
+		t.Fatalf("code %d", w.Code)
+	}
+	if strings.Contains(buf.String(), "ERROR") {
+		t.Fatalf("logged %s", buf.String())
 	}
 }

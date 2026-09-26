@@ -90,7 +90,7 @@ func (s *Service) Serve(w http.ResponseWriter, r *http.Request, v *vol.Volume, r
 	}
 	f, err := v.Root.Open(rel)
 	if err != nil {
-		httpx.Error(w, err)
+		httpx.Fail(w, 404, "no thumbnail")
 		return
 	}
 	defer f.Close()
@@ -127,8 +127,7 @@ func (s *Service) Serve(w http.ResponseWriter, r *http.Request, v *vol.Volume, r
 	http.ServeContent(w, r, "", fi.ModTime(), t)
 }
 
-// The source is handed to ffmpeg as fd 3 so it never resolves the path itself;
-// resolving it would follow symlinks out of the volume.
+// ffmpeg reads fd 3, never the path: resolving the path would follow symlinks out of the volume.
 func (s *Service) render(ctx context.Context, key string, src *os.File, kind, out string) error {
 	s.mu.Lock()
 	if ch, ok := s.inflight[key]; ok {
@@ -172,7 +171,7 @@ func (s *Service) render(ctx context.Context, key string, src *os.File, kind, ou
 		}
 	}
 	tmp := out + ".tmp"
-	args = append(args, "-i", "/dev/fd/3", "-frames:v", "1", "-vf", "scale='min(320,iw)':-2",
+	args = append(args, "-protocol_whitelist", "file", "-i", "/dev/fd/3", "-frames:v", "1", "-vf", "scale='min(320,iw)':-2",
 		"-c:v", "libwebp", "-quality", "75", "-f", "webp", tmp)
 	src.Seek(0, io.SeekStart)
 	cmd := exec.CommandContext(rctx, "nice", args...)
@@ -189,7 +188,7 @@ func (s *Service) duration(ctx context.Context, src *os.File) float64 {
 		return 0
 	}
 	src.Seek(0, io.SeekStart)
-	cmd := exec.CommandContext(ctx, s.FFprobe, "-v", "error", "-show_entries", "format=duration", "-of", "csv=p=0", "/dev/fd/3")
+	cmd := exec.CommandContext(ctx, s.FFprobe, "-v", "error", "-protocol_whitelist", "file", "-show_entries", "format=duration", "-of", "csv=p=0", "/dev/fd/3")
 	cmd.ExtraFiles = []*os.File{src}
 	b, err := cmd.Output()
 	if err != nil {
