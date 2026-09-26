@@ -1,9 +1,11 @@
 export const t = {
   brand: 'filebox',
+  username: '用户名',
   password: '密码',
   login: '登录',
   logout: '退出登录',
   wrongPassword: '密码不对',
+  wrongLogin: '用户名或密码不对',
   tooMany: '尝试次数太多，请稍后再试',
   loadFailed: '加载失败，请检查网络后重试。',
   retry: '重试',

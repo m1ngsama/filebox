@@ -53,7 +53,7 @@ const jobCodes: Record<string, number> = { exists: 409, notfound: 404, nospace: 
 
 export const api = {
   me: () => req<Me>('GET', '/api/me'),
-  login: (password: string) => req<void>('POST', '/api/login', { password }),
+  login: (name: string, password: string) => req<void>('POST', '/api/login', { name, password }),
   logout: () => req<void>('POST', '/api/logout'),
   ls: (vol: string, path: string) => req<{ entries: Entry[] }>('GET', `/api/ls?${q({ vol, path })}`),
   mkdir: (vol: string, path: string) => req<void>('POST', '/api/mkdir', { vol, path }),

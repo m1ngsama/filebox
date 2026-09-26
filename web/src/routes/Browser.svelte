@@ -22,6 +22,7 @@
   import { enqueue } from '../lib/uploads.svelte'
   import { thumbable, arrange, type Sort } from '../lib/format'
   import { t } from '../lib/i18n'
+  import { load, save } from '../lib/storage'
   import NavToggle from '../components/NavToggle.svelte'
   import EntryList, { type Action } from '../components/EntryList.svelte'
   import Preview from '../components/Preview.svelte'
@@ -40,15 +41,7 @@
   let filter = $state('')
   let sort = $state<Sort>('name')
   let desc = $state(false)
-  let grid = $state(
-    (() => {
-      try {
-        return localStorage.getItem('grid') === '1'
-      } catch {
-        return false
-      }
-    })(),
-  )
+  let grid = $state(load('grid') === '1')
   let dragging = $state(false)
   let depth = 0
   let preview = $state<Entry | null>(null)
@@ -96,11 +89,7 @@
     selected.clear()
   })
 
-  $effect(() => {
-    try {
-      localStorage.setItem('grid', grid ? '1' : '0')
-    } catch {}
-  })
+  $effect(() => save('grid', grid ? '1' : '0'))
 
   function open(e: Entry) {
     if (e.dir) navigate(filesURL(vol, join(e.name)))

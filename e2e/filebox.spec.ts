@@ -12,6 +12,7 @@ const row = (p: Page, name: string) => p.locator('.row', { hasText: name })
 
 async function login(page: Page) {
   await page.goto('/')
+  await page.getByPlaceholder(t.username).fill('admin')
   await page.getByPlaceholder(t.password).fill('pw-pw-pw-pw')
   await page.getByRole('button', { name: t.login }).click()
   await expect(page).toHaveURL(/\/files\/v\/$/)
@@ -54,9 +55,10 @@ async function shareDocs(page: Page, mode: 'read' | 'upload' | 'drop', password 
 
 test('wrong password is rejected', async ({ page }) => {
   await page.goto('/')
+  await page.getByPlaceholder(t.username).fill('admin')
   await page.getByPlaceholder(t.password).fill('nope-nope')
   await page.getByRole('button', { name: t.login }).click()
-  await expect(page.getByText(t.wrongPassword)).toBeVisible()
+  await expect(page.getByText(t.wrongLogin)).toBeVisible()
 })
 
 test('browse and preview', async ({ page }) => {
