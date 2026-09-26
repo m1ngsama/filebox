@@ -11,6 +11,7 @@ import (
 
 	"github.com/m1ngsama/filebox/internal/auth"
 	"github.com/m1ngsama/filebox/internal/db"
+	"github.com/m1ngsama/filebox/internal/thumb"
 	"github.com/m1ngsama/filebox/internal/upload"
 	"github.com/m1ngsama/filebox/internal/vol"
 )
@@ -47,7 +48,7 @@ func newTestApp(t *testing.T) *fixture {
 		"index.html":      {Data: []byte("<!doctype html>app")},
 		"assets/app-1.js": {Data: []byte("js")},
 	}
-	ap := &App{Vols: vols, DB: d, Auth: a, Web: web, Uploads: &upload.Server{Vols: vols, Dir: t.TempDir()}}
+	ap := &App{Vols: vols, DB: d, Auth: a, Web: web, Uploads: &upload.Server{Vols: vols, Dir: t.TempDir()}, Thumbs: thumb.New("", t.TempDir())}
 	return &fixture{App: ap, H: ap.Handler(), Dir: dir, Dir2: dir2, Bearer: bearer,
 		Cookie: &http.Cookie{Name: auth.CookieName, Value: sess}, UserID: uid}
 }

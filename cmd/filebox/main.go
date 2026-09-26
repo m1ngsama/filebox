@@ -20,6 +20,7 @@ import (
 	"github.com/m1ngsama/filebox/internal/app"
 	"github.com/m1ngsama/filebox/internal/auth"
 	"github.com/m1ngsama/filebox/internal/db"
+	"github.com/m1ngsama/filebox/internal/thumb"
 	"github.com/m1ngsama/filebox/internal/upload"
 	"github.com/m1ngsama/filebox/internal/vol"
 	"github.com/m1ngsama/filebox/web"
@@ -69,6 +70,7 @@ func serveCmd(args []string) error {
 	fl := flag.NewFlagSet("serve", flag.ExitOnError)
 	data := fl.String("data", "./data", "data directory")
 	listen := fl.String("listen", ":5280", "listen address")
+	ffmpeg := fl.String("ffmpeg", "", "path to ffmpeg for thumbnails; empty disables them")
 	var vols multi
 	fl.Var(&vols, "vol", "volume as name=path, repeatable")
 	fl.Parse(args)
@@ -96,7 +98,7 @@ func serveCmd(args []string) error {
 			time.Sleep(time.Hour)
 		}
 	}()
-	a := &app.App{Vols: set, DB: d, Auth: auth.New(d), Web: webFS, Uploads: up}
+	a := &app.App{Vols: set, DB: d, Auth: auth.New(d), Web: webFS, Uploads: up, Thumbs: thumb.New(*ffmpeg, filepath.Join(*data, "thumbs"))}
 
 	srv := &http.Server{Addr: *listen, Handler: a.Handler(), ReadHeaderTimeout: 10 * time.Second, IdleTimeout: 2 * time.Minute}
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)

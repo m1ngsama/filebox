@@ -12,6 +12,7 @@ import (
 	"github.com/m1ngsama/filebox/internal/db"
 	"github.com/m1ngsama/filebox/internal/httpx"
 	"github.com/m1ngsama/filebox/internal/serve"
+	"github.com/m1ngsama/filebox/internal/thumb"
 	"github.com/m1ngsama/filebox/internal/upload"
 	"github.com/m1ngsama/filebox/internal/vol"
 )
@@ -25,11 +26,13 @@ type App struct {
 	Auth    *auth.Auth
 	Web     fs.FS
 	Uploads *upload.Server
+	Thumbs  *thumb.Service
 }
 
 func (a *App) Handler() http.Handler {
 	mux := http.NewServeMux()
 	mux.Handle("GET /raw/{vol}/{path...}", a.Auth.RequireAny(http.HandlerFunc(a.raw)))
+	mux.Handle("GET /thumb/{vol}/{path...}", a.Auth.RequireAny(http.HandlerFunc(a.thumb)))
 	(&api.API{Vols: a.Vols, DB: a.DB, Auth: a.Auth, Jobs: api.NewJobs()}).Register(mux)
 	d := dav.Handler(a.Vols, a.Auth)
 	mux.Handle("/dav", d)
@@ -74,6 +77,15 @@ func (a *App) raw(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	serve.File(w, r, v.Root, rel, r.URL.Query().Has("dl"))
+}
+
+func (a *App) thumb(w http.ResponseWriter, r *http.Request) {
+	v, rel, err := a.Vols.Resolve(r.PathValue("vol"), r.PathValue("path"))
+	if err != nil {
+		httpx.Error(w, err)
+		return
+	}
+	a.Thumbs.Serve(w, r, v, rel)
 }
 
 func (a *App) spa() http.Handler {
