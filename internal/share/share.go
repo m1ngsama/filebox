@@ -26,14 +26,6 @@ type Service struct {
 	Auth    *auth.Auth
 	Uploads *upload.Server
 	Thumbs  *thumb.Service
-	Now     func() time.Time
-}
-
-func (s *Service) now() time.Time {
-	if s.Now != nil {
-		return s.Now()
-	}
-	return time.Now()
 }
 
 func (s *Service) Register(mux *http.ServeMux) {
@@ -79,7 +71,7 @@ func (s *Service) create(w http.ResponseWriter, r *http.Request) {
 	p, _ := auth.From(r.Context())
 	b := make([]byte, 16)
 	rand.Read(b)
-	now := s.now().Unix()
+	now := time.Now().Unix()
 	sh := &db.Share{Token: base64.RawURLEncoding.EncodeToString(b), UserID: p.UserID, Vol: v.Name,
 		Path: rel, Mode: in.Mode, CreatedAt: now}
 	if in.ExpiresIn > 0 {
@@ -135,7 +127,7 @@ type opened struct {
 }
 
 func (s *Service) open(w http.ResponseWriter, r *http.Request, allowed ...string) (opened, bool) {
-	sh, err := s.DB.ShareByToken(r.PathValue("token"), s.now().Unix())
+	sh, err := s.DB.ShareByToken(r.PathValue("token"), time.Now().Unix())
 	if err != nil {
 		httpx.Fail(w, 404, "not found")
 		return opened{}, false
