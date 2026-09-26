@@ -133,3 +133,20 @@ func TestDeleteShareDropsUnlockTokens(t *testing.T) {
 		t.Fatal("unlock token of another share removed")
 	}
 }
+
+func TestPurgeExpiredTokens(t *testing.T) {
+	d := open(t)
+	uid, _ := d.SetPassword("admin", "h")
+	d.InsertToken(&Token{UserID: uid, Kind: "session", Hash: "old", CreatedAt: 1, ExpiresAt: 50})
+	d.InsertToken(&Token{UserID: uid, Kind: "share", Hash: "old2", CreatedAt: 1, ExpiresAt: 99})
+	d.InsertToken(&Token{UserID: uid, Kind: "session", Hash: "live", CreatedAt: 1, ExpiresAt: 500})
+	d.InsertToken(&Token{UserID: uid, Kind: "app", Hash: "app", CreatedAt: 1})
+	if n, err := d.PurgeTokens(100); err != nil || n != 2 {
+		t.Fatalf("purged %d %v", n, err)
+	}
+	var left int
+	d.QueryRow(`SELECT count(*) FROM tokens`).Scan(&left)
+	if left != 2 {
+		t.Fatalf("%d tokens left", left)
+	}
+}

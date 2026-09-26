@@ -100,6 +100,7 @@ func serveCmd(args []string) error {
 	go func() {
 		for {
 			up.Sweep(24 * time.Hour)
+			d.PurgeTokens(time.Now().Unix())
 			time.Sleep(time.Hour)
 		}
 	}()
