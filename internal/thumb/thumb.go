@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -20,6 +21,10 @@ import (
 	"github.com/m1ngsama/filebox/internal/vol"
 )
 
+const maxFailed = 10000
+
+var errCanceled = errors.New("thumb: request canceled")
+
 var kinds = map[string]string{
 	".jpg": "image", ".jpeg": "image", ".png": "image", ".gif": "image", ".webp": "image",
 	".bmp": "image", ".tif": "image", ".tiff": "image", ".heic": "image", ".avif": "image",
@@ -35,11 +40,17 @@ type Service struct {
 	sem      chan struct{}
 	mu       sync.Mutex
 	inflight map[string]chan struct{}
-	failed   sync.Map
+	failed   map[string]struct{}
 }
 
 func New(ffmpeg, dir string) *Service {
-	s := &Service{FFmpeg: ffmpeg, Dir: dir, sem: make(chan struct{}, 2), inflight: map[string]chan struct{}{}}
+	if ffmpeg != "" && !filepath.IsAbs(ffmpeg) {
+		if p, err := exec.LookPath(ffmpeg); err == nil {
+			ffmpeg = p
+		}
+	}
+	s := &Service{FFmpeg: ffmpeg, Dir: dir, sem: make(chan struct{}, 2),
+		inflight: map[string]chan struct{}{}, failed: map[string]struct{}{}}
 	if ffmpeg != "" {
 		if p := filepath.Join(filepath.Dir(ffmpeg), "ffprobe"); fileExists(p) {
 			s.FFprobe = p
@@ -49,6 +60,28 @@ func New(ffmpeg, dir string) *Service {
 }
 
 func fileExists(p string) bool { _, err := os.Stat(p); return err == nil }
+
+func cacheKey(volName, rel string, size, mtime int64) string {
+	sum := sha256.Sum256([]byte(fmt.Sprintf("%s\x00%s\x00%d\x00%d", volName, rel, size, mtime)))
+	return hex.EncodeToString(sum[:])
+}
+
+func (s *Service) isFailed(key string) bool {
+	s.mu.Lock()
+	_, bad := s.failed[key]
+	s.mu.Unlock()
+	return bad
+}
+
+// Bounded so a stream of distinct broken files can't grow this without limit.
+func (s *Service) markFailed(key string) {
+	s.mu.Lock()
+	if len(s.failed) >= maxFailed {
+		s.failed = map[string]struct{}{}
+	}
+	s.failed[key] = struct{}{}
+	s.mu.Unlock()
+}
 
 func (s *Service) Serve(w http.ResponseWriter, r *http.Request, v *vol.Volume, rel string) {
 	kind := Kind(rel)
@@ -67,16 +100,17 @@ func (s *Service) Serve(w http.ResponseWriter, r *http.Request, v *vol.Volume, r
 		httpx.Fail(w, 404, "no thumbnail")
 		return
 	}
-	sum := sha256.Sum256([]byte(fmt.Sprintf("%s\x00%s\x00%d\x00%d", v.Name, rel, fi.Size(), fi.ModTime().UnixNano())))
-	key := hex.EncodeToString(sum[:])
+	key := cacheKey(v.Name, rel, fi.Size(), fi.ModTime().UnixNano())
 	out := filepath.Join(s.Dir, key[:2], key+".webp")
 	if !fileExists(out) {
-		if _, bad := s.failed.Load(key); bad {
+		if s.isFailed(key) {
 			httpx.Fail(w, 404, "no thumbnail")
 			return
 		}
-		if err := s.render(key, f, kind, out); err != nil {
-			s.failed.Store(key, struct{}{})
+		if err := s.render(r.Context(), key, f, kind, out); err != nil {
+			if !errors.Is(err, errCanceled) && !errors.Is(err, os.ErrNotExist) {
+				s.markFailed(key)
+			}
 			httpx.Fail(w, 404, "no thumbnail")
 			return
 		}
@@ -96,11 +130,20 @@ func (s *Service) Serve(w http.ResponseWriter, r *http.Request, v *vol.Volume, r
 
 // The source is handed to ffmpeg as fd 3 so it never resolves the path itself;
 // resolving it would follow symlinks out of the volume.
-func (s *Service) render(key string, src *os.File, kind, out string) error {
+//
+// ctx only governs how long this call is willing to wait for a semaphore slot
+// or another goroutine's in-flight render; once rendering itself starts it
+// runs to its own timeout so a shared render still finishes for other waiters
+// even after the caller that kicked it off gives up.
+func (s *Service) render(ctx context.Context, key string, src *os.File, kind, out string) error {
 	s.mu.Lock()
 	if ch, ok := s.inflight[key]; ok {
 		s.mu.Unlock()
-		<-ch
+		select {
+		case <-ch:
+		case <-ctx.Done():
+			return errCanceled
+		}
 		if !fileExists(out) {
 			return os.ErrNotExist
 		}
@@ -116,17 +159,21 @@ func (s *Service) render(key string, src *os.File, kind, out string) error {
 		close(ch)
 	}()
 
-	s.sem <- struct{}{}
+	select {
+	case s.sem <- struct{}{}:
+	case <-ctx.Done():
+		return errCanceled
+	}
 	defer func() { <-s.sem }()
 	if err := os.MkdirAll(filepath.Dir(out), 0o755); err != nil {
 		return err
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
+	rctx, cancel := context.WithTimeout(context.Background(), time.Minute)
 	defer cancel()
 
 	args := []string{"-n", "19", s.FFmpeg, "-nostdin", "-v", "error", "-y"}
 	if kind == "video" {
-		if d := s.duration(ctx, src); d > 0 {
+		if d := s.duration(rctx, src); d > 0 {
 			args = append(args, "-ss", strconv.FormatFloat(d/10, 'f', 2, 64))
 		}
 	}
@@ -134,7 +181,7 @@ func (s *Service) render(key string, src *os.File, kind, out string) error {
 	args = append(args, "-i", "/dev/fd/3", "-frames:v", "1", "-vf", "scale='min(320,iw)':-2",
 		"-c:v", "libwebp", "-quality", "75", "-f", "webp", tmp)
 	src.Seek(0, io.SeekStart)
-	cmd := exec.CommandContext(ctx, "nice", args...)
+	cmd := exec.CommandContext(rctx, "nice", args...)
 	cmd.ExtraFiles = []*os.File{src}
 	if err := cmd.Run(); err != nil {
 		os.Remove(tmp)

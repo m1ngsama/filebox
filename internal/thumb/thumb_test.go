@@ -2,12 +2,15 @@ package thumb
 
 import (
 	"bytes"
+	"context"
+	"fmt"
 	"net/http/httptest"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/m1ngsama/filebox/internal/vol"
 )
@@ -94,6 +97,64 @@ func TestRender(t *testing.T) {
 	}
 	if w := get(s, v, "red.png"); w.Code != 200 {
 		t.Fatal("cached thumbnail not served after ffmpeg vanished")
+	}
+}
+
+func TestCancelWhileQueued(t *testing.T) {
+	s, v, dir := setup(t, "/nonexistent-ffmpeg")
+	p := filepath.Join(dir, "a.jpg")
+	os.WriteFile(p, []byte("x"), 0o644)
+	fi, err := os.Stat(p)
+	if err != nil {
+		t.Fatal(err)
+	}
+	key := cacheKey(v.Name, "a.jpg", fi.Size(), fi.ModTime().UnixNano())
+
+	s.sem <- struct{}{}
+	s.sem <- struct{}{}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	r := httptest.NewRequest("GET", "/", nil).WithContext(ctx)
+	w := httptest.NewRecorder()
+	done := make(chan struct{})
+	go func() {
+		s.Serve(w, r, v, "a.jpg")
+		close(done)
+	}()
+	select {
+	case <-done:
+	case <-time.After(2 * time.Second):
+		t.Fatal("Serve blocked past cancellation instead of returning promptly")
+	}
+	if w.Code != 404 {
+		t.Fatalf("code = %d", w.Code)
+	}
+	if s.isFailed(key) {
+		t.Fatal("cancellation was negative-cached")
+	}
+
+	<-s.sem
+	<-s.sem
+
+	if w := get(s, v, "a.jpg"); w.Code != 404 {
+		t.Fatalf("second attempt code = %d", w.Code)
+	}
+	if !s.isFailed(key) {
+		t.Fatal("genuine failure after cancellation was not negative-cached (render never ran)")
+	}
+}
+
+func TestFailedCacheBounded(t *testing.T) {
+	s, _, _ := setup(t, "/nonexistent-ffmpeg")
+	for i := 0; i < maxFailed+1; i++ {
+		s.markFailed(fmt.Sprintf("k%d", i))
+	}
+	s.mu.Lock()
+	n := len(s.failed)
+	s.mu.Unlock()
+	if n >= maxFailed {
+		t.Fatalf("failed cache not bounded: %d entries", n)
 	}
 }
 
