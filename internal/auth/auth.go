@@ -12,6 +12,7 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"golang.org/x/crypto/bcrypt"
@@ -66,6 +67,11 @@ func Hash(tok string) string {
 	return hex.EncodeToString(s[:])
 }
 
+var dummyHash = sync.OnceValue(func() string {
+	h, _ := HashPassword(base64.RawURLEncoding.EncodeToString(random(32)))
+	return h
+})
+
 func random(n int) []byte {
 	b := make([]byte, n)
 	rand.Read(b)
@@ -87,7 +93,11 @@ func (a *Auth) Login(name, pw, ip string) (string, error) {
 		return "", ErrRateLimited
 	}
 	u, err := a.DB.UserByName(name)
-	if err != nil || !CheckPassword(u.PasswordHash, pw) {
+	hash := u.PasswordHash
+	if err != nil {
+		hash = dummyHash()
+	}
+	if !CheckPassword(hash, pw) || err != nil {
 		a.lim.fail(ip, a.Now())
 		return "", ErrBadLogin
 	}
@@ -204,6 +214,7 @@ func (a *Auth) RequireBasic(h http.Handler) http.Handler {
 			http.Error(w, "unauthorized", 401)
 			return
 		}
+		a.lim.ok(ip)
 		h.ServeHTTP(w, with(r, p))
 	})
 }

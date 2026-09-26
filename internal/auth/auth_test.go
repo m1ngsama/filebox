@@ -145,3 +145,71 @@ func TestClientIP(t *testing.T) {
 		t.Fatal("spoofed header trusted from LAN")
 	}
 }
+
+func TestSetCookie(t *testing.T) {
+	w := httptest.NewRecorder()
+	r := httptest.NewRequest("GET", "/", nil)
+	SetCookie(w, r, "name", "value", "/path", time.Hour)
+	c := w.Result().Cookies()[0]
+	if !c.HttpOnly || c.SameSite != http.SameSiteLaxMode || c.Path != "/path" || c.MaxAge != 3600 {
+		t.Fatalf("cookie = %+v", c)
+	}
+	if c.Secure {
+		t.Fatal("secure on plain http")
+	}
+
+	w = httptest.NewRecorder()
+	r = httptest.NewRequest("GET", "/", nil)
+	r.RemoteAddr = "127.0.0.1:1234"
+	r.Header.Set("X-Forwarded-Proto", "https")
+	SetCookie(w, r, "name", "value", "/", time.Hour)
+	if c := w.Result().Cookies()[0]; !c.Secure {
+		t.Fatal("not secure behind loopback https proxy")
+	}
+
+	w = httptest.NewRecorder()
+	r = httptest.NewRequest("GET", "/", nil)
+	SetCookie(w, r, "name", "value", "/", -1)
+	if c := w.Result().Cookies()[0]; c.MaxAge >= 0 {
+		t.Fatalf("MaxAge = %d, want negative", c.MaxAge)
+	}
+}
+
+func TestRequireSession(t *testing.T) {
+	a, _, uid := setup(t)
+	var gotUID int64
+	h := a.RequireSession(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		p, _ := From(r.Context())
+		gotUID = p.UserID
+	}))
+
+	w := httptest.NewRecorder()
+	h.ServeHTTP(w, httptest.NewRequest("GET", "/", nil))
+	if w.Code != 401 || w.Header().Get("Content-Type") != "application/json" {
+		t.Fatalf("code %d content-type %q", w.Code, w.Header().Get("Content-Type"))
+	}
+
+	tok, _ := a.Login("admin", "correct horse", "1.1.1.1")
+	w = httptest.NewRecorder()
+	h.ServeHTTP(w, withCookie(tok))
+	if w.Code != 200 || gotUID != uid {
+		t.Fatalf("code %d uid %d", w.Code, gotUID)
+	}
+}
+
+func TestRequireAnyBearerToken(t *testing.T) {
+	a, _, uid := setup(t)
+	tok, _ := a.NewAppToken(uid, "cli", false)
+	var gotUID int64
+	h := a.RequireAny(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		p, _ := From(r.Context())
+		gotUID = p.UserID
+	}))
+	r := httptest.NewRequest("GET", "/", nil)
+	r.Header.Set("Authorization", "Bearer "+tok)
+	w := httptest.NewRecorder()
+	h.ServeHTTP(w, r)
+	if w.Code != 200 || gotUID != uid {
+		t.Fatalf("code %d uid %d", w.Code, gotUID)
+	}
+}
