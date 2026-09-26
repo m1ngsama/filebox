@@ -7,6 +7,7 @@ import (
 
 	"github.com/m1ngsama/filebox/internal/api"
 	"github.com/m1ngsama/filebox/internal/auth"
+	"github.com/m1ngsama/filebox/internal/dav"
 	"github.com/m1ngsama/filebox/internal/db"
 	"github.com/m1ngsama/filebox/internal/httpx"
 	"github.com/m1ngsama/filebox/internal/serve"
@@ -27,6 +28,9 @@ func (a *App) Handler() http.Handler {
 	mux := http.NewServeMux()
 	mux.Handle("GET /raw/{vol}/{path...}", a.Auth.RequireAny(http.HandlerFunc(a.raw)))
 	(&api.API{Vols: a.Vols, DB: a.DB, Auth: a.Auth, Jobs: api.NewJobs()}).Register(mux)
+	d := dav.Handler(a.Vols, a.Auth)
+	mux.Handle("/dav", d)
+	mux.Handle("/dav/", d)
 	mux.Handle("/", a.spa())
 	return common(http.NewCrossOriginProtection().Handler(mux))
 }
