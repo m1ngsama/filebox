@@ -286,3 +286,28 @@ func TestLimiterFloodKeepsBans(t *testing.T) {
 		t.Fatalf("expired entries kept: %d", len(l.m))
 	}
 }
+
+func TestSessionCookieRenewed(t *testing.T) {
+	a, c, _ := setup(t)
+	tok, _ := a.Login("admin", "correct horse", "1.1.1.1")
+	h := a.RequireSession(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {}))
+	serve := func() *http.Cookie {
+		w := httptest.NewRecorder()
+		h.ServeHTTP(w, withCookie(tok))
+		if w.Code != 200 {
+			t.Fatalf("code %d", w.Code)
+		}
+		if cs := w.Result().Cookies(); len(cs) > 0 {
+			return cs[0]
+		}
+		return nil
+	}
+	if ck := serve(); ck != nil {
+		t.Fatalf("cookie re-sent without renewal: %+v", ck)
+	}
+	c.t = c.t.Add(2 * time.Hour)
+	ck := serve()
+	if ck == nil || ck.Name != CookieName || ck.Value != tok || ck.MaxAge != int(SessionTTL/time.Second) || ck.Path != "/" {
+		t.Fatalf("renewed cookie %+v", ck)
+	}
+}

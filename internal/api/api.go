@@ -132,7 +132,7 @@ func (a *API) login(w http.ResponseWriter, r *http.Request) {
 	case err != nil:
 		httpx.Fail(w, 401, "wrong password")
 	default:
-		auth.SetCookie(w, r, auth.CookieName, tok, "/", 30*24*time.Hour)
+		auth.SetCookie(w, r, auth.CookieName, tok, "/", auth.SessionTTL)
 		w.WriteHeader(204)
 	}
 }

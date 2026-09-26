@@ -24,7 +24,7 @@ import (
 const (
 	CookieName  = "fb_session"
 	ShareCookie = "fb_share"
-	sessionTTL  = 30 * 24 * time.Hour
+	SessionTTL  = 30 * 24 * time.Hour
 	shareTTL    = 24 * time.Hour
 )
 
@@ -105,7 +105,7 @@ func (a *Auth) Login(name, pw, ip string) (string, error) {
 	}
 	a.lim.ok(ip)
 	tok := base64.RawURLEncoding.EncodeToString(random(32))
-	return tok, a.issue(u.ID, "session", "", "", tok, sessionTTL)
+	return tok, a.issue(u.ID, "session", "", "", tok, SessionTTL)
 }
 
 func (a *Auth) Logout(tok string) error { return a.DB.DeleteTokenByHash(Hash(tok)) }
@@ -124,30 +124,35 @@ func (a *Auth) NewShareToken(userID, shareID int64) (string, error) {
 	return tok, a.issue(userID, "share", "", strconv.FormatInt(shareID, 10), tok, shareTTL)
 }
 
-func (a *Auth) lookup(tok, kind string) (db.Token, bool) {
+func (a *Auth) lookup(tok, kind string) (t db.Token, ok, renewed bool) {
 	if tok == "" {
-		return db.Token{}, false
+		return
 	}
 	now := a.Now().Unix()
 	t, err := a.DB.TokenByHash(Hash(tok), now)
 	if err != nil || t.Kind != kind {
-		return db.Token{}, false
+		return db.Token{}, false, false
 	}
 	switch {
 	case kind == "session" && now-t.LastUsedAt > 3600:
-		a.DB.TouchToken(t.ID, now, now+int64(sessionTTL/time.Second))
+		renewed = a.DB.TouchToken(t.ID, now, now+int64(SessionTTL/time.Second)) == nil
 	case kind == "app" && now-t.LastUsedAt > 60:
 		a.DB.TouchToken(t.ID, now, t.ExpiresAt)
 	}
-	return t, true
+	return t, true, renewed
 }
 
-func (a *Auth) Session(r *http.Request) (Principal, bool) {
+func (a *Auth) Session(r *http.Request) (Principal, bool) { return a.session(nil, r) }
+
+func (a *Auth) session(w http.ResponseWriter, r *http.Request) (Principal, bool) {
 	c, err := r.Cookie(CookieName)
 	if err != nil {
 		return Principal{}, false
 	}
-	t, ok := a.lookup(c.Value, "session")
+	t, ok, renewed := a.lookup(c.Value, "session")
+	if renewed && w != nil {
+		SetCookie(w, r, CookieName, c.Value, "/", SessionTTL)
+	}
 	return Principal{UserID: t.UserID, TokenID: t.ID}, ok
 }
 
@@ -158,7 +163,7 @@ func (a *Auth) App(r *http.Request) (Principal, bool) {
 	} else if b, ok := strings.CutPrefix(r.Header.Get("Authorization"), "Bearer "); ok {
 		tok = b
 	}
-	t, ok := a.lookup(tok, "app")
+	t, ok, _ := a.lookup(tok, "app")
 	return Principal{UserID: t.UserID, TokenID: t.ID, ReadOnly: t.Scope == "ro"}, ok
 }
 
@@ -167,7 +172,7 @@ func (a *Auth) ShareUnlocked(r *http.Request, shareID int64) bool {
 	if err != nil {
 		return false
 	}
-	t, ok := a.lookup(c.Value, "share")
+	t, ok, _ := a.lookup(c.Value, "share")
 	return ok && t.Scope == strconv.FormatInt(shareID, 10)
 }
 
@@ -177,7 +182,7 @@ func with(r *http.Request, p Principal) *http.Request {
 
 func (a *Auth) RequireSession(h http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		p, ok := a.Session(r)
+		p, ok := a.session(w, r)
 		if !ok {
 			httpx.Fail(w, 401, "unauthorized")
 			return
@@ -188,7 +193,7 @@ func (a *Auth) RequireSession(h http.Handler) http.Handler {
 
 func (a *Auth) RequireAny(h http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		p, ok := a.Session(r)
+		p, ok := a.session(w, r)
 		if !ok {
 			p, ok = a.App(r)
 		}
