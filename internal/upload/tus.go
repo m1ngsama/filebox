@@ -150,7 +150,9 @@ func (s *Server) Handler(prefix string, p Policy) http.Handler {
 			case http.MethodPatch:
 				s.patch(w, r, in, v)
 			case http.MethodDelete:
+				unlock := s.lock(id)
 				s.remove(in, v)
+				unlock()
 				w.WriteHeader(204)
 			default:
 				httpx.Fail(w, 405, "method not allowed")
@@ -347,12 +349,16 @@ func (s *Server) Sweep(maxAge time.Duration) {
 			if err != nil {
 				continue
 			}
+			unlock := s.lock(id)
 			fi, err := v.Root.Stat(partPath(id))
-			if err != nil || fi.ModTime().Before(cutoff) {
+			stale := err != nil || fi.ModTime().Before(cutoff)
+			if stale {
 				s.remove(in, v)
-				continue
 			}
-			known[id] = true
+			unlock()
+			if !stale {
+				known[id] = true
+			}
 		}
 	}
 	for _, v := range s.Vols.All() {
@@ -363,12 +369,16 @@ func (s *Server) Sweep(maxAge time.Duration) {
 		ents, _ := f.ReadDir(-1)
 		f.Close()
 		for _, e := range ents {
-			if known[e.Name()] {
+			name := e.Name()
+			if known[name] {
 				continue
 			}
-			if fi, err := e.Info(); err == nil && fi.ModTime().Before(cutoff) {
-				v.Root.Remove(partPath(e.Name()))
+			unlock := s.lock(name)
+			if fi, err := v.Root.Stat(partPath(name)); err == nil && fi.ModTime().Before(cutoff) {
+				v.Root.Remove(partPath(name))
+				s.locks.Delete(name)
 			}
+			unlock()
 		}
 	}
 }

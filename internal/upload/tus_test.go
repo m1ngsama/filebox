@@ -134,6 +134,41 @@ func TestTusNameCollision(t *testing.T) {
 	}
 }
 
+func TestTusConcurrentPatchSameUpload(t *testing.T) {
+	e := setup(t)
+	loc := e.create(t, 10, "c.bin")
+	var wg sync.WaitGroup
+	codes := make([]int, 2)
+	for i := range codes {
+		wg.Add(1)
+		go func(i int) {
+			defer wg.Done()
+			codes[i] = e.patch(loc, 0, "hello").Code
+		}(i)
+	}
+	wg.Wait()
+	var got204, got409 int
+	for _, c := range codes {
+		switch c {
+		case 204:
+			got204++
+		case 409:
+			got409++
+		default:
+			t.Fatalf("unexpected code %d", c)
+		}
+	}
+	if got204 != 1 || got409 != 1 {
+		t.Fatalf("codes %v", codes)
+	}
+	if w := e.patch(loc, 5, "world"); w.Code != 204 {
+		t.Fatalf("finish patch %d", w.Code)
+	}
+	if b, _ := os.ReadFile(filepath.Join(e.dir, "c.bin")); string(b) != "helloworld" {
+		t.Fatalf("content %q", b)
+	}
+}
+
 func TestTusOverflow(t *testing.T) {
 	e := setup(t)
 	loc := e.create(t, 5, "o.bin")
