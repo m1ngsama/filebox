@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"strconv"
 
 	_ "modernc.org/sqlite"
 )
@@ -18,7 +19,7 @@ var migrations = []string{
 		created_at INTEGER NOT NULL DEFAULT (unixepoch())
 	);
 	CREATE TABLE tokens (
-		id INTEGER PRIMARY KEY,
+		id INTEGER PRIMARY KEY AUTOINCREMENT,
 		user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
 		kind TEXT NOT NULL,
 		hash TEXT NOT NULL UNIQUE,
@@ -29,7 +30,7 @@ var migrations = []string{
 		expires_at INTEGER NOT NULL DEFAULT 0
 	);
 	CREATE TABLE shares (
-		id INTEGER PRIMARY KEY,
+		id INTEGER PRIMARY KEY AUTOINCREMENT,
 		token TEXT NOT NULL UNIQUE,
 		user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
 		vol TEXT NOT NULL,
@@ -219,8 +220,21 @@ func (d *DB) ListShares(userID int64) ([]Share, error) {
 }
 
 func (d *DB) DeleteShare(userID, id int64) error {
-	_, err := d.Exec(`DELETE FROM shares WHERE user_id = ? AND id = ?`, userID, id)
-	return err
+	tx, err := d.Begin()
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+	res, err := tx.Exec(`DELETE FROM shares WHERE user_id = ? AND id = ?`, userID, id)
+	if err != nil {
+		return err
+	}
+	if n, _ := res.RowsAffected(); n > 0 {
+		if _, err := tx.Exec(`DELETE FROM tokens WHERE kind = 'share' AND scope = ?`, strconv.FormatInt(id, 10)); err != nil {
+			return err
+		}
+	}
+	return tx.Commit()
 }
 
 func (d *DB) HitShare(id int64) error {

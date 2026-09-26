@@ -3,6 +3,7 @@ package db
 import (
 	"errors"
 	"path/filepath"
+	"strconv"
 	"testing"
 )
 
@@ -112,5 +113,23 @@ func TestShares(t *testing.T) {
 	d.DeleteShare(uid, s.ID)
 	if _, err := d.ShareByToken("tok", 10); !errors.Is(err, ErrNotFound) {
 		t.Fatal("deleted share returned")
+	}
+}
+
+func TestDeleteShareDropsUnlockTokens(t *testing.T) {
+	d := open(t)
+	uid, _ := d.SetPassword("admin", "h")
+	s := &Share{Token: "tok", UserID: uid, Vol: "v", Path: ".", Mode: "read", CreatedAt: 1}
+	d.InsertShare(s)
+	d.InsertToken(&Token{UserID: uid, Kind: "share", Hash: "u1", Scope: strconv.FormatInt(s.ID, 10), CreatedAt: 1})
+	d.InsertToken(&Token{UserID: uid, Kind: "share", Hash: "u2", Scope: "999", CreatedAt: 1})
+	if err := d.DeleteShare(uid, s.ID); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := d.TokenByHash("u1", 2); !errors.Is(err, ErrNotFound) {
+		t.Fatal("unlock token of a deleted share survived")
+	}
+	if _, err := d.TokenByHash("u2", 2); err != nil {
+		t.Fatal("unlock token of another share removed")
 	}
 }

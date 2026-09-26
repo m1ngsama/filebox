@@ -201,3 +201,29 @@ func TestUploadStorageErrorHidden(t *testing.T) {
 		}
 	}
 }
+
+func TestShareUnlockNotReusedAfterDelete(t *testing.T) {
+	f := newTestApp(t)
+	f.write(t, "p/a.txt", "x")
+	type created struct {
+		ID    int64
+		Token string
+	}
+	w := f.do("POST", "/api/shares", body(`{"vol":"v","path":"p","mode":"read","password":"first pw"}`))
+	a := decode[created](t, w)
+	_, _, cookie := anon(f, "POST", "/s/"+a.Token+"/unlock", `{"password":"first pw"}`)
+	val := strings.TrimPrefix(strings.SplitN(cookie, ";", 2)[0], "fb_share=")
+	if val == "" {
+		t.Fatal("no unlock cookie")
+	}
+	if w := f.do("DELETE", "/api/shares/"+strconv.FormatInt(a.ID, 10), nil); w.Code != 204 {
+		t.Fatalf("delete %d", w.Code)
+	}
+	b := decode[created](t, f.do("POST", "/api/shares", body(`{"vol":"v","path":"p","mode":"read","password":"second pw"}`)))
+	if b.ID == a.ID {
+		t.Errorf("share id %d reused", b.ID)
+	}
+	if c, _, _ := anon(f, "GET", "/s/"+b.Token+"/ls", "", "Cookie", "fb_share="+val); c != 401 {
+		t.Fatalf("old unlock cookie opened the new share: %d", c)
+	}
+}
