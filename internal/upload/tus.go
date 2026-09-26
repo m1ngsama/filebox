@@ -15,7 +15,6 @@ import (
 	"strconv"
 	"strings"
 	"sync"
-	"syscall"
 	"time"
 
 	"github.com/tus/tusd/v2/pkg/filestore"
@@ -358,7 +357,7 @@ func sanitize(err error) error {
 	switch {
 	case err == nil || errors.As(err, &herr):
 		return err
-	case errors.Is(err, syscall.ENOSPC) || errors.Is(err, syscall.EDQUOT):
+	case httpx.NoSpace(err):
 		return errNoSpace
 	}
 	slog.Error("upload storage", "err", err)

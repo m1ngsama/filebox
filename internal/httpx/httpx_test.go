@@ -5,19 +5,24 @@ import (
 	"io/fs"
 	"net/http/httptest"
 	"strings"
+	"syscall"
 	"testing"
+
+	"github.com/m1ngsama/filebox/internal/db"
 
 	"github.com/m1ngsama/filebox/internal/vol"
 )
 
 func TestErrorMapping(t *testing.T) {
 	cases := map[error]int{
-		fs.ErrNotExist:                   404,
-		fmt.Errorf("x: %w", fs.ErrExist): 409,
-		vol.ErrBadPath:                   400,
-		fs.ErrPermission:                 403,
-		ErrNoSpace:                       507,
-		fmt.Errorf("disk on fire"):       500,
+		fs.ErrNotExist:                      404,
+		fmt.Errorf("x: %w", fs.ErrExist):    409,
+		vol.ErrBadPath:                      400,
+		fs.ErrPermission:                    403,
+		fmt.Errorf("w: %w", syscall.ENOSPC): 507,
+		syscall.EDQUOT:                      507,
+		fmt.Errorf("q: %w", db.ErrNotFound): 404,
+		fmt.Errorf("disk on fire"):          500,
 	}
 	for err, want := range cases {
 		w := httptest.NewRecorder()

@@ -12,9 +12,9 @@ import (
 	"strings"
 	"sync"
 	"sync/atomic"
-	"syscall"
 	"time"
 
+	"github.com/m1ngsama/filebox/internal/httpx"
 	"github.com/m1ngsama/filebox/internal/vol"
 )
 
@@ -88,7 +88,7 @@ func errorCode(err error) string {
 		return "exists"
 	case errors.Is(err, fs.ErrNotExist):
 		return "notfound"
-	case errors.Is(err, syscall.ENOSPC) || errors.Is(err, syscall.EDQUOT):
+	case httpx.NoSpace(err):
 		return "nospace"
 	}
 	return "internal"
