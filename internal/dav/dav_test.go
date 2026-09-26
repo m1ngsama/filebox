@@ -150,6 +150,8 @@ func TestDavMove(t *testing.T) {
 
 func TestDavInfiniteDepth(t *testing.T) {
 	e := setup(t)
+	os.Mkdir(filepath.Join(e.dir, "sub"), 0o755)
+	os.WriteFile(filepath.Join(e.dir, "sub/deep.txt"), nil, 0o644)
 	for _, d := range []string{"infinity", ""} {
 		r, _ := http.NewRequest("PROPFIND", e.srv.URL+"/dav/v/", nil)
 		r.SetBasicAuth("me", e.rw)
@@ -162,7 +164,11 @@ func TestDavInfiniteDepth(t *testing.T) {
 		}
 		b, _ := io.ReadAll(res.Body)
 		res.Body.Close()
-		if res.StatusCode != 403 || !strings.Contains(string(b), "propfind-finite-depth") {
+		if d == "" {
+			if res.StatusCode != 207 || !strings.Contains(string(b), "/dav/v/sub/") || strings.Contains(string(b), "deep.txt") {
+				t.Errorf("missing depth: %d %s", res.StatusCode, b)
+			}
+		} else if res.StatusCode != 403 || !strings.Contains(string(b), "propfind-finite-depth") {
 			t.Errorf("depth %q: %d %s", d, res.StatusCode, b)
 		}
 	}

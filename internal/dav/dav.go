@@ -35,7 +35,10 @@ func Handler(vols *vol.Set, a *auth.Auth) http.Handler {
 			http.Error(w, "read-only token", http.StatusForbidden)
 			return
 		}
-		if d := r.Header.Get("Depth"); r.Method == "PROPFIND" && (d == "" || d == "infinity") {
+		if r.Method == "PROPFIND" && r.Header.Get("Depth") == "" {
+			r.Header.Set("Depth", "1")
+		}
+		if r.Method == "PROPFIND" && r.Header.Get("Depth") == "infinity" {
 			w.Header().Set("Content-Type", `application/xml; charset="utf-8"`)
 			w.WriteHeader(http.StatusForbidden)
 			io.WriteString(w, `<?xml version="1.0" encoding="utf-8"?><D:error xmlns:D="DAV:"><D:propfind-finite-depth/></D:error>`)
