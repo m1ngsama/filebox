@@ -4,11 +4,13 @@
   import Trash from '@lucide/svelte/icons/trash'
   import Settings from '@lucide/svelte/icons/settings'
   import LogOut from '@lucide/svelte/icons/log-out'
+  import { MediaQuery } from 'svelte/reactivity'
   import { link } from '../lib/router.svelte'
   import { shell } from '../lib/shell.svelte'
   import { t } from '../lib/i18n'
 
   let { vols, parts, onlogout }: { vols: string[]; parts: string[]; onlogout: () => void } = $props()
+  const drawer = new MediaQuery('max-width: 767px')
   const cur = $derived(parts[0] === 'files' || parts[0] === 'trash' ? parts[1] : undefined)
 
   function go(e: MouseEvent) {
@@ -20,7 +22,7 @@
 <svelte:window onkeydown={(e) => e.key === 'Escape' && (shell.nav = false)} />
 
 {#if shell.nav}<button class="scrim" aria-label={t.close} onclick={() => (shell.nav = false)}></button>{/if}
-<nav class="nav" class:open={shell.nav} aria-label={t.navigation}>
+<nav class="nav" class:open={shell.nav} aria-label={t.navigation} inert={drawer.current && !shell.nav}>
   <div class="brand">{t.brand}</div>
   <ul>
     {#each vols as v}

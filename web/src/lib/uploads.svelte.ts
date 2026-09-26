@@ -1,5 +1,6 @@
 import * as tus from 'tus-js-client'
 import { t } from './i18n'
+import { errorText } from './api'
 
 export type Item = {
   id: number
@@ -30,6 +31,8 @@ export function enqueue(files: { file: File; rel?: string }[], endpoint: string,
 function errorMessage(e: Error) {
   const res = (e as tus.DetailedError).originalResponse
   if (!res) return t.uploadFailed
+  const known = errorText(res.getStatus())
+  if (known) return known
   const body = res.getBody()?.trim() ?? ''
   try {
     const msg = JSON.parse(body).error

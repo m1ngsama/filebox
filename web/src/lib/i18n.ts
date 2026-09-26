@@ -81,4 +81,17 @@ export const t = {
   copyLink: '复制链接',
   copied: '已复制',
   deleteShare: '删除分享',
+  deleteShareTitle: '删除分享链接',
+  deleteShareMessage: '删除后这个链接立即失效，无法恢复。',
+  errors: {
+    400: '名称或路径无效',
+    401: '请重新登录',
+    403: '没有权限',
+    404: '文件不存在或已被移走',
+    409: '已存在同名文件',
+    413: '文件超过允许的大小',
+    429: '操作太频繁，请稍后再试',
+    507: '磁盘空间不足',
+  } as Record<number, string>,
+  serverError: '服务器出错，请稍后再试',
 }

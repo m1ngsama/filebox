@@ -70,6 +70,7 @@
       .filter((e) => e.name.toLowerCase().includes(f))
       .sort((a, b) => (a.dir !== b.dir ? (a.dir ? -1 : 1) : dir * cmp(a, b) || collator.compare(a.name, b.name)))
   })
+  const selectedFiles = $derived(entries.filter((e) => !e.dir && selected.has(e.name)).map((e) => e.name))
   const thumb = (e: Entry) => (!e.dir && thumbable(e.name) ? thumbURL(vol, join(e.name)) : null)
 
   async function refresh() {
@@ -157,13 +158,13 @@
   const what = (names: string[]) => (names.length === 1 ? `“${names[0]}”` : t.items(names.length))
 
   function keydown(e: KeyboardEvent) {
-    if (dialog || preview || document.querySelector('[role=menu]')) return
+    if (document.querySelector('[role=dialog], [role=menu]')) return
     const typing = e.target instanceof HTMLInputElement || e.target instanceof HTMLSelectElement
     if (e.key === 'Escape') {
       if (details) details = null
       else selected.clear()
     } else if (typing) return
-    else if (e.key === 'Delete' && selected.size) dialog = { kind: 'delete', names: [...selected] }
+    else if ((e.key === 'Delete' || e.key === 'Backspace') && selected.size) dialog = { kind: 'delete', names: [...selected] }
     else if (e.key === 'Enter' && selected.size === 1 && !(e.target instanceof HTMLButtonElement || e.target instanceof HTMLAnchorElement)) {
       const hit = entries.find((x) => selected.has(x.name))
       if (hit) open(hit)
@@ -176,7 +177,7 @@
 <svelte:window onkeydowncapture={keydown} ondragover={(e) => e.preventDefault()} ondrop={(e) => e.preventDefault()} />
 
 {#snippet batch()}
-  <button class="ghost" onclick={() => download(entries.filter((e) => !e.dir && selected.has(e.name)).map((e) => e.name))}>
+  <button class="ghost" disabled={!selectedFiles.length} onclick={() => download(selectedFiles)}>
     <Download size={16} />{t.download}
   </button>
   <button class="ghost" onclick={() => (dialog = { kind: 'move', names: [...selected] })}><FolderInput size={16} />{t.moveOrCopy}</button>

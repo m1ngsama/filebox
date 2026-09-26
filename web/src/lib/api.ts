@@ -1,3 +1,8 @@
+import { t } from './i18n'
+
+export const errorText = (status: number): string | undefined =>
+  t.errors[status] ?? (status >= 500 ? t.serverError : undefined)
+
 export class HttpError extends Error {
   constructor(public status: number, message: string) {
     super(message)
@@ -24,7 +29,7 @@ async function req<T>(method: string, url: string, body?: unknown): Promise<T> {
     try {
       msg = JSON.parse(text).error ?? msg
     } catch {}
-    throw new HttpError(r.status, msg)
+    throw new HttpError(r.status, errorText(r.status) ?? msg)
   }
   return (text ? JSON.parse(text) : undefined) as T
 }
@@ -52,7 +57,7 @@ export const api = {
     for (;;) {
       const s = await req<JobStatus>('GET', `/api/jobs/${id}`)
       onprogress?.(s)
-      if (s.state === 'error') throw new Error(s.error)
+      if (s.state === 'error') throw new Error(t.serverError)
       if (s.state === 'done') return
       await new Promise((r) => setTimeout(r, 1000))
     }
