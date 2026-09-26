@@ -32,6 +32,12 @@ func TestParse(t *testing.T) {
 	if _, err := Parse([]string{"a=/does/not/exist"}); err == nil {
 		t.Fatal("want error for missing dir")
 	}
+	if _, err := Parse([]string{".filebox=" + t.TempDir()}); err == nil {
+		t.Fatal("want error for reserved name .filebox")
+	}
+	if _, err := Parse([]string{".trash=" + t.TempDir()}); err == nil {
+		t.Fatal("want error for reserved name .trash")
+	}
 	s, _ := newSet(t)
 	if v, ok := s.Get("data"); !ok || v.Name != "data" {
 		t.Fatal("Get failed")

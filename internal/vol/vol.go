@@ -76,10 +76,13 @@ func (s *Set) All() []*Volume {
 }
 
 func (s *Set) Close() error {
+	var errs []error
 	for _, v := range s.m {
-		v.Root.Close()
+		if err := v.Root.Close(); err != nil {
+			errs = append(errs, err)
+		}
 	}
-	return nil
+	return errors.Join(errs...)
 }
 
 func Reserved(name string) bool { return name == ".filebox" || name == TrashDir }
