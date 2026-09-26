@@ -82,7 +82,7 @@
             <span class="row-title" title={k.label}>{k.label}</span>
             <span class="tags">
               <span class="tag">{k.readonly ? t.readonly : t.readWrite}</span>
-              {#if k.last_used > k.created}
+              {#if k.last_used}
                 <span class="hint" title={date(k.last_used * 1000)}>{t.lastUsed(ago(k.last_used * 1000))}</span>
               {:else}
                 <span class="hint">{t.neverUsed}</span>

@@ -311,3 +311,17 @@ func TestSessionCookieRenewed(t *testing.T) {
 		t.Fatalf("renewed cookie %+v", ck)
 	}
 }
+
+func TestAppTokenNeverUsed(t *testing.T) {
+	a, c, uid := setup(t)
+	tok, _ := a.NewAppToken(uid, "fresh", false)
+	if ts, _ := a.DB.ListTokens(uid, "app"); len(ts) != 1 || ts[0].LastUsedAt != 0 {
+		t.Fatalf("new token %+v", ts)
+	}
+	r := httptest.NewRequest("GET", "/", nil)
+	r.Header.Set("Authorization", "Bearer "+tok)
+	a.App(r)
+	if ts, _ := a.DB.ListTokens(uid, "app"); ts[0].LastUsedAt != c.t.Unix() {
+		t.Fatalf("used token %+v", ts)
+	}
+}

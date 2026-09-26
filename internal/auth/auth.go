@@ -82,8 +82,7 @@ func random(n int) []byte {
 
 func (a *Auth) issue(userID int64, kind, label, scope, tok string, ttl time.Duration) error {
 	now := a.Now()
-	t := &db.Token{UserID: userID, Kind: kind, Hash: Hash(tok), Label: label, Scope: scope,
-		CreatedAt: now.Unix(), LastUsedAt: now.Unix()}
+	t := &db.Token{UserID: userID, Kind: kind, Hash: Hash(tok), Label: label, Scope: scope, CreatedAt: now.Unix()}
 	if ttl > 0 {
 		t.ExpiresAt = now.Add(ttl).Unix()
 	}
@@ -134,7 +133,7 @@ func (a *Auth) lookup(tok, kind string) (t db.Token, ok, renewed bool) {
 		return db.Token{}, false, false
 	}
 	switch {
-	case kind == "session" && now-t.LastUsedAt > 3600:
+	case kind == "session" && now-max(t.LastUsedAt, t.CreatedAt) > 3600:
 		renewed = a.DB.TouchToken(t.ID, now, now+int64(SessionTTL/time.Second)) == nil
 	case kind == "app" && now-t.LastUsedAt > 60:
 		a.DB.TouchToken(t.ID, now, t.ExpiresAt)

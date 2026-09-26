@@ -195,7 +195,11 @@ func tokenCmd(args []string) error {
 			return err
 		}
 		for _, t := range ts {
-			fmt.Printf("%d\t%s\t%s\tlast used %s\n", t.ID, t.Label, t.Scope, time.Unix(t.LastUsedAt, 0).Format(time.DateTime))
+			used := "never used"
+			if t.LastUsedAt > 0 {
+				used = "last used " + time.Unix(t.LastUsedAt, 0).Format(time.DateTime)
+			}
+			fmt.Printf("%d\t%s\t%s\t%s\n", t.ID, t.Label, t.Scope, used)
 		}
 	case "rm":
 		if len(rest) < 2 {
