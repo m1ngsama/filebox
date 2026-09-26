@@ -3,6 +3,7 @@ package vol
 import (
 	"errors"
 	"fmt"
+	"io/fs"
 	"os"
 	"path"
 	"sort"
@@ -83,6 +84,18 @@ func (s *Set) Close() error {
 		}
 	}
 	return errors.Join(errs...)
+}
+
+func (s *Set) Resolve(volName, p string) (*Volume, string, error) {
+	v, ok := s.m[volName]
+	if !ok {
+		return nil, "", fs.ErrNotExist
+	}
+	rel, err := Clean(p)
+	if err != nil {
+		return nil, "", err
+	}
+	return v, rel, nil
 }
 
 func Reserved(name string) bool { return name == ".filebox" || name == TrashDir }

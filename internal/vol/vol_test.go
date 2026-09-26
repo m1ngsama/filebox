@@ -2,6 +2,7 @@ package vol
 
 import (
 	"errors"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"testing"
@@ -104,6 +105,20 @@ func TestInsideSymlinkAllowed(t *testing.T) {
 	b, err := v.Root.ReadFile("alias/f")
 	if err != nil || string(b) != "ok" {
 		t.Fatalf("inside symlink: %q %v", b, err)
+	}
+}
+
+func TestResolve(t *testing.T) {
+	s, _ := newSet(t)
+	v, rel, err := s.Resolve("data", "/a/../b")
+	if err != nil || v.Name != "data" || rel != "b" {
+		t.Fatalf("%v %q %v", v, rel, err)
+	}
+	if _, _, err := s.Resolve("nope", "a"); !errors.Is(err, fs.ErrNotExist) {
+		t.Fatalf("err = %v", err)
+	}
+	if _, _, err := s.Resolve("data", ".trash"); !errors.Is(err, ErrBadPath) {
+		t.Fatalf("err = %v", err)
 	}
 }
 
