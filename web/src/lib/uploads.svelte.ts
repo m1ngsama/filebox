@@ -27,15 +27,15 @@ export function enqueue(files: { file: File; rel?: string }[], endpoint: string,
   pump()
 }
 
-function errorMessage(e: Error | tus.DetailedError) {
-  const body = (e as tus.DetailedError).originalResponse?.getBody()
-  if (body) {
-    try {
-      const parsed = JSON.parse(body).error
-      if (parsed) return parsed as string
-    } catch {}
-  }
-  return e.message
+function errorMessage(e: Error) {
+  const res = (e as tus.DetailedError).originalResponse
+  if (!res) return t.uploadFailed
+  const body = res.getBody()?.trim() ?? ''
+  try {
+    const msg = JSON.parse(body).error
+    if (msg) return msg as string
+  } catch {}
+  return `HTTP ${res.getStatus()} ${body.split('\n')[0]}`.trim()
 }
 
 function run({ item, file, endpoint, meta }: Job) {
@@ -66,6 +66,7 @@ function run({ item, file, endpoint, meta }: Job) {
     )
     upload.findPreviousUploads().then((prev) => {
       const newest = prev.sort((a, b) => Date.parse(b.creationTime) - Date.parse(a.creationTime))[0]
+      if (item.ctl.signal.aborted) return
       if (newest) upload.resumeFromPreviousUpload(newest)
       upload.start()
     })

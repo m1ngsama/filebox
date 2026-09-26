@@ -37,7 +37,7 @@ export const shareRawURL = (tok: string, path: string, dl = false) => `/s/${tok}
 export const shareThumbURL = (tok: string, path: string) => `/s/${tok}/thumb/${enc(path)}`
 const q = (o: Record<string, string>) => new URLSearchParams(o).toString()
 
-type JobStatus = { state: 'running' | 'done' | 'error'; error?: string; total: number; done: number }
+export type JobStatus = { state: 'running' | 'done' | 'error'; error?: string; total: number; done: number }
 
 export const api = {
   me: () => req<Me>('GET', '/api/me'),
@@ -48,9 +48,10 @@ export const api = {
   mv: (src: Loc, dst: Loc) => req<{ job: string } | undefined>('POST', '/api/mv', { src, dst }),
   cp: (src: Loc, dst: Loc) => req<{ job: string }>('POST', '/api/cp', { src, dst }),
   rm: (vol: string, paths: string[]) => req<void>('POST', '/api/rm', { vol, paths }),
-  async waitJob(id: string) {
+  async waitJob(id: string, onprogress?: (s: JobStatus) => void) {
     for (;;) {
       const s = await req<JobStatus>('GET', `/api/jobs/${id}`)
+      onprogress?.(s)
       if (s.state === 'error') throw new Error(s.error)
       if (s.state === 'done') return
       await new Promise((r) => setTimeout(r, 1000))

@@ -11,6 +11,18 @@ export function size(n: number): string {
 export const date = (ms: number) =>
   new Date(ms).toLocaleString('zh-CN', { dateStyle: 'short', timeStyle: 'short' })
 
+const rtf = new Intl.RelativeTimeFormat('zh-CN', { numeric: 'auto' })
+const steps: [Intl.RelativeTimeFormatUnit, number][] = [['second', 60], ['minute', 60], ['hour', 24], ['day', 30], ['month', 12], ['year', Infinity]]
+
+export function ago(ms: number) {
+  let v = (ms - Date.now()) / 1000
+  for (const [unit, n] of steps) {
+    if (Math.abs(v) < n) return rtf.format(Math.round(v), unit)
+    v /= n
+  }
+  return ''
+}
+
 const ext = (n: string) => (n.includes('.') ? n.slice(n.lastIndexOf('.') + 1).toLowerCase() : '')
 
 const groups: Record<string, string> = {

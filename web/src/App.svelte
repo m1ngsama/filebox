@@ -1,6 +1,6 @@
 <script lang="ts">
   import { api, HttpError, type Me } from './lib/api'
-  import { route, navigate, link } from './lib/router.svelte'
+  import { route, navigate } from './lib/router.svelte'
   import { t } from './lib/i18n'
   import Login from './routes/Login.svelte'
   import Browser from './routes/Browser.svelte'
@@ -9,12 +9,15 @@
   import Trash from './routes/Trash.svelte'
   import SharePage from './routes/SharePage.svelte'
   import UploadPanel from './components/UploadPanel.svelte'
+  import Nav from './components/Nav.svelte'
+  import NavToggle from './components/NavToggle.svelte'
 
   let me = $state<Me | null>(null)
   let needLogin = $state(false)
   let error = $state('')
   const parts = $derived(route.path.split('/').filter(Boolean).map(decodeURIComponent))
   const isShare = $derived(parts[0] === 's' && !!parts[1])
+  const titles: Record<string, string> = { shares: t.myShares, trash: t.trash, settings: t.settings }
 
   async function load() {
     try {
@@ -58,31 +61,29 @@
 {:else if needLogin}
   <Login onok={load} />
 {:else if me}
-  <header class="top">
-    <a class="brand" href="/" onclick={link}>{t.brand}</a>
-    {#each me.vols as v}
-      <a href={`/files/${encodeURIComponent(v)}/`} onclick={link} class:active={parts[0] === 'files' && parts[1] === v}>{v}</a>
-    {/each}
-    <span class="grow"></span>
-    {#if me.vols.length}
-      <a href="/shares" onclick={link}>{t.shares}</a>
-      <a href="/tokens" onclick={link}>{t.tokens}</a>
-      <a href={`/trash/${encodeURIComponent(parts[0] === 'files' && parts[1] ? parts[1] : me.vols[0])}`} onclick={link}>{t.trash}</a>
-    {/if}
-    <button onclick={logout}>{t.logout}</button>
-  </header>
-  <main>
-    {#if !me.vols.length}
-      <p class="error">{t.noVolumes}</p>
-    {:else if parts[0] === 'files' && parts[1]}
-      <Browser vol={parts[1]} path={parts.slice(2).join('/')} />
-    {:else if parts[0] === 'shares'}
-      <Shares />
-    {:else if parts[0] === 'tokens'}
-      <Tokens />
-    {:else if parts[0] === 'trash'}
-      <Trash vol={parts[1] ?? me.vols[0]} vols={me.vols} />
-    {/if}
-  </main>
+  <div class="shell">
+    <Nav vols={me.vols} {parts} onlogout={logout} />
+    <main class="main">
+      {#if me.vols.length && parts[0] === 'files' && parts[1]}
+        <Browser vol={parts[1]} path={parts.slice(2).join('/')} vols={me.vols} />
+      {:else}
+        <header class="bar">
+          <NavToggle />
+          <h1>{titles[parts[0]] ?? t.brand}</h1>
+        </header>
+        <div class="page">
+          {#if !me.vols.length}
+            <p class="error">{t.noVolumes}</p>
+          {:else if parts[0] === 'shares'}
+            <Shares />
+          {:else if parts[0] === 'settings'}
+            <Tokens />
+          {:else if parts[0] === 'trash'}
+            <Trash vol={parts[1] ?? me.vols[0]} vols={me.vols} />
+          {/if}
+        </div>
+      {/if}
+    </main>
+  </div>
   <UploadPanel />
 {/if}

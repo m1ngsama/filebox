@@ -1,58 +1,102 @@
 <script lang="ts">
   import { SvelteSet } from 'svelte/reactivity'
+  import { DropdownMenu } from 'bits-ui'
+  import Plus from '@lucide/svelte/icons/plus'
+  import Upload from '@lucide/svelte/icons/upload'
+  import FolderUp from '@lucide/svelte/icons/folder-up'
+  import FolderPlus from '@lucide/svelte/icons/folder-plus'
+  import FolderOpen from '@lucide/svelte/icons/folder-open'
+  import Download from '@lucide/svelte/icons/download'
+  import Pencil from '@lucide/svelte/icons/pencil'
+  import FolderInput from '@lucide/svelte/icons/folder-input'
+  import Share2 from '@lucide/svelte/icons/share-2'
+  import Info from '@lucide/svelte/icons/info'
+  import Trash from '@lucide/svelte/icons/trash'
+  import X from '@lucide/svelte/icons/x'
+  import LayoutGrid from '@lucide/svelte/icons/layout-grid'
+  import List from '@lucide/svelte/icons/list'
+  import ChevronRight from '@lucide/svelte/icons/chevron-right'
   import { api, filesURL, rawURL, thumbURL, type Entry } from '../lib/api'
   import { navigate, link } from '../lib/router.svelte'
   import { enqueue } from '../lib/uploads.svelte'
   import { thumbable } from '../lib/format'
   import { t } from '../lib/i18n'
-  import Entries from '../components/Entries.svelte'
+  import NavToggle from '../components/NavToggle.svelte'
+  import EntryList, { type Action } from '../components/EntryList.svelte'
   import Preview from '../components/Preview.svelte'
-  import ShareDialog from '../components/ShareDialog.svelte'
+  import Details from '../components/Details.svelte'
+  import NameDialog from '../components/NameDialog.svelte'
+  import ConfirmDialog from '../components/ConfirmDialog.svelte'
+  import MoveDialog from '../components/MoveDialog.svelte'
 
-  let { vol, path }: { vol: string; path: string } = $props()
+  let { vol, path, vols }: { vol: string; path: string; vols: string[] } = $props()
+
+  type Dialog = { kind: 'mkdir' } | { kind: 'rename'; e: Entry } | { kind: 'delete' | 'move'; names: string[] }
 
   let entries = $state<Entry[]>([])
   let error = $state('')
+  let at = $state('')
   let filter = $state('')
   let sort = $state<'name' | 'size' | 'mtime'>('name')
-  let grid = $state((() => { try { return localStorage.getItem('grid') === '1' } catch { return false } })())
-  let busy = $state(false)
+  let desc = $state(false)
+  let grid = $state(
+    (() => {
+      try {
+        return localStorage.getItem('grid') === '1'
+      } catch {
+        return false
+      }
+    })(),
+  )
   let dragging = $state(false)
+  let depth = 0
   let preview = $state<Entry | null>(null)
-  let sharing = $state<string | null>(null)
+  let details = $state<Entry | null>(null)
+  let dialog = $state<Dialog | null>(null)
   const selected = new SvelteSet<string>()
   let files = $state<HTMLInputElement>()
   let folder = $state<HTMLInputElement>()
 
+  const here = $derived(`${vol}/${path}`)
   const join = (n: string) => (path ? `${path}/${n}` : n)
   const crumbs = $derived(path ? path.split('/') : [])
-  const shown = $derived(
-    entries
-      .filter((e) => e.name.toLowerCase().includes(filter.toLowerCase()))
-      .sort((a, b) =>
-        a.dir !== b.dir ? (a.dir ? -1 : 1)
-        : sort === 'size' ? b.size - a.size
-        : sort === 'mtime' ? b.mtime - a.mtime
-        : a.name.localeCompare(b.name, 'zh-CN', { numeric: true }),
-      ),
-  )
+  const collator = new Intl.Collator('zh-CN', { numeric: true })
+  const shown = $derived.by(() => {
+    const f = filter.toLowerCase()
+    const dir = desc ? -1 : 1
+    const cmp = (a: Entry, b: Entry) =>
+      sort === 'size' ? a.size - b.size : sort === 'mtime' ? a.mtime - b.mtime : collator.compare(a.name, b.name)
+    return (at === here ? entries : [])
+      .filter((e) => e.name.toLowerCase().includes(f))
+      .sort((a, b) => (a.dir !== b.dir ? (a.dir ? -1 : 1) : dir * cmp(a, b) || collator.compare(a.name, b.name)))
+  })
+  const thumb = (e: Entry) => (!e.dir && thumbable(e.name) ? thumbURL(vol, join(e.name)) : null)
 
   async function refresh() {
-    try {
-      entries = (await api.ls(vol, path)).entries
-      error = ''
-    } catch (e) {
-      entries = []
-      error = (e as Error).message
-    }
+    const want = here
+    const [list, err] = await api.ls(vol, path).then(
+      (r) => [r.entries, ''] as const,
+      (e: Error) => [[], e.message] as const,
+    )
+    if (want !== here) return
+    entries = [...list]
+    error = err
+    at = want
   }
 
   $effect(() => {
     vol
     path
-    selected.clear()
     filter = ''
+    details = null
     refresh()
+  })
+
+  $effect(() => {
+    filter
+    vol
+    path
+    selected.clear()
   })
 
   $effect(() => {
@@ -61,105 +105,217 @@
     } catch {}
   })
 
-  async function run(fn: () => Promise<unknown>) {
-    busy = true
-    try {
-      await fn()
-    } catch (e) {
-      alert((e as Error).message)
-    }
-    busy = false
-    selected.clear()
-    await refresh()
-  }
-
   function open(e: Entry) {
     if (e.dir) navigate(filesURL(vol, join(e.name)))
     else preview = e
   }
 
-  function mkdir() {
-    const n = prompt(t.newFolderName)?.trim()
-    if (n) run(() => api.mkdir(vol, join(n)))
+  function download(names: string[]) {
+    for (const n of names) {
+      const a = document.createElement('a')
+      a.href = rawURL(vol, join(n), true)
+      a.download = ''
+      a.click()
+    }
   }
 
-  function rename() {
-    const [n] = selected
-    const nn = prompt(t.rename, n)?.trim()
-    if (nn && nn !== n) run(() => api.mv({ vol, path: join(n) }, { vol, path: join(nn) }))
-  }
-
-  function transfer(copy: boolean) {
-    const m = (prompt(copy ? t.copyTo : t.moveTo, `${vol}:/${path}`) ?? '').match(/^([^:]+):(.*)$/)
-    if (!m) return
-    const [dv, dd] = [m[1], m[2].replace(/^\/+|\/+$/g, '')]
-    run(async () => {
-      for (const n of selected) {
-        const dst = { vol: dv, path: dd ? `${dd}/${n}` : n }
-        const r = copy ? await api.cp({ vol, path: join(n) }, dst) : await api.mv({ vol, path: join(n) }, dst)
-        if (r?.job) await api.waitJob(r.job)
-      }
-    })
-  }
-
-  function remove() {
-    if (confirm(t.confirmDelete(selected.size))) run(() => api.rm(vol, [...selected].map(join)))
-  }
-
-  function upload(list: FileList | null, asFolder = false) {
+  function upload(list: FileList | null | undefined, asFolder = false) {
     if (!list?.length) return
     const items = [...list].map((file) => ({ file, rel: asFolder ? file.webkitRelativePath : '' }))
     enqueue(items, '/upload/', { vol, dir: path || '/' }, refresh)
   }
 
-  function drop(e: DragEvent) {
-    e.preventDefault()
-    dragging = false
-    upload(e.dataTransfer?.files ?? null)
+  const act = {
+    open: { id: 'open', label: t.open, icon: FolderOpen },
+    download: { id: 'download', label: t.download, icon: Download },
+    rename: { id: 'rename', label: t.rename, icon: Pencil },
+    move: { id: 'move', label: t.moveOrCopy, icon: FolderInput },
+    share: { id: 'share', label: t.share, icon: Share2 },
+    details: { id: 'details', label: t.details, icon: Info },
+    remove: { id: 'remove', label: t.remove, icon: Trash, danger: true },
+    mkdir: { id: 'mkdir', label: t.newFolder, icon: FolderPlus },
+    upload: { id: 'upload', label: t.upload, icon: Upload },
+  } satisfies Record<string, Action>
+
+  const actions = (e: Entry | null): Action[] =>
+    !e ? [act.mkdir, act.upload]
+    : e.dir ? [act.open, act.rename, act.move, act.share, act.details, act.remove]
+    : [act.open, act.download, act.rename, act.move, act.share, act.details, act.remove]
+
+  function onaction(id: string, e: Entry | null) {
+    if (id === 'mkdir') dialog = { kind: 'mkdir' }
+    else if (id === 'upload') files?.click()
+    else if (!e) return
+    else if (id === 'open') open(e)
+    else if (id === 'download') download([e.name])
+    else if (id === 'rename') dialog = { kind: 'rename', e }
+    else if (id === 'move') dialog = { kind: 'move', names: [e.name] }
+    else if (id === 'remove') dialog = { kind: 'delete', names: [e.name] }
+    else details = e
   }
+
+  const what = (names: string[]) => (names.length === 1 ? `“${names[0]}”` : t.items(names.length))
+
+  function keydown(e: KeyboardEvent) {
+    if (dialog || preview || document.querySelector('[role=menu]')) return
+    const typing = e.target instanceof HTMLInputElement || e.target instanceof HTMLSelectElement
+    if (e.key === 'Escape') {
+      if (details) details = null
+      else selected.clear()
+    } else if (typing) return
+    else if (e.key === 'Delete' && selected.size) dialog = { kind: 'delete', names: [...selected] }
+    else if (e.key === 'Enter' && selected.size === 1 && !(e.target instanceof HTMLButtonElement || e.target instanceof HTMLAnchorElement)) {
+      const hit = entries.find((x) => selected.has(x.name))
+      if (hit) open(hit)
+    }
+  }
+
+  const hasFiles = (e: DragEvent) => !!e.dataTransfer?.types.includes('Files')
 </script>
 
-<svelte:window
-  ondragover={(e) => { e.preventDefault(); dragging = true }}
-  ondragleave={(e) => { if (!e.relatedTarget) dragging = false }}
-  ondrop={drop}
-/>
+<svelte:window onkeydowncapture={keydown} ondragover={(e) => e.preventDefault()} ondrop={(e) => e.preventDefault()} />
 
-<nav class="crumbs">
-  <a href={filesURL(vol, '')} onclick={link}>{vol}</a>
-  {#each crumbs as c, i}
-    <span>/</span><a href={filesURL(vol, crumbs.slice(0, i + 1).join('/'))} onclick={link}>{c}</a>
-  {/each}
-</nav>
+{#snippet batch()}
+  <button class="ghost" onclick={() => download(entries.filter((e) => !e.dir && selected.has(e.name)).map((e) => e.name))}>
+    <Download size={16} />{t.download}
+  </button>
+  <button class="ghost" onclick={() => (dialog = { kind: 'move', names: [...selected] })}><FolderInput size={16} />{t.moveOrCopy}</button>
+  <button class="ghost danger" onclick={() => (dialog = { kind: 'delete', names: [...selected] })}><Trash size={16} />{t.remove}</button>
+  <button class="icon-btn" aria-label={t.clearSelection} onclick={() => selected.clear()}><X size={16} /></button>
+{/snippet}
 
-<div class="toolbar">
-  <button onclick={() => files?.click()}>{t.upload}</button>
-  <button onclick={() => folder?.click()}>{t.uploadFolder}</button>
-  <button onclick={mkdir}>{t.newFolder}</button>
-  <span class="sep"></span>
-  <button disabled={selected.size !== 1} onclick={rename}>{t.rename}</button>
-  <button disabled={!selected.size} onclick={() => transfer(false)}>{t.move}</button>
-  <button disabled={!selected.size} onclick={() => transfer(true)}>{t.copy}</button>
-  <button disabled={selected.size !== 1} onclick={() => (sharing = join([...selected][0]))}>{t.share}</button>
-  <button disabled={!selected.size} class="danger" onclick={remove}>{t.remove}</button>
-  <span class="sep"></span>
-  <input type="search" bind:value={filter} placeholder={t.filter} />
-  <select bind:value={sort}>
-    <option value="name">{t.sortName}</option>
-    <option value="size">{t.sortSize}</option>
-    <option value="mtime">{t.sortTime}</option>
-  </select>
-  <button onclick={() => (grid = !grid)}>{grid ? t.list : t.grid}</button>
-  {#if busy}<span class="hint">{t.working}</span>{/if}
+<div class="files-wrap">
+  <section
+    class="files"
+    aria-label={vol}
+    ondragenter={(e) => {
+      if (!hasFiles(e)) return
+      depth++
+      dragging = true
+    }}
+    ondragleave={() => {
+      if (--depth <= 0) {
+        depth = 0
+        dragging = false
+      }
+    }}
+    ondrop={(e) => {
+      depth = 0
+      dragging = false
+      upload(e.dataTransfer?.files)
+    }}
+  >
+    <header class="bar">
+      <NavToggle />
+      <nav class="crumbs" aria-label={t.breadcrumb}>
+        <a href={filesURL(vol, '')} onclick={link}>{vol}</a>
+        {#each crumbs as c, i}
+          <ChevronRight size={16} />
+          <a href={filesURL(vol, crumbs.slice(0, i + 1).join('/'))} onclick={link} aria-current={i === crumbs.length - 1 ? 'page' : undefined}>{c}</a>
+        {/each}
+      </nav>
+      <DropdownMenu.Root>
+        <DropdownMenu.Trigger class="primary new"><Plus size={18} />{t.new}</DropdownMenu.Trigger>
+        <DropdownMenu.Portal>
+          <DropdownMenu.Content class="menu" preventScroll={false} align="start" sideOffset={4}>
+            <DropdownMenu.Item class="menu-item" onSelect={() => files?.click()}><Upload size={16} />{t.upload}</DropdownMenu.Item>
+            <DropdownMenu.Item class="menu-item" onSelect={() => folder?.click()}><FolderUp size={16} />{t.uploadFolder}</DropdownMenu.Item>
+            <DropdownMenu.Separator class="menu-sep" />
+            <DropdownMenu.Item class="menu-item" onSelect={() => (dialog = { kind: 'mkdir' })}><FolderPlus size={16} />{t.newFolder}</DropdownMenu.Item>
+          </DropdownMenu.Content>
+        </DropdownMenu.Portal>
+      </DropdownMenu.Root>
+      <span class="grow"></span>
+      <input class="filter" type="search" bind:value={filter} placeholder={t.filter} aria-label={t.filter} />
+      <button class="icon-btn" aria-label={grid ? t.listView : t.gridView} title={grid ? t.listView : t.gridView} onclick={() => (grid = !grid)}>
+        {#if grid}<List size={20} />{:else}<LayoutGrid size={20} />{/if}
+      </button>
+    </header>
+
+    {#if error && at === here}<p class="error banner">{error}</p>{/if}
+
+    {#key here}
+      <EntryList
+        entries={shown}
+        {grid}
+        {selected}
+        bind:sort
+        bind:desc
+        {thumb}
+        {actions}
+        {onaction}
+        onopen={open}
+        {batch}
+        empty={at !== here || error ? '' : filter ? t.noMatch : t.empty}
+      />
+    {/key}
+
+    {#if dragging}<div class="dropzone">{t.dropHere}</div>{/if}
+  </section>
+
+  {#if details}
+    {#key details.name}
+      <Details {vol} path={join(details.name)} entry={details} thumb={thumb(details)} onclose={() => (details = null)} />
+    {/key}
+  {/if}
 </div>
 
 <input bind:this={files} type="file" multiple hidden onchange={(e) => upload(e.currentTarget.files)} />
 <input bind:this={folder} type="file" webkitdirectory hidden onchange={(e) => upload(e.currentTarget.files, true)} />
 
-{#if error}<p class="error">{error}</p>{/if}
-{#if !error && !shown.length}<p class="hint">{t.empty}</p>{/if}
-<Entries entries={shown} {grid} {selected} onopen={open} thumb={(e) => (thumbable(e.name) ? thumbURL(vol, join(e.name)) : null)} />
+{#if preview}
+  <Preview bind:entry={preview} entries={shown} url={(e, dl) => rawURL(vol, join(e.name), dl)} onclose={() => (preview = null)} />
+{/if}
 
-{#if dragging}<div class="dropzone">{t.dropHere}</div>{/if}
-{#if preview}<Preview name={preview.name} url={rawURL(vol, join(preview.name))} onclose={() => (preview = null)} />{/if}
-{#if sharing}<ShareDialog {vol} path={sharing} onclose={() => (sharing = null)} />{/if}
+{#if dialog?.kind === 'mkdir'}
+  <NameDialog
+    title={t.newFolder}
+    label={t.folderName}
+    action={t.create}
+    onsave={(n) => api.mkdir(vol, join(n)).then(refresh)}
+    onclose={() => (dialog = null)}
+  />
+{:else if dialog?.kind === 'rename'}
+  {@const e = dialog.e}
+  <NameDialog
+    title={t.rename}
+    label={t.newName}
+    action={t.rename}
+    value={e.name}
+    stem={!e.dir}
+    onsave={async (n) => {
+      await api.mv({ vol, path: join(e.name) }, { vol, path: join(n) })
+      selected.clear()
+      if (details?.name === e.name) details = null
+      await refresh()
+    }}
+    onclose={() => (dialog = null)}
+  />
+{:else if dialog?.kind === 'delete'}
+  {@const names = dialog.names}
+  <ConfirmDialog
+    title={t.confirmDeleteTitle}
+    message={t.confirmDelete(what(names))}
+    action={t.remove}
+    onconfirm={async () => {
+      await api.rm(vol, names.map(join))
+      selected.clear()
+      if (details && names.includes(details.name)) details = null
+      await refresh()
+    }}
+    onclose={() => (dialog = null)}
+  />
+{:else if dialog?.kind === 'move'}
+  <MoveDialog
+    {vols}
+    {vol}
+    dir={path}
+    names={dialog.names}
+    ondone={() => {
+      selected.clear()
+      details = null
+      refresh()
+    }}
+    onclose={() => (dialog = null)}
+  />
+{/if}
