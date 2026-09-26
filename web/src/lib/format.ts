@@ -8,6 +8,18 @@ export function size(n: number): string {
   return `${i ? n.toFixed(n < 10 ? 1 : 0) : n} ${u[i]}`
 }
 
+export type Sort = 'name' | 'size' | 'mtime'
+const collator = new Intl.Collator('zh-CN', { numeric: true })
+
+export function arrange<T extends { name: string; dir: boolean; size: number; mtime: number }>(list: T[], filter: string, sort: Sort, desc: boolean) {
+  const f = filter.toLowerCase()
+  const d = desc ? -1 : 1
+  const cmp = (a: T, b: T) => (sort === 'size' ? a.size - b.size : sort === 'mtime' ? a.mtime - b.mtime : collator.compare(a.name, b.name))
+  return list
+    .filter((e) => e.name.toLowerCase().includes(f))
+    .sort((a, b) => (a.dir !== b.dir ? (a.dir ? -1 : 1) : d * cmp(a, b) || collator.compare(a.name, b.name)))
+}
+
 export const date = (ms: number) =>
   new Date(ms).toLocaleString('zh-CN', { dateStyle: 'short', timeStyle: 'short' })
 

@@ -12,6 +12,7 @@ import (
 	"strings"
 	"sync"
 	"sync/atomic"
+	"syscall"
 	"time"
 
 	"github.com/m1ngsama/filebox/internal/vol"
@@ -22,13 +23,13 @@ type JobStatus struct {
 	Total int64  `json:"total"`
 	Done  int64  `json:"done"`
 	State string `json:"state"`
-	Error string `json:"error,omitempty"`
+	Code  string `json:"code,omitempty"`
 }
 
 type job struct {
 	total, done atomic.Int64
 	mu          sync.Mutex
-	state, err  string
+	state, code string
 	finished    time.Time
 }
 
@@ -48,7 +49,7 @@ func (j *Jobs) Get(id string) (JobStatus, bool) {
 	}
 	x.mu.Lock()
 	defer x.mu.Unlock()
-	return JobStatus{ID: id, Total: x.total.Load(), Done: x.done.Load(), State: x.state, Error: x.err}, true
+	return JobStatus{ID: id, Total: x.total.Load(), Done: x.done.Load(), State: x.state, Code: x.code}, true
 }
 
 func (j *Jobs) Start(src, dst *vol.Volume, srel, drel string, move bool) string {
@@ -79,12 +80,24 @@ func (j *Jobs) Start(src, dst *vol.Volume, srel, drel string, move bool) string 
 		x.mu.Lock()
 		x.state, x.finished = "done", time.Now()
 		if err != nil {
-			x.state, x.err = "error", err.Error()
+			x.state, x.code = "error", errorCode(err)
 			slog.Error("job failed", "id", id, "err", err)
 		}
 		x.mu.Unlock()
 	}()
 	return id
+}
+
+func errorCode(err error) string {
+	switch {
+	case errors.Is(err, fs.ErrExist):
+		return "exists"
+	case errors.Is(err, fs.ErrNotExist):
+		return "notfound"
+	case errors.Is(err, syscall.ENOSPC) || errors.Is(err, syscall.EDQUOT):
+		return "nospace"
+	}
+	return "internal"
 }
 
 type counter struct {

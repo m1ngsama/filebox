@@ -17,6 +17,8 @@ export type Token = { id: number; label: string; readonly: boolean; created: num
 export type TrashItem = { id: string; name: string; path: string; dir: boolean; size: number; deleted: number }
 export type ShareInfo = { name: string; dir: boolean; mode: Share['mode']; locked: boolean; size?: number }
 
+export const session = { lost: () => {} }
+
 async function req<T>(method: string, url: string, body?: unknown): Promise<T> {
   const r = await fetch(url, {
     method,
@@ -24,6 +26,7 @@ async function req<T>(method: string, url: string, body?: unknown): Promise<T> {
     body: body === undefined ? undefined : JSON.stringify(body),
   })
   const text = await r.text()
+  if (r.status === 401 && url.startsWith('/api/') && url !== '/api/login') session.lost()
   if (!r.ok) {
     let msg = r.statusText
     try {
@@ -38,11 +41,13 @@ export const enc = (p: string) => p.split('/').filter(Boolean).map(encodeURIComp
 export const filesURL = (vol: string, path: string) => `/files/${encodeURIComponent(vol)}/${enc(path)}${path ? '/' : ''}`
 export const rawURL = (vol: string, path: string, dl = false) => `/raw/${encodeURIComponent(vol)}/${enc(path)}${dl ? '?dl' : ''}`
 export const thumbURL = (vol: string, path: string) => `/thumb/${encodeURIComponent(vol)}/${enc(path)}`
+export const shareLink = (tok: string) => `${location.origin}/s/${tok}`
 export const shareRawURL = (tok: string, path: string, dl = false) => `/s/${tok}/raw/${enc(path)}${dl ? '?dl' : ''}`
 export const shareThumbURL = (tok: string, path: string) => `/s/${tok}/thumb/${enc(path)}`
 const q = (o: Record<string, string>) => new URLSearchParams(o).toString()
 
-export type JobStatus = { state: 'running' | 'done' | 'error'; error?: string; total: number; done: number }
+export type JobStatus = { state: 'running' | 'done' | 'error'; code?: string; total: number; done: number }
+const jobCodes: Record<string, number> = { exists: 409, notfound: 404, nospace: 507 }
 
 export const api = {
   me: () => req<Me>('GET', '/api/me'),
@@ -57,7 +62,7 @@ export const api = {
     for (;;) {
       const s = await req<JobStatus>('GET', `/api/jobs/${id}`)
       onprogress?.(s)
-      if (s.state === 'error') throw new Error(t.serverError)
+      if (s.state === 'error') throw new Error(errorText(jobCodes[s.code ?? ''] ?? 500))
       if (s.state === 'done') return
       await new Promise((r) => setTimeout(r, 1000))
     }

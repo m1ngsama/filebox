@@ -1,3 +1,72 @@
-<script lang="ts"></script>
+<script lang="ts">
+  import Link from '@lucide/svelte/icons/link'
+  import Trash from '@lucide/svelte/icons/trash'
+  import ConfirmDialog from '../components/ConfirmDialog.svelte'
+  import CopyButton from '../components/CopyButton.svelte'
+  import { api, shareLink, filesURL, type Share } from '../lib/api'
+  import { link } from '../lib/router.svelte'
+  import { date } from '../lib/format'
+  import { t } from '../lib/i18n'
 
-<p>…</p>
+  let shares = $state<Share[] | null>(null)
+  let error = $state('')
+  let removing = $state<Share | null>(null)
+
+  async function load() {
+    try {
+      shares = (await api.shares()).shares
+      error = ''
+    } catch (e) {
+      error = (e as Error).message
+    }
+  }
+  load()
+
+  const loc = (s: Share) => `${s.vol}:/${s.path === '.' ? '' : s.path}`
+  const where = (s: Share) => {
+    if (s.path === '.') return filesURL(s.vol, '')
+    const i = s.path.lastIndexOf('/')
+    return `${filesURL(s.vol, i < 0 ? '' : s.path.slice(0, i))}?${new URLSearchParams({ details: s.path.slice(i + 1) })}`
+  }
+</script>
+
+{#if error}<p class="error">{error}</p>{/if}
+{#if shares}
+  <ul class="rows">
+    {#each shares as s (s.id)}
+      {@const gone = !!s.expires && s.expires * 1000 < Date.now()}
+      <li>
+        <Link size={18} class="row-icon" />
+        <div class="row-main">
+          <a href={where(s)} onclick={link} title={loc(s)}>{loc(s)}</a>
+          <span class="tags">
+            <span class="tag">{t.modes[s.mode]}</span>
+            {#if s.has_password}<span class="tag">{t.hasPassword}</span>{/if}
+            <span class="tag" class:warn={gone}>{gone ? t.expired : s.expires ? t.expiresAt(date(s.expires * 1000)) : t.forever}</span>
+            <span class="hint">{t.hits(s.hits)}</span>
+          </span>
+        </div>
+        <CopyButton text={shareLink(s.token)} />
+        <button class="icon-btn danger" aria-label={t.deleteShare} title={t.deleteShare} onclick={() => (removing = s)}>
+          <Trash size={18} />
+        </button>
+      </li>
+    {:else}
+      <li class="hint">{t.sharesEmpty}</li>
+    {/each}
+  </ul>
+{/if}
+
+{#if removing}
+  {@const id = removing.id}
+  <ConfirmDialog
+    title={t.deleteShareTitle}
+    message={t.deleteShareMessage}
+    action={t.remove}
+    onconfirm={async () => {
+      await api.delShare(id)
+      await load()
+    }}
+    onclose={() => (removing = null)}
+  />
+{/if}

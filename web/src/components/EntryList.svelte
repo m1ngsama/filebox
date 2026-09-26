@@ -13,10 +13,9 @@
   import ArrowDown from '@lucide/svelte/icons/arrow-down'
   import FileIcon from './FileIcon.svelte'
   import type { Entry } from '../lib/api'
-  import { size, date, ago } from '../lib/format'
+  import { size, date, ago, type Sort } from '../lib/format'
   import { t } from '../lib/i18n'
 
-  type Sort = 'name' | 'size' | 'mtime'
   let {
     entries,
     grid,

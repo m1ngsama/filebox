@@ -1,11 +1,11 @@
 <script lang="ts">
-  import { api, HttpError, type Me } from './lib/api'
+  import { api, session, HttpError, type Me } from './lib/api'
   import { route, navigate } from './lib/router.svelte'
   import { t } from './lib/i18n'
   import Login from './routes/Login.svelte'
   import Browser from './routes/Browser.svelte'
   import Shares from './routes/Shares.svelte'
-  import Tokens from './routes/Tokens.svelte'
+  import Settings from './routes/Settings.svelte'
   import Trash from './routes/Trash.svelte'
   import SharePage from './routes/SharePage.svelte'
   import UploadPanel from './components/UploadPanel.svelte'
@@ -18,6 +18,11 @@
   const parts = $derived(route.path.split('/').filter(Boolean).map(decodeURIComponent))
   const isShare = $derived(parts[0] === 's' && !!parts[1])
   const titles: Record<string, string> = { shares: t.myShares, trash: t.trash, settings: t.settings }
+
+  session.lost = () => {
+    me = null
+    needLogin = true
+  }
 
   async function load() {
     try {
@@ -77,7 +82,7 @@
           {:else if parts[0] === 'shares'}
             <Shares />
           {:else if parts[0] === 'settings'}
-            <Tokens />
+            <Settings vols={me.vols} />
           {:else if parts[0] === 'trash'}
             <Trash vol={parts[1] ?? me.vols[0]} vols={me.vols} />
           {/if}

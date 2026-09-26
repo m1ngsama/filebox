@@ -108,10 +108,10 @@ func waitJob(t *testing.T, f *fixture, id string) string {
 	t.Helper()
 	for i := 0; i < 100; i++ {
 		w := f.do("GET", "/api/jobs/"+id, nil)
-		st := decode[struct{ State, Error string }](t, w)
+		st := decode[struct{ State, Code string }](t, w)
 		if st.State != "running" {
-			if st.Error != "" {
-				t.Logf("job error: %s", st.Error)
+			if st.Code != "" {
+				t.Logf("job error: %s", st.Code)
 			}
 			return st.State
 		}
@@ -263,6 +263,22 @@ func TestJobDestinationConflict(t *testing.T) {
 	}
 	if _, err := os.Stat(filepath.Join(f.Dir, "tree")); err != nil {
 		t.Fatal("source removed on failed copy", err)
+	}
+}
+
+func TestJobErrorCode(t *testing.T) {
+	f := newTestApp(t)
+	f.write(t, "a.txt", "a")
+	f.write(t, "b.txt", "b")
+	v, _ := f.App.Vols.Get("v")
+	jobs := api.NewJobs()
+	st := waitJobStatus(t, jobs, jobs.Start(v, v, "a.txt", "b.txt", false))
+	if st.State != "error" || st.Code != "exists" {
+		t.Fatalf("status = %+v, want error with code exists", st)
+	}
+	st = waitJobStatus(t, jobs, jobs.Start(v, v, "gone.txt", "c.txt", false))
+	if st.Code != "notfound" {
+		t.Fatalf("status = %+v, want code notfound", st)
 	}
 }
 

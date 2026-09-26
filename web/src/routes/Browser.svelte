@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { untrack } from 'svelte'
   import { SvelteSet } from 'svelte/reactivity'
   import { DropdownMenu } from 'bits-ui'
   import Plus from '@lucide/svelte/icons/plus'
@@ -17,9 +18,9 @@
   import List from '@lucide/svelte/icons/list'
   import ChevronRight from '@lucide/svelte/icons/chevron-right'
   import { api, filesURL, rawURL, thumbURL, type Entry } from '../lib/api'
-  import { navigate, link } from '../lib/router.svelte'
+  import { navigate, link, route } from '../lib/router.svelte'
   import { enqueue } from '../lib/uploads.svelte'
-  import { thumbable } from '../lib/format'
+  import { thumbable, arrange, type Sort } from '../lib/format'
   import { t } from '../lib/i18n'
   import NavToggle from '../components/NavToggle.svelte'
   import EntryList, { type Action } from '../components/EntryList.svelte'
@@ -37,7 +38,7 @@
   let error = $state('')
   let at = $state('')
   let filter = $state('')
-  let sort = $state<'name' | 'size' | 'mtime'>('name')
+  let sort = $state<Sort>('name')
   let desc = $state(false)
   let grid = $state(
     (() => {
@@ -60,16 +61,7 @@
   const here = $derived(`${vol}/${path}`)
   const join = (n: string) => (path ? `${path}/${n}` : n)
   const crumbs = $derived(path ? path.split('/') : [])
-  const collator = new Intl.Collator('zh-CN', { numeric: true })
-  const shown = $derived.by(() => {
-    const f = filter.toLowerCase()
-    const dir = desc ? -1 : 1
-    const cmp = (a: Entry, b: Entry) =>
-      sort === 'size' ? a.size - b.size : sort === 'mtime' ? a.mtime - b.mtime : collator.compare(a.name, b.name)
-    return (at === here ? entries : [])
-      .filter((e) => e.name.toLowerCase().includes(f))
-      .sort((a, b) => (a.dir !== b.dir ? (a.dir ? -1 : 1) : dir * cmp(a, b) || collator.compare(a.name, b.name)))
-  })
+  const shown = $derived(arrange(at === here ? entries : [], filter, sort, desc))
   const selectedFiles = $derived(entries.filter((e) => !e.dir && selected.has(e.name)).map((e) => e.name))
   const thumb = (e: Entry) => (!e.dir && thumbable(e.name) ? thumbURL(vol, join(e.name)) : null)
 
@@ -79,10 +71,11 @@
       (r) => [r.entries, ''] as const,
       (e: Error) => [[], e.message] as const,
     )
-    if (want !== here) return
+    if (want !== here) return false
     entries = [...list]
     error = err
     at = want
+    return true
   }
 
   $effect(() => {
@@ -90,7 +83,10 @@
     path
     filter = ''
     details = null
-    refresh()
+    const focus = new URLSearchParams(untrack(() => route.search)).get('details')
+    refresh().then((ok) => {
+      if (ok && focus) details = entries.find((e) => e.name === focus) ?? null
+    })
   })
 
   $effect(() => {
