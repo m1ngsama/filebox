@@ -156,7 +156,7 @@
 </div>
 
 <ContextMenu.Root onOpenChange={(o) => !o && (ctx = null)}>
-  <ContextMenu.Trigger>
+  <ContextMenu.Trigger disabled={!ctx && !actions(null).length}>
     {#snippet child({ props })}
       <div {...props} class="scroller" bind:this={scroller} bind:clientWidth={width} oncontextmenucapture={() => (ctx = null)}>
         {#if !entries.length}<p class="empty">{empty}</p>{/if}

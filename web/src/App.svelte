@@ -58,6 +58,7 @@
 
 {#if isShare}
   <SharePage token={parts[1]} />
+  <UploadPanel />
 {:else if error}
   <div class="load-error">
     <p class="error">{error}</p>

@@ -40,14 +40,14 @@ input:not([type='checkbox'], [type='radio']), select {
   background: var(--bg); border: 1px solid var(--line); border-radius: 8px; padding: 6px 10px; min-width: 0;
 }
 input[type='checkbox'], input[type='radio'] { accent-color: var(--accent); width: 16px; height: 16px; margin: 0; }
-button {
+button, a.button {
   display: inline-flex; align-items: center; justify-content: center; gap: 6px; white-space: nowrap;
   background: var(--bg); border: 1px solid var(--line); border-radius: 8px; padding: 6px 12px; cursor: pointer;
 }
 button:hover:not(:disabled) { background: var(--hover); }
 button:disabled { opacity: 0.45; cursor: default; }
-button.primary { background: var(--accent); border-color: var(--accent); color: var(--on-accent); font-weight: 600; }
-button.primary:hover:not(:disabled) { background: color-mix(in srgb, var(--accent) 88%, var(--fg)); }
+button.primary, a.button.primary { background: var(--accent); border-color: var(--accent); color: var(--on-accent); font-weight: 600; }
+button.primary:hover:not(:disabled), a.button.primary:hover { background: color-mix(in srgb, var(--accent) 88%, var(--fg)); }
 button.danger-fill { background: var(--danger); border-color: var(--danger); color: #fff; font-weight: 600; }
 button.ghost { border-color: transparent; background: none; }
 .danger { color: var(--danger); }
@@ -237,6 +237,15 @@ button.ghost { border-color: transparent; background: none; }
 .token-new code { display: block; flex: 1; min-width: 0; padding: 6px 8px; border-radius: 6px; background: var(--bg); font: 13px ui-monospace, SFMono-Regular, Menlo, monospace; overflow-wrap: anywhere; }
 .code-line { display: flex; align-items: center; gap: 4px; }
 
+.public { position: relative; display: flex; flex-direction: column; height: 100dvh; padding: env(safe-area-inset-top) 0 env(safe-area-inset-bottom); }
+.public-bar .brand { font-weight: 700; padding-right: 12px; border-right: 1px solid var(--line); }
+.public-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.public-file, .dropbox { display: flex; flex-direction: column; align-items: center; gap: 10px; width: min(440px, calc(100% - 32px)); margin: 8vh auto; text-align: center; }
+.public-file .details-thumb { width: 100%; height: 240px; }
+.public-file h2 { overflow-wrap: anywhere; }
+.public-file p, .dropbox p { margin: 0; }
+.dropbox { padding: 40px 24px; border: 2px dashed var(--line); border-radius: 16px; }
+.hint.big { font-size: 15px; }
 
 .login, .load-error { max-width: 320px; margin: 18vh auto; display: flex; flex-direction: column; gap: 10px; padding: 0 16px; }
 .load-error { align-items: center; text-align: center; }
