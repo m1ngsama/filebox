@@ -20,6 +20,7 @@ import (
 	"github.com/m1ngsama/filebox/internal/app"
 	"github.com/m1ngsama/filebox/internal/auth"
 	"github.com/m1ngsama/filebox/internal/db"
+	"github.com/m1ngsama/filebox/internal/upload"
 	"github.com/m1ngsama/filebox/internal/vol"
 	"github.com/m1ngsama/filebox/web"
 )
@@ -88,7 +89,14 @@ func serveCmd(args []string) error {
 	}
 	defer set.Close()
 	webFS, _ := fs.Sub(web.Dist, "dist")
-	a := &app.App{Vols: set, DB: d, Auth: auth.New(d), Web: webFS}
+	up := &upload.Server{Vols: set, Dir: filepath.Join(*data, "uploads")}
+	go func() {
+		for {
+			up.Sweep(24 * time.Hour)
+			time.Sleep(time.Hour)
+		}
+	}()
+	a := &app.App{Vols: set, DB: d, Auth: auth.New(d), Web: webFS, Uploads: up}
 
 	srv := &http.Server{Addr: *listen, Handler: a.Handler(), ReadHeaderTimeout: 10 * time.Second, IdleTimeout: 2 * time.Minute}
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)

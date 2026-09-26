@@ -3,6 +3,7 @@ package app
 import (
 	"io/fs"
 	"net/http"
+	"strconv"
 	"strings"
 
 	"github.com/m1ngsama/filebox/internal/api"
@@ -11,6 +12,7 @@ import (
 	"github.com/m1ngsama/filebox/internal/db"
 	"github.com/m1ngsama/filebox/internal/httpx"
 	"github.com/m1ngsama/filebox/internal/serve"
+	"github.com/m1ngsama/filebox/internal/upload"
 	"github.com/m1ngsama/filebox/internal/vol"
 )
 
@@ -18,10 +20,11 @@ const spaCSP = "default-src 'self'; img-src 'self' blob: data:; media-src 'self'
 	"frame-src 'self'; object-src 'none'; base-uri 'none'; frame-ancestors 'none'; form-action 'self'"
 
 type App struct {
-	Vols *vol.Set
-	DB   *db.DB
-	Auth *auth.Auth
-	Web  fs.FS
+	Vols    *vol.Set
+	DB      *db.DB
+	Auth    *auth.Auth
+	Web     fs.FS
+	Uploads *upload.Server
 }
 
 func (a *App) Handler() http.Handler {
@@ -31,6 +34,7 @@ func (a *App) Handler() http.Handler {
 	d := dav.Handler(a.Vols, a.Auth)
 	mux.Handle("/dav", d)
 	mux.Handle("/dav/", d)
+	mux.Handle("/upload/", a.Uploads.Handler("/upload/", a.userUploads()))
 	mux.Handle("/", a.spa())
 	return common(http.NewCrossOriginProtection().Handler(mux))
 }
@@ -41,6 +45,26 @@ func common(h http.Handler) http.Handler {
 		w.Header().Set("X-Content-Type-Options", "nosniff")
 		h.ServeHTTP(w, r)
 	})
+}
+
+func (a *App) userUploads() upload.Policy {
+	return upload.Policy{
+		Owner: func(r *http.Request) (string, bool) {
+			p, ok := a.Auth.Session(r)
+			if !ok {
+				p, ok = a.Auth.App(r)
+				ok = ok && !p.ReadOnly
+			}
+			return "user:" + strconv.FormatInt(p.UserID, 10), ok
+		},
+		Resolve: func(r *http.Request, meta map[string]string) (upload.Target, error) {
+			v, dir, err := a.Vols.Resolve(meta["vol"], meta["dir"])
+			if err != nil {
+				return upload.Target{}, err
+			}
+			return upload.TargetFor(v, dir, meta)
+		},
+	}
 }
 
 func (a *App) raw(w http.ResponseWriter, r *http.Request) {
