@@ -17,6 +17,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/m1ngsama/filebox/internal/api"
 	"github.com/m1ngsama/filebox/internal/app"
 	"github.com/m1ngsama/filebox/internal/auth"
 	"github.com/m1ngsama/filebox/internal/db"
@@ -90,6 +91,7 @@ func serveCmd(args []string) error {
 		return err
 	}
 	defer set.Close()
+	api.ClearStaging(set)
 	webFS, _ := fs.Sub(web.Dist, "dist")
 	up, err := upload.New(set)
 	if err != nil {

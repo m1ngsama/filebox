@@ -13,6 +13,7 @@ import (
 
 const (
 	UploadsDir = ".filebox/uploads"
+	JobsDir    = ".filebox/jobs"
 	TrashDir   = ".trash"
 )
 

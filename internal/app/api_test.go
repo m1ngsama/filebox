@@ -308,3 +308,89 @@ func TestJobCopyCleansUpOnFailure(t *testing.T) {
 		t.Fatalf("partial destination left behind: %v", err)
 	}
 }
+
+func TestJobCopyNeverExposesPartialDestination(t *testing.T) {
+	f := newTestApp(t)
+	chunk := strings.Repeat("x", 256<<10)
+	for i := range 100 {
+		f.write(t, "big/"+strconv.Itoa(i), chunk)
+	}
+	v, _ := f.App.Vols.Get("v")
+	w, _ := f.App.Vols.Get("w")
+	jobs := api.NewJobs()
+	id := jobs.Start(v, w, "big", "big", false)
+	for {
+		ents, err := os.ReadDir(filepath.Join(f.Dir2, "big"))
+		st, _ := jobs.Get(id)
+		if err == nil && len(ents) != 100 {
+			t.Fatalf("destination visible with %d of 100 files (state %s)", len(ents), st.State)
+		}
+		if st.State != "running" {
+			if st.State != "done" {
+				t.Fatalf("state %+v", st)
+			}
+			break
+		}
+	}
+	if ents, _ := os.ReadDir(filepath.Join(f.Dir2, ".filebox/jobs")); len(ents) != 0 {
+		t.Fatalf("staging left behind: %d", len(ents))
+	}
+}
+
+func TestJobPlacementIsExclusive(t *testing.T) {
+	f := newTestApp(t)
+	f.write(t, "a.txt", "new")
+	f.write(t, "tree/a.txt", "new")
+	v, _ := f.App.Vols.Get("v")
+	w, _ := f.App.Vols.Get("w")
+	os.WriteFile(filepath.Join(f.Dir2, "a.txt"), []byte("foreign"), 0o644)
+	os.Mkdir(filepath.Join(f.Dir2, "tree"), 0o755)
+	jobs := api.NewJobs()
+	for _, p := range []string{"a.txt", "tree"} {
+		st := waitJobStatus(t, jobs, jobs.Start(v, w, p, p, true))
+		if st.State != "error" || st.Code != "exists" {
+			t.Fatalf("%s: %+v", p, st)
+		}
+		if _, err := os.Stat(filepath.Join(f.Dir, p)); err != nil {
+			t.Fatalf("%s: source removed", p)
+		}
+	}
+	if b, _ := os.ReadFile(filepath.Join(f.Dir2, "a.txt")); string(b) != "foreign" {
+		t.Fatalf("foreign file overwritten: %q", b)
+	}
+	if ents, err := os.ReadDir(filepath.Join(f.Dir2, "tree")); err != nil || len(ents) != 0 {
+		t.Fatalf("foreign directory replaced: %v %d", err, len(ents))
+	}
+}
+
+func TestJobMoveRefusesSymlinks(t *testing.T) {
+	f := newTestApp(t)
+	f.write(t, "tree/a.txt", "a")
+	os.Symlink("a.txt", filepath.Join(f.Dir, "tree/link"))
+	v, _ := f.App.Vols.Get("v")
+	w, _ := f.App.Vols.Get("w")
+	jobs := api.NewJobs()
+	st := waitJobStatus(t, jobs, jobs.Start(v, w, "tree", "tree", true))
+	if st.State != "error" || st.Code != "internal" {
+		t.Fatalf("status %+v", st)
+	}
+	if _, err := os.Lstat(filepath.Join(f.Dir, "tree/link")); err != nil {
+		t.Fatal("source symlink lost")
+	}
+	if _, err := os.Stat(filepath.Join(f.Dir2, "tree")); !os.IsNotExist(err) {
+		t.Fatalf("destination created: %v", err)
+	}
+	st = waitJobStatus(t, jobs, jobs.Start(v, w, "tree", "copy", false))
+	if st.State != "done" {
+		t.Fatalf("copy with symlink %+v", st)
+	}
+}
+
+func TestClearStaging(t *testing.T) {
+	f := newTestApp(t)
+	f.write(t, ".filebox/jobs/dead/half.bin", "x")
+	api.ClearStaging(f.App.Vols)
+	if _, err := os.Stat(filepath.Join(f.Dir, ".filebox/jobs")); !os.IsNotExist(err) {
+		t.Fatalf("stale staging kept: %v", err)
+	}
+}

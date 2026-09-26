@@ -70,13 +70,7 @@ func (j *Jobs) Start(src, dst *vol.Volume, srel, drel string, move bool) string 
 	j.mu.Unlock()
 
 	go func() {
-		cerr, rootConflict := copyTree(src, dst, srel, drel, x)
-		err := cerr
-		if cerr == nil && move {
-			err = src.Root.RemoveAll(srel)
-		} else if cerr != nil && !rootConflict {
-			dst.Root.RemoveAll(drel)
-		}
+		err := run(src, dst, srel, drel, id, move, x)
 		x.mu.Lock()
 		x.state, x.finished = "done", time.Now()
 		if err != nil {
@@ -111,8 +105,51 @@ func (c counter) Read(p []byte) (int, error) {
 	return n, err
 }
 
-// Symlinks are skipped: following them could copy data from outside the volume.
-func copyTree(src, dst *vol.Volume, srel, drel string, x *job) (err error, rootConflict bool) {
+var errSpecial = errors.New("symlink or special file")
+
+func ClearStaging(vols *vol.Set) {
+	for _, v := range vols.All() {
+		v.Root.RemoveAll(vol.JobsDir)
+	}
+}
+
+func run(src, dst *vol.Volume, srel, drel, id string, move bool, x *job) error {
+	stage := path.Join(vol.JobsDir, id)
+	if err := dst.Root.MkdirAll(stage, 0o700); err != nil {
+		return err
+	}
+	defer dst.Root.RemoveAll(stage)
+	tmp := path.Join(stage, "item")
+	if err := copyTree(src, dst, srel, tmp, move, x); err != nil {
+		return err
+	}
+	if err := place(dst.Root, tmp, drel); err != nil {
+		return err
+	}
+	if move {
+		return src.Root.RemoveAll(srel)
+	}
+	return nil
+}
+
+func place(r *os.Root, from, to string) error {
+	err := r.Link(from, to)
+	if err == nil || errors.Is(err, fs.ErrExist) {
+		return err
+	}
+	if _, err := r.Lstat(to); err == nil {
+		return fs.ErrExist
+	}
+	return r.Rename(from, to)
+}
+
+// Copies skip symlinks, since following them could copy data from outside the volume.
+func copyTree(src, dst *vol.Volume, srel, drel string, strict bool, x *job) error {
+	if fi, err := src.Root.Lstat(srel); err != nil {
+		return err
+	} else if strict && !fi.IsDir() && !fi.Mode().IsRegular() {
+		return errSpecial
+	}
 	sfs := src.Root.FS()
 	fs.WalkDir(sfs, srel, func(p string, d fs.DirEntry, err error) error {
 		if err == nil && d.Type().IsRegular() {
@@ -122,29 +159,21 @@ func copyTree(src, dst *vol.Volume, srel, drel string, x *job) (err error, rootC
 		}
 		return nil
 	})
-	err = fs.WalkDir(sfs, srel, func(p string, d fs.DirEntry, err error) error {
+	return fs.WalkDir(sfs, srel, func(p string, d fs.DirEntry, err error) error {
 		if err != nil {
 			return err
 		}
 		target := path.Join(drel, strings.TrimPrefix(strings.TrimPrefix(p, srel), "/"))
 		switch {
 		case d.IsDir():
-			if p == srel {
-				err := dst.Root.Mkdir(target, 0o755)
-				rootConflict = errors.Is(err, fs.ErrExist)
-				return err
-			}
 			return dst.Root.MkdirAll(target, 0o755)
 		case d.Type().IsRegular():
-			err := copyFile(src.Root, dst.Root, p, target, x)
-			if p == srel {
-				rootConflict = errors.Is(err, fs.ErrExist)
-			}
-			return err
+			return copyFile(src.Root, dst.Root, p, target, x)
+		case strict:
+			return errSpecial
 		}
 		return nil
 	})
-	return err, rootConflict
 }
 
 func copyFile(sr, dr *os.Root, from, to string, x *job) error {
