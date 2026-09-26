@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"path/filepath"
+	"strconv"
 	"testing"
 	"time"
 
@@ -211,5 +212,77 @@ func TestRequireAnyBearerToken(t *testing.T) {
 	h.ServeHTTP(w, r)
 	if w.Code != 200 || gotUID != uid {
 		t.Fatalf("code %d uid %d", w.Code, gotUID)
+	}
+}
+
+func dav(a *Auth, ip, tok string) int {
+	h := a.RequireBasic(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {}))
+	r := httptest.NewRequest("PROPFIND", "/dav/", nil)
+	r.RemoteAddr = ip + ":1234"
+	r.SetBasicAuth("me", tok)
+	w := httptest.NewRecorder()
+	h.ServeHTTP(w, r)
+	return w.Code
+}
+
+func TestBasicAndLoginLimitsSeparate(t *testing.T) {
+	a, _, uid := setup(t)
+	tok, _ := a.NewAppToken(uid, "dav", false)
+	for range 5 {
+		a.Login("admin", "wrong", "4.4.4.4")
+	}
+	if c := dav(a, "4.4.4.4", tok); c != 200 {
+		t.Fatalf("valid token after bad web logins %d", c)
+	}
+	for range 6 {
+		dav(a, "5.5.5.5", "fb_stale")
+	}
+	if c := dav(a, "5.5.5.5", "fb_stale"); c != 429 {
+		t.Fatalf("bad basic attempts not limited: %d", c)
+	}
+	if c := dav(a, "5.5.5.5", tok); c != 200 {
+		t.Fatalf("valid token throttled %d", c)
+	}
+	if _, err := a.Login("admin", "correct horse", "5.5.5.5"); err != nil {
+		t.Fatalf("bad basic attempts blocked web login: %v", err)
+	}
+}
+
+func TestGlobalFailureBudget(t *testing.T) {
+	a, c, _ := setup(t)
+	for i := range 21 {
+		a.Login("admin", "wrong", "10.0.0."+strconv.Itoa(i))
+	}
+	if _, err := a.Login("admin", "correct horse", "10.0.1.1"); !errors.Is(err, ErrRateLimited) {
+		t.Fatalf("err = %v, want rate limited", err)
+	}
+	if !a.Throttled("10.0.1.2") {
+		t.Fatal("share unlock not covered by the global budget")
+	}
+	c.t = c.t.Add(time.Minute)
+	if _, err := a.Login("admin", "correct horse", "10.0.1.1"); err != nil {
+		t.Fatalf("still limited after the window: %v", err)
+	}
+}
+
+func TestLimiterFloodKeepsBans(t *testing.T) {
+	l := newLimiter(0)
+	now := time.Unix(1_000_000, 0)
+	for range 5 {
+		l.fail("6.6.6.6", now)
+	}
+	for i := range maxEntries + 10 {
+		l.fail("f"+strconv.Itoa(i), now)
+	}
+	if l.allow("6.6.6.6", now) {
+		t.Fatal("flood lifted an existing ban")
+	}
+	if len(l.m) > maxEntries {
+		t.Fatalf("map grew to %d", len(l.m))
+	}
+	later := now.Add(time.Hour)
+	l.fail("7.7.7.7", later)
+	if len(l.m) != 1 {
+		t.Fatalf("expired entries kept: %d", len(l.m))
 	}
 }

@@ -46,12 +46,14 @@ func From(ctx context.Context) (Principal, bool) {
 }
 
 type Auth struct {
-	DB  *db.DB
-	Now func() time.Time
-	lim *limiter
+	DB         *db.DB
+	Now        func() time.Time
+	lim, basic *limiter
 }
 
-func New(d *db.DB) *Auth { return &Auth{DB: d, Now: time.Now, lim: newLimiter()} }
+func New(d *db.DB) *Auth {
+	return &Auth{DB: d, Now: time.Now, lim: newLimiter(20), basic: newLimiter(0)}
+}
 
 func HashPassword(pw string) (string, error) {
 	b, err := bcrypt.GenerateFromPassword([]byte(pw), bcrypt.DefaultCost)
@@ -200,22 +202,20 @@ func (a *Auth) RequireAny(h http.Handler) http.Handler {
 
 func (a *Auth) RequireBasic(h http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		ip := ClientIP(r)
-		if !a.lim.allow(ip, a.Now()) {
-			http.Error(w, "too many attempts", 429)
+		if p, ok := a.App(r); ok {
+			h.ServeHTTP(w, with(r, p))
 			return
 		}
-		p, ok := a.App(r)
-		if !ok {
-			if _, _, sent := r.BasicAuth(); sent {
-				a.lim.fail(ip, a.Now())
+		if _, _, sent := r.BasicAuth(); sent {
+			ip := ClientIP(r)
+			if !a.basic.allow(ip, a.Now()) {
+				http.Error(w, "too many attempts", 429)
+				return
 			}
-			w.Header().Set("WWW-Authenticate", `Basic realm="filebox", charset="UTF-8"`)
-			http.Error(w, "unauthorized", 401)
-			return
+			a.basic.fail(ip, a.Now())
 		}
-		a.lim.ok(ip)
-		h.ServeHTTP(w, with(r, p))
+		w.Header().Set("WWW-Authenticate", `Basic realm="filebox", charset="UTF-8"`)
+		http.Error(w, "unauthorized", 401)
 	})
 }
 
