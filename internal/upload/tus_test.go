@@ -1,12 +1,14 @@
 package upload
 
 import (
+	"bytes"
 	"encoding/base64"
 	"io"
 	"net/http"
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"slices"
 	"strconv"
 	"strings"
 	"sync"
@@ -72,8 +74,9 @@ func (e *env) send(method, url string, body io.Reader, hdr ...string) *http.Resp
 	if err != nil {
 		panic(err)
 	}
-	io.Copy(io.Discard, w.Body)
+	b, _ := io.ReadAll(w.Body)
 	w.Body.Close()
+	w.Body = io.NopCloser(bytes.NewReader(b))
 	return w
 }
 
@@ -164,7 +167,8 @@ func TestTusConcurrentPatchSameUpload(t *testing.T) {
 		wg.Go(func() { codes[i] = e.patch(loc, 0, "hello").StatusCode })
 	}
 	wg.Wait()
-	if codes[0]+codes[1] != 204+409 {
+	slices.Sort(codes)
+	if !slices.Equal(codes, []int{204, 409}) {
 		t.Fatalf("codes %v", codes)
 	}
 	if w := e.patch(loc, 5, "world"); w.StatusCode != 204 {
@@ -184,6 +188,13 @@ func TestTusPatchNotInterrupted(t *testing.T) {
 		done <- e.send("PATCH", loc, pr, "Upload-Offset", "0", "Content-Type", "application/offset+octet-stream").StatusCode
 	}()
 	pw.Write([]byte("hel"))
+	id := strings.TrimPrefix(loc, "/up/")
+	for {
+		if fi, err := os.Stat(filepath.Join(e.dir, vol.UploadsDir, id)); err == nil && fi.Size() == 3 {
+			break
+		}
+		time.Sleep(time.Millisecond)
+	}
 	head := make(chan string)
 	go func() { head <- e.do("HEAD", loc, "").Header.Get("Upload-Offset") }()
 	pw.Write([]byte("lo"))
@@ -221,6 +232,9 @@ func TestTusOwnerAndVersion(t *testing.T) {
 	}
 	if w := e.do("DELETE", loc, "", "X-Owner", "mallory"); w.StatusCode != 404 {
 		t.Fatalf("other owner delete %d", w.StatusCode)
+	}
+	if _, ok := e.srv.lookup("+" + strings.TrimPrefix(loc, "/up/")); ok {
+		t.Fatal("signed volume index accepted")
 	}
 	if w := e.do("PATCH", "/up/../../x", "", "Upload-Offset", "0", "Content-Type", "application/offset+octet-stream"); w.StatusCode != 404 {
 		t.Fatalf("bad id %d", w.StatusCode)
@@ -319,5 +333,20 @@ func TestTusOptions(t *testing.T) {
 	ext := w.Header.Get("Tus-Extension")
 	if w.StatusCode != 200 || w.Header.Get("Tus-Version") != "1.0.0" || !strings.Contains(ext, "creation") || !strings.Contains(ext, "termination") || strings.Contains(ext, "defer") {
 		t.Fatalf("%d %v", w.StatusCode, w.Header)
+	}
+}
+
+func TestTusStorageErrorHidden(t *testing.T) {
+	if os.Geteuid() == 0 {
+		t.Skip("root ignores directory permissions")
+	}
+	e := setup(t)
+	up := filepath.Join(e.dir, vol.UploadsDir)
+	os.Chmod(up, 0o500)
+	t.Cleanup(func() { os.Chmod(up, 0o700) })
+	w := e.do("POST", "/up/", "", "Upload-Length", "1", "Upload-Metadata", meta("filename", "x"))
+	b, _ := io.ReadAll(w.Body)
+	if w.StatusCode < 300 || strings.Contains(string(b), e.dir) || strings.Contains(string(b), "secretvol") {
+		t.Fatalf("%d %q", w.StatusCode, b)
 	}
 }

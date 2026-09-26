@@ -66,6 +66,7 @@ const (
 var (
 	errNoSpace  = handler.NewError("ERR_INSUFFICIENT_STORAGE", "insufficient storage", http.StatusInsufficientStorage)
 	errFinalize = handler.NewError("ERR_FINALIZE", "cannot store the upload", http.StatusInternalServerError)
+	errInternal = handler.NewError("ERR_INTERNAL", "internal error", http.StatusInternalServerError)
 )
 
 type Server struct {
@@ -133,7 +134,7 @@ func (s *Server) now() time.Time {
 func (s *Server) lookup(id string) (*volume, bool) {
 	idx, tail, _ := strings.Cut(id, "-")
 	i, err := strconv.Atoi(idx)
-	if err != nil || i < 0 || i >= len(s.vols) || len(tail) != 26 || strings.Trim(tail, "ABCDEFGHIJKLMNOPQRSTUVWXYZ234567") != "" {
+	if err != nil || strings.Trim(idx, "0123456789") != "" || i < 0 || i >= len(s.vols) || len(tail) != 26 || strings.Trim(tail, "ABCDEFGHIJKLMNOPQRSTUVWXYZ234567") != "" {
 		return nil, false
 	}
 	return s.vols[i], true
@@ -303,17 +304,24 @@ type store struct{ filestore.FileStore }
 
 type upload struct{ handler.Upload }
 
-func noSpace(err error) error {
-	if errors.Is(err, syscall.ENOSPC) {
+type terminatable struct{ handler.TerminatableUpload }
+
+func sanitize(err error) error {
+	var herr handler.Error
+	switch {
+	case err == nil || errors.As(err, &herr):
+		return err
+	case errors.Is(err, syscall.ENOSPC) || errors.Is(err, syscall.EDQUOT):
 		return errNoSpace
 	}
-	return err
+	slog.Error("upload storage", "err", err)
+	return errInternal
 }
 
 func (s store) NewUpload(ctx context.Context, info handler.FileInfo) (handler.Upload, error) {
 	up, err := s.FileStore.NewUpload(ctx, info)
 	if err != nil {
-		return nil, noSpace(err)
+		return nil, sanitize(err)
 	}
 	return upload{up}, nil
 }
@@ -321,18 +329,24 @@ func (s store) NewUpload(ctx context.Context, info handler.FileInfo) (handler.Up
 func (s store) GetUpload(ctx context.Context, id string) (handler.Upload, error) {
 	up, err := s.FileStore.GetUpload(ctx, id)
 	if err != nil {
-		return nil, err
+		return nil, sanitize(err)
 	}
 	return upload{up}, nil
 }
 
 func (s store) AsTerminatableUpload(up handler.Upload) handler.TerminatableUpload {
-	return s.FileStore.AsTerminatableUpload(up.(upload).Upload)
+	return terminatable{s.FileStore.AsTerminatableUpload(up.(upload).Upload)}
 }
 
 func (u upload) WriteChunk(ctx context.Context, offset int64, src io.Reader) (int64, error) {
 	n, err := u.Upload.WriteChunk(ctx, offset, src)
-	return n, noSpace(err)
+	return n, sanitize(err)
+}
+
+func (u upload) FinishUpload(ctx context.Context) error { return sanitize(u.Upload.FinishUpload(ctx)) }
+
+func (t terminatable) Terminate(ctx context.Context) error {
+	return sanitize(t.TerminatableUpload.Terminate(ctx))
 }
 
 // tusd v2.10.1 races on its request body when a lock interrupts its holder, so locks wait instead.

@@ -182,3 +182,22 @@ func TestShareCreateValidation(t *testing.T) {
 		}
 	}
 }
+
+func TestUploadStorageErrorHidden(t *testing.T) {
+	if os.Geteuid() == 0 {
+		t.Skip("root ignores directory permissions")
+	}
+	f := newTestApp(t)
+	f.write(t, "inbox/.keep", "")
+	tok := mkShare(t, f, `{"vol":"v","path":"inbox","mode":"drop"}`)
+	up := filepath.Join(f.Dir, ".filebox/uploads")
+	os.Chmod(up, 0o500)
+	t.Cleanup(func() { os.Chmod(up, 0o700) })
+	md := "vol " + b64("v") + ",dir " + b64("inbox") + ",filename " + b64("x")
+	for _, url := range []string{"/s/" + tok + "/upload/", "/upload/"} {
+		w := f.do("POST", url, nil, "Tus-Resumable", "1.0.0", "Upload-Length", "1", "Upload-Metadata", md)
+		if b := w.Body.String(); w.Code < 300 || strings.Contains(b, f.Dir) || strings.Contains(b, ".filebox") || strings.Contains(b, "/v/") {
+			t.Errorf("%s: %d %q", url, w.Code, b)
+		}
+	}
+}
