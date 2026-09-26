@@ -3,8 +3,10 @@ package api
 import (
 	"crypto/rand"
 	"encoding/hex"
+	"errors"
 	"io"
 	"io/fs"
+	"log/slog"
 	"os"
 	"path"
 	"strings"
@@ -67,14 +69,18 @@ func (j *Jobs) Start(src, dst *vol.Volume, srel, drel string, move bool) string 
 	j.mu.Unlock()
 
 	go func() {
-		err := copyTree(src, dst, srel, drel, x)
-		if err == nil && move {
+		cerr, rootConflict := copyTree(src, dst, srel, drel, x)
+		err := cerr
+		if cerr == nil && move {
 			err = src.Root.RemoveAll(srel)
+		} else if cerr != nil && !rootConflict {
+			dst.Root.RemoveAll(drel)
 		}
 		x.mu.Lock()
 		x.state, x.finished = "done", time.Now()
 		if err != nil {
 			x.state, x.err = "error", err.Error()
+			slog.Error("job failed", "id", id, "err", err)
 		}
 		x.mu.Unlock()
 	}()
@@ -93,7 +99,7 @@ func (c counter) Read(p []byte) (int, error) {
 }
 
 // Symlinks are skipped: following them could copy data from outside the volume.
-func copyTree(src, dst *vol.Volume, srel, drel string, x *job) error {
+func copyTree(src, dst *vol.Volume, srel, drel string, x *job) (err error, rootConflict bool) {
 	sfs := src.Root.FS()
 	fs.WalkDir(sfs, srel, func(p string, d fs.DirEntry, err error) error {
 		if err == nil && d.Type().IsRegular() {
@@ -103,19 +109,29 @@ func copyTree(src, dst *vol.Volume, srel, drel string, x *job) error {
 		}
 		return nil
 	})
-	return fs.WalkDir(sfs, srel, func(p string, d fs.DirEntry, err error) error {
+	err = fs.WalkDir(sfs, srel, func(p string, d fs.DirEntry, err error) error {
 		if err != nil {
 			return err
 		}
 		target := path.Join(drel, strings.TrimPrefix(strings.TrimPrefix(p, srel), "/"))
 		switch {
 		case d.IsDir():
+			if p == srel {
+				err := dst.Root.Mkdir(target, 0o755)
+				rootConflict = errors.Is(err, fs.ErrExist)
+				return err
+			}
 			return dst.Root.MkdirAll(target, 0o755)
 		case d.Type().IsRegular():
-			return copyFile(src.Root, dst.Root, p, target, x)
+			err := copyFile(src.Root, dst.Root, p, target, x)
+			if p == srel {
+				rootConflict = errors.Is(err, fs.ErrExist)
+			}
+			return err
 		}
 		return nil
 	})
+	return err, rootConflict
 }
 
 func copyFile(sr, dr *os.Root, from, to string, x *job) error {
@@ -134,9 +150,11 @@ func copyFile(sr, dr *os.Root, from, to string, x *job) error {
 	}
 	if _, err := io.Copy(out, counter{in, &x.done}); err != nil {
 		out.Close()
+		dr.Remove(to)
 		return err
 	}
 	if err := out.Close(); err != nil {
+		dr.Remove(to)
 		return err
 	}
 	return dr.Chtimes(to, fi.ModTime(), fi.ModTime())

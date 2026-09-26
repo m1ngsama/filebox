@@ -9,6 +9,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/m1ngsama/filebox/internal/api"
 )
 
 func body(s string) *strings.Reader { return strings.NewReader(s) }
@@ -218,5 +220,75 @@ func TestTokensAPI(t *testing.T) {
 	}
 	if w := f.do("GET", "/raw/v/a", nil, "X-No-Auth", "1", "Authorization", "Bearer "+tok); w.Code != 401 {
 		t.Fatalf("revoked token accepted %d", w.Code)
+	}
+}
+
+func waitJobStatus(t *testing.T, jobs *api.Jobs, id string) api.JobStatus {
+	t.Helper()
+	for i := 0; i < 100; i++ {
+		st, ok := jobs.Get(id)
+		if !ok {
+			t.Fatal("job not found")
+		}
+		if st.State != "running" {
+			return st
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+	t.Fatal("job did not finish")
+	return api.JobStatus{}
+}
+
+func TestJobDestinationConflict(t *testing.T) {
+	f := newTestApp(t)
+	f.write(t, "tree/a.txt", "aaa")
+	v, ok := f.App.Vols.Get("v")
+	if !ok {
+		t.Fatal("volume v missing")
+	}
+	if err := v.Root.MkdirAll("copy", 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := v.Root.WriteFile("copy/marker.txt", []byte("keep"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	jobs := api.NewJobs()
+	id := jobs.Start(v, v, "tree", "copy", false)
+	st := waitJobStatus(t, jobs, id)
+	if st.State != "error" {
+		t.Fatalf("state = %s", st.State)
+	}
+	if b, err := os.ReadFile(filepath.Join(f.Dir, "copy/marker.txt")); err != nil || string(b) != "keep" {
+		t.Fatalf("pre-existing destination clobbered: %v %q", err, b)
+	}
+	if _, err := os.Stat(filepath.Join(f.Dir, "tree")); err != nil {
+		t.Fatal("source removed on failed copy", err)
+	}
+}
+
+func TestJobCopyCleansUpOnFailure(t *testing.T) {
+	if os.Geteuid() == 0 {
+		t.Skip("running as root: chmod 0 has no effect")
+	}
+	f := newTestApp(t)
+	f.write(t, "bad/ok.txt", "x")
+	f.write(t, "bad/secret.txt", "y")
+	secret := filepath.Join(f.Dir, "bad/secret.txt")
+	if err := os.Chmod(secret, 0o000); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { os.Chmod(secret, 0o644) })
+	v, ok := f.App.Vols.Get("v")
+	if !ok {
+		t.Fatal("volume v missing")
+	}
+	jobs := api.NewJobs()
+	id := jobs.Start(v, v, "bad", "bad-copy", false)
+	st := waitJobStatus(t, jobs, id)
+	if st.State != "error" {
+		t.Fatalf("state = %s", st.State)
+	}
+	if _, err := os.Stat(filepath.Join(f.Dir, "bad-copy")); !os.IsNotExist(err) {
+		t.Fatalf("partial destination left behind: %v", err)
 	}
 }
