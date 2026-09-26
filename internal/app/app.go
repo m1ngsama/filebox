@@ -12,6 +12,7 @@ import (
 	"github.com/m1ngsama/filebox/internal/db"
 	"github.com/m1ngsama/filebox/internal/httpx"
 	"github.com/m1ngsama/filebox/internal/serve"
+	"github.com/m1ngsama/filebox/internal/share"
 	"github.com/m1ngsama/filebox/internal/thumb"
 	"github.com/m1ngsama/filebox/internal/upload"
 	"github.com/m1ngsama/filebox/internal/vol"
@@ -38,6 +39,8 @@ func (a *App) Handler() http.Handler {
 	mux.Handle("/dav", d)
 	mux.Handle("/dav/", d)
 	mux.Handle("/upload/", a.Uploads.Handler("/upload/", a.userUploads()))
+	(&share.Service{DB: a.DB, Vols: a.Vols, Auth: a.Auth, Uploads: a.Uploads, Thumbs: a.Thumbs}).Register(mux)
+	mux.Handle("GET /s/{token}", a.spa())
 	mux.Handle("/", a.spa())
 	return common(http.NewCrossOriginProtection().Handler(mux))
 }

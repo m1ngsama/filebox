@@ -247,3 +247,6 @@ func SetCookie(w http.ResponseWriter, r *http.Request, name, value, path string,
 	}
 	http.SetCookie(w, c)
 }
+
+func (a *Auth) Throttled(ip string) bool { return !a.lim.allow(ip, a.Now()) }
+func (a *Auth) Failed(ip string)         { a.lim.fail(ip, a.Now()) }
