@@ -41,7 +41,7 @@ func TargetFor(v *vol.Volume, dir string, meta map[string]string) (Target, error
 	name := meta["filename"]
 	if rp := meta["relativePath"]; rp != "" {
 		for _, seg := range strings.Split(rp, "/") {
-			if seg == ".." {
+			if seg == ".." || vol.Reserved(seg) {
 				return Target{}, vol.ErrBadPath
 			}
 		}

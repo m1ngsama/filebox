@@ -227,3 +227,25 @@ func TestShareUnlockNotReusedAfterDelete(t *testing.T) {
 		t.Fatalf("old unlock cookie opened the new share: %d", c)
 	}
 }
+
+func TestShareUploadRelativePath(t *testing.T) {
+	f := newTestApp(t)
+	f.write(t, "inbox/.keep", "")
+	tok := mkShare(t, f, `{"vol":"v","path":"inbox","mode":"upload"}`)
+	up := "/s/" + tok + "/upload/"
+	md := func(rp string) string { return "filename " + b64("x.txt") + ",relativePath " + b64(rp) }
+	w := f.do("POST", up, nil, "X-No-Auth", "1", "Tus-Resumable", "1.0.0", "Upload-Length", "2", "Upload-Metadata", md("sub/deep/x.txt"))
+	if w.Code != 201 {
+		t.Fatalf("create %d", w.Code)
+	}
+	f.do("PATCH", w.Header().Get("Location"), strings.NewReader("ok"), "X-No-Auth", "1", "Tus-Resumable", "1.0.0",
+		"Upload-Offset", "0", "Content-Type", "application/offset+octet-stream")
+	if b, _ := os.ReadFile(filepath.Join(f.Dir, "inbox/sub/deep/x.txt")); string(b) != "ok" {
+		t.Fatalf("stored %q", b)
+	}
+	for _, rp := range []string{"../x.txt", "sub/../../x.txt", "sub/.trash/x.txt", ".filebox/x.txt", "sub/.filebox/x.txt"} {
+		if c, _, _ := anon(f, "POST", up, "", "Tus-Resumable", "1.0.0", "Upload-Length", "0", "Upload-Metadata", md(rp)); c != 400 {
+			t.Errorf("%s → %d", rp, c)
+		}
+	}
+}
