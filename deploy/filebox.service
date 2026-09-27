@@ -2,7 +2,8 @@
 Description=filebox
 After=network-online.target
 Wants=network-online.target
-RequiresMountsFor=/mnt/backup1t
+Wants=mnt-backup1t.automount
+After=mnt-backup1t.automount
 
 [Service]
 User=m1ng
