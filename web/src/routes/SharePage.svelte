@@ -180,7 +180,8 @@
     <form class="login" onsubmit={unlock}>
       <Lock size={32} class="ficon" />
       <p>{t.shareLocked}</p>
-      <input type="password" bind:value={password} placeholder={t.password} aria-label={t.password} autocomplete="off" required />
+      <label for="share-password" class="sr-only">{t.password}</label>
+      <input id="share-password" type="password" bind:value={password} placeholder={t.password} autocomplete="off" required />
       <button class="primary" type="submit">{t.unlock}</button>
       {#if unlockError}<p class="error">{unlockError}</p>{/if}
     </form>

@@ -65,8 +65,10 @@
 
 <form class="login" onsubmit={submit}>
   <h1>{t.brand}</h1>
-  <input bind:value={name} placeholder={t.username} aria-label={t.username} autocomplete="username webauthn" onfocus={refreshAutofill} autocapitalize="none" spellcheck="false" required />
-  <input type="password" bind:value={password} placeholder={t.password} aria-label={t.password} autocomplete="current-password" required />
+  <label for="login-name" class="sr-only">{t.username}</label>
+  <input id="login-name" bind:value={name} placeholder={t.username} autocomplete="username webauthn" onfocus={refreshAutofill} autocapitalize="none" spellcheck="false" required />
+  <label for="login-password" class="sr-only">{t.password}</label>
+  <input id="login-password" type="password" bind:value={password} placeholder={t.password} autocomplete="current-password" required />
   <button type="submit">{t.login}</button>
   {#if passkeys}<button type="button" onclick={() => passkey()}>{t.passkeyLogin}</button>{/if}
   {#if error}<p class="error">{error}</p>{/if}

@@ -9,6 +9,7 @@ import { t } from '../web/src/lib/i18n'
 const VOL = join(DIR, 'vol')
 const fileInput = (p: Page) => p.locator('input[type=file]:not([webkitdirectory])')
 const row = (p: Page, name: string) => p.locator('.row', { hasText: name })
+const unlabeled = (p: Page) => p.evaluate(() => [...document.querySelectorAll('input:not([type=file]):not([type=checkbox])')].filter((i) => !(i as HTMLInputElement).labels?.length).length)
 
 async function login(page: Page) {
   await page.goto('/')
@@ -16,8 +17,10 @@ async function login(page: Page) {
 }
 
 async function signIn(page: Page) {
-  await page.getByPlaceholder(t.username).fill('admin')
-  await page.getByPlaceholder(t.password).fill('pw-pw-pw-pw')
+  await expect(page.getByLabel(t.username)).toBeVisible()
+  expect(await unlabeled(page)).toBe(0)
+  await page.getByLabel(t.username).fill('admin')
+  await page.getByLabel(t.password).fill('pw-pw-pw-pw')
   await page.getByRole('button', { name: t.login, exact: true }).click()
   await expect(page).toHaveURL(/\/files\/v\/$/)
 }
@@ -67,6 +70,8 @@ test('wrong password is rejected', async ({ page }) => {
 
 test('browse and preview', async ({ page }) => {
   await login(page)
+  await expect(row(page, 'docs')).toBeVisible()
+  expect(await unlabeled(page)).toBe(0)
   await row(page, 'docs').locator('button.name').click()
   await expect(page).toHaveURL(/\/files\/v\/docs\/$/)
   await row(page, 'readme.txt').locator('button.name').click()
@@ -162,9 +167,10 @@ test('password share opens anonymously', async ({ page, browser }) => {
   const url = await shareDocs(page, 'read', 'secret-pass')
   const anon = await browser.newPage()
   await anon.goto(url)
-  await expect(anon.getByPlaceholder(t.password)).toBeVisible()
+  await expect(anon.getByLabel(t.password)).toBeVisible()
+  expect(await unlabeled(anon)).toBe(0)
   await expect(anon.locator('body')).not.toContainText('docs')
-  await anon.getByPlaceholder(t.password).fill('secret-pass')
+  await anon.getByLabel(t.password).fill('secret-pass')
   await anon.getByRole('button', { name: t.unlock, exact: true }).click()
   await row(anon, 'readme.txt').locator('button.name').click()
   await expect(anon.locator('.viewer pre')).toHaveText('hello\n')

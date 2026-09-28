@@ -57,6 +57,7 @@ button.ghost { border-color: transparent; background: none; }
 }
 .icon-btn:hover { background: var(--hover); color: var(--fg); }
 .grow { flex: 1; }
+.sr-only { position: absolute; width: 1px; height: 1px; margin: -1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
 .error { color: var(--danger); margin: 0; }
 .hint { color: var(--muted); font-size: 12px; }
 

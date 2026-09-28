@@ -217,7 +217,8 @@
         </DropdownMenu.Portal>
       </DropdownMenu.Root>
       <span class="grow"></span>
-      <input class="filter" type="search" bind:value={filter} placeholder={t.filter} aria-label={t.filter} />
+      <label for="filter" class="sr-only">{t.filter}</label>
+      <input id="filter" class="filter" type="search" bind:value={filter} placeholder={t.filter} />
       <button class="icon-btn" aria-label={grid ? t.listView : t.gridView} title={grid ? t.listView : t.gridView} onclick={() => (grid = !grid)}>
         {#if grid}<List size={20} />{:else}<LayoutGrid size={20} />{/if}
       </button>
