@@ -426,9 +426,9 @@ test('an uploaded file shows first in recent and leads back to its folder', asyn
 test.describe('with an English browser', () => {
   test.use({ locale: 'en-US' })
 
-  test('dates follow the browser locale', async ({ page }) => {
+  test('dates stay in the UI language', async ({ page }) => {
     await login(page)
     await page.goto('/settings')
-    await expect(page.getByRole('list', { name: t.sessions }).getByText(new RegExp(`^${t.lastUsed('(now|\\d+ seconds? ago)')}$`))).toBeVisible()
+    await expect(page.getByRole('list', { name: t.sessions }).getByText(new RegExp(`^${t.lastUsed('(现在|\\d+秒钟前)')}$`))).toBeVisible()
   })
 })

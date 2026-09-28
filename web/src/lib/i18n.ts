@@ -1,5 +1,7 @@
 const wait = (s: number) => (s < 60 ? `${s} 秒` : `${Math.ceil(s / 60)} 分钟`)
 
+export const lang = 'zh-CN'
+
 export const t = {
   brand: 'filebox',
   username: '用户名',

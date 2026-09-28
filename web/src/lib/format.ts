@@ -1,3 +1,5 @@
+import { lang } from './i18n'
+
 export function size(n: number): string {
   const u = ['B', 'KB', 'MB', 'GB', 'TB']
   let i = 0
@@ -9,8 +11,7 @@ export function size(n: number): string {
 }
 
 export type Sort = 'name' | 'size' | 'mtime'
-const locale = navigator.language
-const collator = new Intl.Collator(locale, { numeric: true })
+const collator = new Intl.Collator(navigator.language, { numeric: true })
 
 type Row = { name: string; dir: boolean; size: number; mtime: number }
 const keys = new WeakMap<Row[], { rank: Int32Array; lower: string[] }>()
@@ -41,10 +42,10 @@ export function arrange<T extends Row>(list: T[], filter: string, sort: Sort, de
     .map((i) => list[i])
 }
 
-const dtf = new Intl.DateTimeFormat(locale, { dateStyle: 'short', timeStyle: 'short' })
+const dtf = new Intl.DateTimeFormat(lang, { dateStyle: 'short', timeStyle: 'short' })
 export const date = (ms: number) => dtf.format(ms)
 
-const rtf = new Intl.RelativeTimeFormat(locale, { numeric: 'auto' })
+const rtf = new Intl.RelativeTimeFormat(lang, { numeric: 'auto' })
 const steps: [Intl.RelativeTimeFormatUnit, number][] = [['second', 60], ['minute', 60], ['hour', 24], ['day', 30], ['month', 12], ['year', Infinity]]
 
 export function ago(ms: number) {
