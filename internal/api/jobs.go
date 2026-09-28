@@ -152,6 +152,7 @@ func run(ix *index.Index, src, dst *vol.Volume, srel, drel, id string, move bool
 	if err := place(dst, tmp, drel, x); err != nil {
 		return err
 	}
+	ix.CopyProps(src, srel, dst, drel, true)
 	if move {
 		return src.Root.RemoveAll(srel)
 	}

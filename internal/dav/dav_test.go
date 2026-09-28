@@ -11,6 +11,7 @@ import (
 
 	"github.com/m1ngsama/filebox/internal/auth"
 	"github.com/m1ngsama/filebox/internal/db"
+	"github.com/m1ngsama/filebox/internal/index"
 	"github.com/m1ngsama/filebox/internal/vol"
 )
 
@@ -36,7 +37,7 @@ func setup(t *testing.T) *env {
 	rw, _ := a.NewAppToken(uid, "rw", false)
 	ro, _ := a.NewAppToken(uid, "ro", true)
 	mux := http.NewServeMux()
-	h := Handler(vols, a, nil)
+	h := Handler(vols, a, index.New(d))
 	mux.Handle("/dav", h)
 	mux.Handle("/dav/", h)
 	srv := httptest.NewServer(mux)

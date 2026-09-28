@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io/fs"
 	"log/slog"
@@ -85,12 +86,14 @@ func (x *Index) rename(vol, from, to string) error {
 		return err
 	}
 	defer tx.Rollback()
-	if _, err := tx.Exec(`DELETE FROM files WHERE `+subtree, under(vol, to)...); err != nil {
-		return err
-	}
-	if _, err := tx.Exec(`UPDATE files SET path = ? || substr(path, length(?) + 1) WHERE `+subtree,
-		append([]any{to, from}, under(vol, from)...)...); err != nil {
-		return err
+	for _, t := range []string{"files", "dav_props"} {
+		if _, err := tx.Exec(`DELETE FROM `+t+` WHERE `+subtree, under(vol, to)...); err != nil {
+			return err
+		}
+		if _, err := tx.Exec(`UPDATE `+t+` SET path = ? || substr(path, length(?) + 1) WHERE `+subtree,
+			append([]any{to, from}, under(vol, from)...)...); err != nil {
+			return err
+		}
 	}
 	return tx.Commit()
 }
@@ -173,6 +176,22 @@ func (x *Index) scan(vols *vol.Set) (int, error) {
 		if err == nil {
 			_, err = c.ExecContext(ctx, `DELETE FROM files WHERE vol = ? AND path NOT IN (SELECT path FROM temp.seen)`, v.Name)
 		}
+		x.mu.Lock()
+		var touched []string
+		for p := range x.touched {
+			if p.v == v {
+				touched = append(touched, p.rel)
+			}
+		}
+		x.mu.Unlock()
+		for _, p := range touched {
+			if err == nil {
+				_, err = c.ExecContext(ctx, `INSERT OR IGNORE INTO temp.seen (path) SELECT path FROM dav_props WHERE `+subtree, under(v.Name, p)...)
+			}
+		}
+		if err == nil {
+			_, err = c.ExecContext(ctx, `DELETE FROM dav_props WHERE vol = ? AND path != '.' AND path NOT IN (SELECT path FROM temp.seen)`, v.Name)
+		}
 		if err != nil {
 			return n, fmt.Errorf("index volume %s: %w", v.Name, err)
 		}
@@ -184,6 +203,12 @@ func (x *Index) scan(vols *vol.Set) (int, error) {
 
 func (x *Index) sync(v *vol.Volume, rel string) error {
 	fi, err := v.Root.Lstat(rel)
+	if errors.Is(err, fs.ErrNotExist) {
+		_, err := x.db.Exec(`DELETE FROM dav_props WHERE `+subtree, under(v.Name, rel)...)
+		if err != nil {
+			return err
+		}
+	}
 	if err != nil || (!fi.IsDir() && !fi.Mode().IsRegular()) {
 		_, err := x.db.Exec(`DELETE FROM files WHERE `+subtree, under(v.Name, rel)...)
 		return err

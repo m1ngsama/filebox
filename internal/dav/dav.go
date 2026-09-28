@@ -2,10 +2,12 @@ package dav
 
 import (
 	"context"
+	"encoding/xml"
 	"io"
 	"io/fs"
 	"log/slog"
 	"net/http"
+	"net/url"
 	"os"
 	"path"
 	"strings"
@@ -21,9 +23,10 @@ import (
 )
 
 func Handler(vols *vol.Set, a *auth.Auth, ix *index.Index) http.Handler {
+	fsys := &FS{vols: vols, ix: ix}
 	h := &webdav.Handler{
 		Prefix:     "/dav",
-		FileSystem: &FS{vols: vols, ix: ix},
+		FileSystem: fsys,
 		LockSystem: webdav.NewMemLS(),
 		Logger: func(r *http.Request, err error) {
 			if err != nil {
@@ -48,8 +51,38 @@ func Handler(vols *vol.Set, a *auth.Auth, ix *index.Index) http.Handler {
 		}
 		// Browsers with cached Basic credentials would otherwise render uploaded HTML on this origin.
 		serve.SafeHeaders(w.Header(), "")
+		if r.Method == "COPY" && ix != nil {
+			sw := &status{ResponseWriter: w}
+			h.ServeHTTP(sw, r)
+			if sw.code == http.StatusCreated || sw.code == http.StatusNoContent {
+				fsys.copyProps(r)
+			}
+			return
+		}
 		h.ServeHTTP(w, r)
 	}))
+}
+
+type status struct {
+	http.ResponseWriter
+	code int
+}
+
+func (s *status) WriteHeader(code int) {
+	s.code = code
+	s.ResponseWriter.WriteHeader(code)
+}
+
+func (f *FS) copyProps(r *http.Request) {
+	u, err := url.Parse(r.Header.Get("Destination"))
+	if err != nil {
+		return
+	}
+	v1, r1, err1 := f.resolve(strings.TrimPrefix(r.URL.Path, "/dav"))
+	v2, r2, err2 := f.resolve(strings.TrimPrefix(u.Path, "/dav"))
+	if err1 == nil && err2 == nil && v1 != nil && v2 != nil {
+		f.ix.CopyProps(v1, r1, v2, r2, r.Header.Get("Depth") != "0")
+	}
 }
 
 func readOnlyMethod(m string) bool {
@@ -105,17 +138,25 @@ func (f *FS) OpenFile(ctx context.Context, name string, flag int, perm os.FileMo
 		}
 		return &rootDir{vols: f.vols}, nil
 	}
+	// PROPPATCH opens with a bare O_RDWR, which fails on directories.
+	if flag == os.O_RDWR && f.ix != nil {
+		flag = os.O_RDONLY
+	}
 	fh, err := v.Root.OpenFile(rel, flag, perm)
 	if err != nil {
 		return nil, err
 	}
-	if rel == "." {
-		return volRoot{fh}, nil
+	var file webdav.File = fh
+	switch {
+	case rel == ".":
+		file = volRoot{fh}
+	case flag&(os.O_WRONLY|os.O_RDWR|os.O_CREATE|os.O_TRUNC) != 0:
+		file = written{fh, func() { f.ix.Touch(v, rel) }}
 	}
-	if flag&(os.O_WRONLY|os.O_RDWR|os.O_CREATE|os.O_TRUNC) != 0 {
-		return written{fh, func() { f.ix.Touch(v, rel) }}, nil
+	if f.ix == nil {
+		return file, nil
 	}
-	return fh, nil
+	return propFile{file, f.ix, v, rel}, nil
 }
 
 func (f *FS) RemoveAll(ctx context.Context, name string) error {
@@ -197,6 +238,45 @@ func (w written) Close() error {
 	err := w.File.Close()
 	w.done()
 	return err
+}
+
+type propFile struct {
+	webdav.File
+	ix  *index.Index
+	v   *vol.Volume
+	rel string
+}
+
+func (f propFile) DeadProps() (map[xml.Name]webdav.Property, error) {
+	ps, err := f.ix.Props(f.v, f.rel)
+	if err != nil {
+		return nil, err
+	}
+	m := make(map[xml.Name]webdav.Property, len(ps))
+	for _, p := range ps {
+		n := xml.Name{Space: p.NS, Local: p.Name}
+		m[n] = webdav.Property{XMLName: n, InnerXML: p.XML}
+	}
+	return m, nil
+}
+
+func (f propFile) Patch(patches []webdav.Proppatch) ([]webdav.Propstat, error) {
+	var ops []index.Prop
+	st := webdav.Propstat{Status: http.StatusOK}
+	for _, pp := range patches {
+		for _, p := range pp.Props {
+			op := index.Prop{NS: p.XMLName.Space, Name: p.XMLName.Local}
+			if !pp.Remove {
+				op.XML = append([]byte{}, p.InnerXML...)
+			}
+			ops = append(ops, op)
+			st.Props = append(st.Props, webdav.Property{XMLName: p.XMLName})
+		}
+	}
+	if err := f.ix.PatchProps(f.v, f.rel, ops); err != nil {
+		return nil, err
+	}
+	return []webdav.Propstat{st}, nil
 }
 
 type volRoot struct{ *os.File }

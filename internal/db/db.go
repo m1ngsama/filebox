@@ -67,6 +67,14 @@ var migrations = []string{
 		PRIMARY KEY (vol, path)
 	) WITHOUT ROWID;
 	CREATE INDEX files_mtime ON files(mtime DESC);`,
+	`CREATE TABLE dav_props (
+		vol TEXT NOT NULL,
+		path TEXT NOT NULL,
+		ns TEXT NOT NULL,
+		name TEXT NOT NULL,
+		xml BLOB NOT NULL,
+		PRIMARY KEY (vol, path, ns, name)
+	) WITHOUT ROWID;`,
 }
 
 type DB struct{ *sql.DB }
