@@ -12,6 +12,7 @@ import (
 	"strings"
 	"sync"
 	"sync/atomic"
+	"syscall"
 	"time"
 
 	"github.com/m1ngsama/filebox/internal/httpx"
@@ -123,7 +124,7 @@ func run(src, dst *vol.Volume, srel, drel, id string, move bool, x *job) error {
 	if err := copyTree(src, dst, srel, tmp, move, x); err != nil {
 		return err
 	}
-	if err := place(dst.Root, tmp, drel); err != nil {
+	if err := place(dst, tmp, drel); err != nil {
 		return err
 	}
 	if move {
@@ -132,15 +133,32 @@ func run(src, dst *vol.Volume, srel, drel, id string, move bool, x *job) error {
 	return nil
 }
 
-func place(r *os.Root, from, to string) error {
-	err := r.Link(from, to)
+var link, rename = (*os.Root).Link, (*os.Root).Rename
+
+func place(v *vol.Volume, from, to string) error {
+	r := v.Root
+	err := link(r, from, to)
 	if err == nil || errors.Is(err, fs.ErrExist) {
 		return err
 	}
 	if _, err := r.Lstat(to); err == nil {
 		return fs.ErrExist
 	}
-	return r.Rename(from, to)
+	if err := rename(r, from, to); !errors.Is(err, syscall.EXDEV) {
+		return err
+	}
+	fi, err := r.Lstat(from)
+	if err != nil || !fi.IsDir() {
+		return copyTree(v, v, from, to, false, &job{})
+	}
+	if err := r.Mkdir(to, 0o755); err != nil {
+		return err
+	}
+	if err := copyTree(v, v, from, to, false, &job{}); err != nil {
+		r.RemoveAll(to)
+		return err
+	}
+	return nil
 }
 
 // Copies skip symlinks, since following them could copy data from outside the volume.
