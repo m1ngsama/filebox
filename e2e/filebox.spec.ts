@@ -107,6 +107,23 @@ test('resumable upload survives a dropped connection and a page reload', async (
   expect(await sha(join(VOL, 'filebox-e2e-200.bin'))).toBe(await sha(src))
 })
 
+test('closing details opened from my shares clears the query', async ({ page }) => {
+  await login(page)
+  await shareDocs(page, 'read')
+  await page.getByRole('link', { name: t.myShares, exact: true }).click()
+  await page.locator('.rows li a', { hasText: 'v:/docs' }).first().click()
+  await expect(page).toHaveURL(/\/files\/v\/\?details=docs$/)
+  await expect(page.locator('.details h2')).toHaveText('docs')
+  await page.locator('.details-close').click()
+  await expect(page).toHaveURL(/\/files\/v\/$/)
+  await page.goBack()
+  await page.goForward()
+  await expect(page).toHaveURL(/\/files\/v\/$/)
+  await page.reload()
+  await expect(row(page, 'docs')).toBeVisible()
+  await expect(page.locator('.details')).toHaveCount(0)
+})
+
 test('password share opens anonymously', async ({ page, browser }) => {
   await login(page)
   const url = await shareDocs(page, 'read', 'secret-pass')

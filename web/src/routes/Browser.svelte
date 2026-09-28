@@ -82,6 +82,11 @@
     })
   })
 
+  function closeDetails() {
+    details = null
+    if (new URLSearchParams(route.search).has('details')) navigate(route.path, true)
+  }
+
   $effect(() => {
     filter
     vol
@@ -146,7 +151,7 @@
     if (document.querySelector('[role=dialog], [role=menu]')) return
     const typing = e.target instanceof HTMLInputElement || e.target instanceof HTMLSelectElement
     if (e.key === 'Escape') {
-      if (details) details = null
+      if (details) closeDetails()
       else selected.clear()
     } else if (typing) return
     else if ((e.key === 'Delete' || e.key === 'Backspace') && selected.size) dialog = { kind: 'delete', names: [...selected] }
@@ -241,7 +246,7 @@
 
   {#if details}
     {#key details.name}
-      <Details {vol} path={join(details.name)} entry={details} thumb={thumb(details)} onclose={() => (details = null)} />
+      <Details {vol} path={join(details.name)} entry={details} thumb={thumb(details)} onclose={closeDetails} />
     {/key}
   {/if}
 </div>
@@ -272,7 +277,7 @@
     onsave={async (n) => {
       await api.mv({ vol, path: join(e.name) }, { vol, path: join(n) })
       selected.clear()
-      if (details?.name === e.name) details = null
+      if (details?.name === e.name) closeDetails()
       await refresh()
     }}
     onclose={() => (dialog = null)}
@@ -287,7 +292,7 @@
       const failed = new Set((await api.rm(vol, names.map(join)))?.failed.map((f) => f.path))
       const left = names.filter((n) => failed.has(join(n)))
       selected.clear()
-      if (details && names.includes(details.name) && !left.includes(details.name)) details = null
+      if (details && names.includes(details.name) && !left.includes(details.name)) closeDetails()
       await refresh()
       if (left.length) {
         dialog = { kind: 'delete', names: left }
@@ -304,7 +309,7 @@
     names={dialog.names}
     ondone={() => {
       selected.clear()
-      details = null
+      closeDetails()
       refresh()
     }}
     onclose={() => (dialog = null)}
