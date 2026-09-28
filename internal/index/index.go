@@ -25,7 +25,20 @@ const upsert = `INSERT INTO files (vol, path, dir, size, mtime) VALUES (?, ?, ?,
 
 const subtree = `(vol = ? AND path = ?) OR (vol = ? AND path > ? AND path < ?)`
 
-func under(vol, rel string) []any { return []any{vol, rel, vol, rel + "/", rel + "0"} }
+func under(vol, rel string) []any {
+	if rel == "." {
+		// No UTF-8 path sorts after the byte 0xff.
+		return []any{vol, rel, vol, "", "\xff"}
+	}
+	return []any{vol, rel, vol, rel + "/", rel + "0"}
+}
+
+func moved(from, to string) (string, []any) {
+	if from == "." {
+		return `CASE path WHEN '.' THEN ? ELSE ? || '/' || path END`, []any{to, to}
+	}
+	return `? || substr(path, length(?) + 1)`, []any{to, from}
+}
 
 type File struct {
 	Vol   string `json:"vol"`
@@ -90,8 +103,8 @@ func (x *Index) rename(vol, from, to string) error {
 		if _, err := tx.Exec(`DELETE FROM `+t+` WHERE `+subtree, under(vol, to)...); err != nil {
 			return err
 		}
-		if _, err := tx.Exec(`UPDATE `+t+` SET path = ? || substr(path, length(?) + 1) WHERE `+subtree,
-			append([]any{to, from}, under(vol, from)...)...); err != nil {
+		expr, args := moved(from, to)
+		if _, err := tx.Exec(`UPDATE `+t+` SET path = `+expr+` WHERE `+subtree, append(args, under(vol, from)...)...); err != nil {
 			return err
 		}
 	}
@@ -197,7 +210,11 @@ func (x *Index) scan(vols *vol.Set) (int, error) {
 		}
 	}
 	names, _ := json.Marshal(vols.Names())
-	_, err = c.ExecContext(ctx, `DELETE FROM files WHERE vol NOT IN (SELECT value FROM json_each(?))`, string(names))
+	for _, t := range []string{"files", "dav_props"} {
+		if err == nil {
+			_, err = c.ExecContext(ctx, `DELETE FROM `+t+` WHERE vol NOT IN (SELECT value FROM json_each(?))`, string(names))
+		}
+	}
 	return n, err
 }
 

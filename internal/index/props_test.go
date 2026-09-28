@@ -6,6 +6,8 @@ import (
 	"slices"
 	"testing"
 	"time"
+
+	"github.com/m1ngsama/filebox/internal/vol"
 )
 
 func (e *env) propPaths(t *testing.T) []string {
@@ -62,4 +64,31 @@ func TestPropsFollowFiles(t *testing.T) {
 		t.Fatal(err)
 	}
 	check("v:.", "v:a/bc", "v:a/bc/f", "v:d")
+}
+
+func TestCopyPropsRootAndOverwrite(t *testing.T) {
+	e := setup(t)
+	v, _ := e.vols.Get("v")
+	e.write(t, "a/f", "x", time.Now())
+	for _, p := range []string{".", "a", "a/f"} {
+		e.x.PatchProps(v, p, []Prop{{NS: "urn:x", Name: "k", XML: []byte("1")}})
+	}
+	e.x.CopyProps(v, ".", v, "r", true)
+	if got, want := e.propPaths(t), []string{"v:.", "v:a", "v:a/f", "v:r", "v:r/a", "v:r/a/f"}; !slices.Equal(got, want) {
+		t.Fatalf("props %v, want %v", got, want)
+	}
+	e.x.PatchProps(v, "b/old", []Prop{{NS: "urn:x", Name: "stale", XML: []byte("1")}})
+	e.x.CopyProps(v, "r", v, "b", true)
+	if got, want := e.propPaths(t), []string{"v:.", "v:a", "v:a/f", "v:b", "v:b/a", "v:b/a/f", "v:r", "v:r/a", "v:r/a/f"}; !slices.Equal(got, want) {
+		t.Fatalf("props %v, want %v", got, want)
+	}
+	e.x.Touch(v, "r")
+	e.x.Touch(v, "b")
+	e.scan(t)
+	e.vols, _ = vol.Parse([]string{"w=" + e.out})
+	t.Cleanup(func() { e.vols.Close() })
+	e.scan(t)
+	if got := e.propPaths(t); got != nil {
+		t.Fatalf("props of a removed volume kept: %v", got)
+	}
 }

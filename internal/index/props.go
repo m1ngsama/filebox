@@ -1,9 +1,20 @@
 package index
 
 import (
+	"errors"
 	"log/slog"
 
 	"github.com/m1ngsama/filebox/internal/vol"
+)
+
+const (
+	MaxPropSize = 64 << 10
+	MaxProps    = 256
+)
+
+var (
+	ErrPropTooLarge = errors.New("property value too large")
+	ErrTooManyProps = errors.New("too many properties")
 )
 
 type Prop struct {
@@ -29,6 +40,11 @@ func (x *Index) Props(v *vol.Volume, rel string) ([]Prop, error) {
 }
 
 func (x *Index) PatchProps(v *vol.Volume, rel string, ops []Prop) error {
+	for _, p := range ops {
+		if len(p.XML) > MaxPropSize {
+			return ErrPropTooLarge
+		}
+	}
 	tx, err := x.db.Begin()
 	if err != nil {
 		return err
@@ -44,6 +60,13 @@ func (x *Index) PatchProps(v *vol.Volume, rel string, ops []Prop) error {
 			return err
 		}
 	}
+	var n int
+	if err := tx.QueryRow(`SELECT count(*) FROM dav_props WHERE vol = ? AND path = ?`, v.Name, rel).Scan(&n); err != nil {
+		return err
+	}
+	if n > MaxProps {
+		return ErrTooManyProps
+	}
 	return tx.Commit()
 }
 
@@ -51,14 +74,31 @@ func (x *Index) CopyProps(src *vol.Volume, srel string, dst *vol.Volume, drel st
 	if x == nil {
 		return
 	}
-	where, args := `vol = ? AND path = ?`, []any{src.Name, srel}
+	if err := x.copyProps(src, srel, dst, drel, tree); err != nil {
+		slog.Warn("copy props", "from", src.Name+":"+srel, "to", dst.Name+":"+drel, "err", err)
+	}
+}
+
+func (x *Index) copyProps(src *vol.Volume, srel string, dst *vol.Volume, drel string, tree bool) error {
+	one := `vol = ? AND path = ?`
+	from, to := []any{src.Name, srel}, []any{dst.Name, drel}
+	fromWhere, toWhere := one, one
 	if tree {
-		where, args = subtree, under(src.Name, srel)
+		fromWhere, toWhere, from, to = subtree, subtree, under(src.Name, srel), under(dst.Name, drel)
 	}
-	_, err := x.db.Exec(`INSERT OR REPLACE INTO dav_props (vol, path, ns, name, xml)
-		SELECT ?, ? || substr(path, length(?) + 1), ns, name, xml FROM dav_props WHERE `+where,
-		append([]any{dst.Name, drel, srel}, args...)...)
+	tx, err := x.db.Begin()
 	if err != nil {
-		slog.Warn("copy props", "vol", src.Name, "from", srel, "to", drel, "err", err)
+		return err
 	}
+	defer tx.Rollback()
+	if _, err := tx.Exec(`DELETE FROM dav_props WHERE `+toWhere, to...); err != nil {
+		return err
+	}
+	expr, args := moved(srel, drel)
+	if _, err := tx.Exec(`INSERT OR REPLACE INTO dav_props (vol, path, ns, name, xml)
+		SELECT ?, `+expr+`, ns, name, xml FROM dav_props WHERE `+fromWhere,
+		append(append([]any{dst.Name}, args...), from...)...); err != nil {
+		return err
+	}
+	return tx.Commit()
 }

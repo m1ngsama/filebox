@@ -3,6 +3,7 @@ package dav
 import (
 	"context"
 	"encoding/xml"
+	"errors"
 	"io"
 	"io/fs"
 	"log/slog"
@@ -273,10 +274,26 @@ func (f propFile) Patch(patches []webdav.Proppatch) ([]webdav.Propstat, error) {
 			st.Props = append(st.Props, webdav.Property{XMLName: p.XMLName})
 		}
 	}
-	if err := f.ix.PatchProps(f.v, f.rel, ops); err != nil {
+	err := f.ix.PatchProps(f.v, f.rel, ops)
+	switch {
+	case err == nil:
+		return []webdav.Propstat{st}, nil
+	case !errors.Is(err, index.ErrPropTooLarge) && !errors.Is(err, index.ErrTooManyProps):
 		return nil, err
 	}
-	return []webdav.Propstat{st}, nil
+	bad := webdav.Propstat{Status: http.StatusInsufficientStorage}
+	dep := webdav.Propstat{Status: http.StatusFailedDependency}
+	for i, op := range ops {
+		if op.XML != nil && (errors.Is(err, index.ErrTooManyProps) || len(op.XML) > index.MaxPropSize) {
+			bad.Props = append(bad.Props, st.Props[i])
+		} else {
+			dep.Props = append(dep.Props, st.Props[i])
+		}
+	}
+	if dep.Props == nil {
+		return []webdav.Propstat{bad}, nil
+	}
+	return []webdav.Propstat{bad, dep}, nil
 }
 
 type volRoot struct{ *os.File }
