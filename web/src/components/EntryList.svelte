@@ -57,7 +57,7 @@
   const cols = $derived(grid ? Math.max(1, Math.floor((width - 16) / 172)) : 1)
   const rows = $derived(Math.ceil(entries.length / cols))
   const tab = $derived(Math.min(cur, entries.length - 1))
-  const all = $derived(!!selected && entries.length > 0 && entries.every((e) => selected.has(e.name)))
+  const all = $derived(!!selected && entries.length > 0 && entries.every((e) => selected.has(id(e))))
 
   const v = createVirtualizer<HTMLDivElement, HTMLDivElement>({
     count: 0,
@@ -93,11 +93,11 @@
   function pick(ev: MouseEvent, i: number) {
     if (!selected || (ev.target as Element).closest('button, input, a')) return
     if (ev.shiftKey && anchor >= 0) {
-      for (const e of entries.slice(Math.min(anchor, i), Math.max(anchor, i) + 1)) selected.add(e.name)
+      for (const e of entries.slice(Math.min(anchor, i), Math.max(anchor, i) + 1)) selected.add(id(e))
       return
     }
     anchor = i
-    toggle(entries[i].name)
+    toggle(id(entries[i]))
   }
 
   function focusWanted() {
@@ -118,7 +118,7 @@
     if (ev.key === ' ') {
       ev.preventDefault()
       anchor = i
-      toggle(entries[i].name)
+      toggle(id(entries[i]))
     } else if (ev.key === 'Enter') {
       ev.preventDefault()
       onopen(entries[i])
@@ -134,7 +134,7 @@
   function selectAll() {
     if (!selected) return
     if (all) selected.clear()
-    else for (const e of entries) selected.add(e.name)
+    else for (const e of entries) selected.add(id(e))
   }
 
   const src = (e: Entry) => (e.dir || broken.has(id(e)) ? null : thumb(e))
@@ -160,7 +160,7 @@
 
 {#snippet check(e: Entry, cls: string)}
   {#if selected}
-    <input type="checkbox" class={cls} checked={selected.has(e.name)} onchange={() => toggle(e.name)} aria-label={t.select(e.name)} />
+    <input type="checkbox" class={cls} checked={selected.has(id(e))} onchange={() => toggle(id(e))} aria-label={t.select(e.name)} />
   {:else}
     <span></span>
   {/if}
@@ -207,9 +207,9 @@
                   {@const i = r.index * cols + j}
                   <div
                     class="card"
-                    class:sel={selected?.has(e.name)}
+                    class:sel={selected?.has(id(e))}
                     role="gridcell"
-                    aria-selected={selected ? selected.has(e.name) : undefined}
+                    aria-selected={selected ? selected.has(id(e)) : undefined}
                     tabindex={i === tab ? 0 : -1}
                     data-i={i}
                     onclick={(ev) => pick(ev, i)}
@@ -233,11 +233,11 @@
               {@const s = src(e)}
               <div
                 class="row"
-                class:sel={selected?.has(e.name)}
+                class:sel={selected?.has(id(e))}
                 style:transform={`translateY(${r.start}px)`}
                 role="row"
                 aria-rowindex={r.index + 1}
-                aria-selected={selected ? selected.has(e.name) : undefined}
+                aria-selected={selected ? selected.has(id(e)) : undefined}
                 tabindex={r.index === tab ? 0 : -1}
                 data-i={r.index}
                 onclick={(ev) => pick(ev, r.index)}
