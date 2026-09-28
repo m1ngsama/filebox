@@ -6,6 +6,7 @@ import (
 	"os"
 	"os/signal"
 	"strings"
+	"sync"
 	"syscall"
 
 	"golang.org/x/sys/unix"
@@ -22,9 +23,17 @@ func readPassword(f *os.File) (string, error) {
 		sig := make(chan os.Signal, 1)
 		signal.Notify(sig, os.Interrupt, syscall.SIGTERM, syscall.SIGHUP)
 		done := make(chan struct{})
+		var mu sync.Mutex
 		go func() {
 			select {
 			case <-sig:
+				mu.Lock()
+				select {
+				case <-done:
+					mu.Unlock()
+					return
+				default:
+				}
 				unix.IoctlSetTermios(fd, ioctlSetTermios, old)
 				fmt.Fprintln(os.Stderr)
 				os.Exit(130)
@@ -32,8 +41,10 @@ func readPassword(f *os.File) (string, error) {
 			}
 		}()
 		defer func() {
-			signal.Stop(sig)
+			mu.Lock()
 			close(done)
+			mu.Unlock()
+			signal.Stop(sig)
 			unix.IoctlSetTermios(fd, ioctlSetTermios, old)
 			fmt.Fprintln(os.Stderr)
 		}()
