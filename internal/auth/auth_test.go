@@ -9,6 +9,7 @@ import (
 	"strings"
 	"testing"
 	"time"
+	"unicode/utf8"
 
 	"github.com/m1ngsama/filebox/internal/db"
 )
@@ -356,5 +357,17 @@ func TestRefuseSaysWhichLimit(t *testing.T) {
 	}
 	if err := a.ShareLimit("10.0.1.1"); err != nil {
 		t.Fatalf("share unlock paused by bad logins: %v", err)
+	}
+}
+
+func TestSessionUserAgentTruncatedOnRune(t *testing.T) {
+	a, _, uid := setup(t)
+	if _, err := a.Login("admin", "correct horse", "1.1.1.1", "x"+strings.Repeat("é", 200)+"\xff"); err != nil {
+		t.Fatal(err)
+	}
+	ts, _ := a.DB.ListTokens(uid, "session")
+	ua := ts[0].UserAgent
+	if len(ua) != 255 || !utf8.ValidString(ua) {
+		t.Fatalf("user agent %d bytes, valid %v", len(ua), utf8.ValidString(ua))
 	}
 }

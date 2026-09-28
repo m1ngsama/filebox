@@ -14,6 +14,7 @@ import (
 	"strings"
 	"sync"
 	"time"
+	"unicode/utf8"
 
 	"golang.org/x/crypto/bcrypt"
 
@@ -100,6 +101,17 @@ func (a *Auth) Login(name, pw, ip, ua string) (string, error) {
 	})
 }
 
+func truncate(s string, n int) string {
+	s = strings.ToValidUTF8(s, "")
+	if len(s) <= n {
+		return s
+	}
+	for n > 0 && !utf8.RuneStart(s[n]) {
+		n--
+	}
+	return s[:n]
+}
+
 func (a *Auth) LoginWith(ip, ua string, verify func() (userID int64, ok bool)) (string, error) {
 	if err := a.lim.check(ip, a.Now()); err != nil {
 		return "", err
@@ -111,7 +123,7 @@ func (a *Auth) LoginWith(ip, ua string, verify func() (userID int64, ok bool)) (
 	}
 	a.lim.ok(ip)
 	tok := base64.RawURLEncoding.EncodeToString(random(32))
-	return tok, a.issue(db.Token{UserID: uid, Kind: "session", UserAgent: ua[:min(len(ua), 256)], IP: ip}, tok, SessionTTL)
+	return tok, a.issue(db.Token{UserID: uid, Kind: "session", UserAgent: truncate(ua, 256), IP: ip}, tok, SessionTTL)
 }
 
 func (a *Auth) Logout(tok string) error { return a.DB.DeleteTokenByHash(Hash(tok)) }
