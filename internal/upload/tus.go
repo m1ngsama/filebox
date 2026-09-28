@@ -3,6 +3,8 @@ package upload
 import (
 	"context"
 	"crypto/rand"
+	"crypto/sha256"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"io"
@@ -72,6 +74,7 @@ type Server struct {
 	Now func() time.Time
 
 	vols     []*volume
+	byKey    map[string]*volume
 	finalize sync.Mutex
 }
 
@@ -90,11 +93,15 @@ type creation struct {
 type creationKey struct{}
 
 func New(vols *vol.Set) (*Server, error) {
-	s := &Server{}
+	s := &Server{byKey: map[string]*volume{}}
 	logger := xslog.New(xslog.NewTextHandler(os.Stderr, &xslog.HandlerOptions{Level: xslog.LevelWarn}))
-	for i, v := range vols.All() {
+	for _, v := range vols.All() {
 		if err := v.Root.MkdirAll(vol.UploadsDir, 0o700); err != nil {
 			return nil, err
+		}
+		key := volumeKey(v.Name)
+		if _, dup := s.byKey[key]; dup {
+			return nil, fmt.Errorf("volume %q: upload key collides with another volume, rename it", v.Name)
 		}
 		u := &volume{v: v, store: store{filestore.New(filepath.Join(v.Path, vol.UploadsDir))}, locker: locker{memorylocker.New()}}
 		c := handler.NewStoreComposer()
@@ -108,7 +115,7 @@ func New(vols *vol.Set) (*Server, error) {
 			Cors:            &handler.CorsConfig{Disable: true},
 			Logger:          logger,
 			PreUploadCreateCallback: func(hook handler.HookEvent) (handler.HTTPResponse, handler.FileInfoChanges, error) {
-				return create(i, hook)
+				return create(key, hook)
 			},
 			PreFinishResponseCallback: func(hook handler.HookEvent) (handler.HTTPResponse, error) {
 				return handler.HTTPResponse{}, s.finish(u, hook.Upload)
@@ -119,6 +126,7 @@ func New(vols *vol.Set) (*Server, error) {
 		}
 		u.h = h
 		s.vols = append(s.vols, u)
+		s.byKey[key] = u
 	}
 	return s, nil
 }
@@ -130,13 +138,18 @@ func (s *Server) now() time.Time {
 	return time.Now()
 }
 
+func volumeKey(name string) string {
+	h := sha256.Sum256([]byte(name))
+	return hex.EncodeToString(h[:4])
+}
+
 func (s *Server) lookup(id string) (*volume, bool) {
-	idx, tail, _ := strings.Cut(id, "-")
-	i, err := strconv.Atoi(idx)
-	if err != nil || strings.Trim(idx, "0123456789") != "" || i < 0 || i >= len(s.vols) || len(tail) != 26 || strings.Trim(tail, "ABCDEFGHIJKLMNOPQRSTUVWXYZ234567") != "" {
+	key, tail, _ := strings.Cut(id, "-")
+	u, ok := s.byKey[key]
+	if !ok || len(tail) != 26 || strings.Trim(tail, "ABCDEFGHIJKLMNOPQRSTUVWXYZ234567") != "" {
 		return nil, false
 	}
-	return s.vols[i], true
+	return u, true
 }
 
 func (s *Server) Handler(prefix string, p Policy) http.Handler {
@@ -227,7 +240,7 @@ func (w *rewriter) WriteHeader(code int) {
 
 func (w *rewriter) Unwrap() http.ResponseWriter { return w.ResponseWriter }
 
-func create(idx int, hook handler.HookEvent) (handler.HTTPResponse, handler.FileInfoChanges, error) {
+func create(key string, hook handler.HookEvent) (handler.HTTPResponse, handler.FileInfoChanges, error) {
 	var none handler.FileInfoChanges
 	c, ok := hook.Context.Value(creationKey{}).(creation)
 	if !ok {
@@ -237,7 +250,7 @@ func create(idx int, hook handler.HookEvent) (handler.HTTPResponse, handler.File
 		return handler.HTTPResponse{}, none, errNoSpace
 	}
 	return handler.HTTPResponse{}, handler.FileInfoChanges{
-		ID:       strconv.Itoa(idx) + "-" + rand.Text(),
+		ID:       key + "-" + rand.Text(),
 		MetaData: handler.MetaData{keyOwner: c.owner, keyDir: c.t.Dir, keyName: c.t.Name},
 	}, nil
 }

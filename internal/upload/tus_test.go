@@ -448,3 +448,35 @@ func TestTusSweepDuringPatch(t *testing.T) {
 		t.Fatalf("content %q", b)
 	}
 }
+
+func TestTusIDSurvivesVolumeReorder(t *testing.T) {
+	a, b := t.TempDir(), t.TempDir()
+	serve := func(specs ...string) string {
+		vols, err := vol.Parse(specs)
+		if err != nil {
+			t.Fatal(err)
+		}
+		t.Cleanup(func() { vols.Close() })
+		s, err := New(vols)
+		if err != nil {
+			t.Fatal(err)
+		}
+		v, _ := vols.Get("b")
+		ts := httptest.NewServer(s.Handler("/up/", Policy{
+			Owner:   func(r *http.Request) (string, bool) { return "alice", true },
+			Resolve: func(r *http.Request, meta map[string]string) (Target, error) { return TargetFor(v, ".", meta) },
+		}))
+		t.Cleanup(ts.Close)
+		return ts.URL
+	}
+	e := &env{url: serve("a="+a, "b="+b)}
+	loc := e.create(t, 6, "r.bin")
+	e.patch(loc, 0, "abc")
+	e.url = serve("b="+b, "a="+a, "a0="+t.TempDir())
+	if w := e.patch(loc, 3, "def"); w.StatusCode != 204 {
+		t.Fatalf("resume after reorder %d", w.StatusCode)
+	}
+	if got, _ := os.ReadFile(filepath.Join(b, "r.bin")); string(got) != "abcdef" {
+		t.Fatalf("content %q", got)
+	}
+}
