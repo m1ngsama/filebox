@@ -82,6 +82,8 @@ test('resumable upload survives a dropped connection and a page reload', async (
   await login(page)
   let aborted = false
   let stalled = false
+  let stall = () => {}
+  const reached = new Promise<void>((r) => (stall = r))
   await page.route('**/upload/*', (route) => {
     if (route.request().method() !== 'PATCH') return route.continue()
     const offset = Number(route.request().headers()['upload-offset'])
@@ -91,6 +93,7 @@ test('resumable upload survives a dropped connection and a page reload', async (
     }
     if (!stalled && offset >= total * 0.3) {
       stalled = true
+      stall()
       return new Promise<void>(() => {})
     }
     return route.continue()
@@ -100,7 +103,7 @@ test('resumable upload survives a dropped connection and a page reload', async (
     if (r.method() === 'PATCH') offsets.push(Number(r.headers()['upload-offset']))
   })
   await fileInput(page).setInputFiles(src)
-  await expect.poll(() => stalled).toBe(true)
+  await reached
   await expect(page.locator('.uploads li.uploading')).toHaveCount(1)
   await page.unrouteAll()
   await page.reload()
