@@ -15,14 +15,15 @@ import (
 
 	"github.com/m1ngsama/filebox/internal/api"
 	"github.com/m1ngsama/filebox/internal/auth"
+	"github.com/m1ngsama/filebox/internal/index"
 	"github.com/m1ngsama/filebox/internal/serve"
 	"github.com/m1ngsama/filebox/internal/vol"
 )
 
-func Handler(vols *vol.Set, a *auth.Auth) http.Handler {
+func Handler(vols *vol.Set, a *auth.Auth, ix *index.Index) http.Handler {
 	h := &webdav.Handler{
 		Prefix:     "/dav",
-		FileSystem: &FS{vols: vols},
+		FileSystem: &FS{vols: vols, ix: ix},
 		LockSystem: webdav.NewMemLS(),
 		Logger: func(r *http.Request, err error) {
 			if err != nil {
@@ -59,7 +60,10 @@ func readOnlyMethod(m string) bool {
 	return false
 }
 
-type FS struct{ vols *vol.Set }
+type FS struct {
+	vols *vol.Set
+	ix   *index.Index
+}
 
 func (f *FS) resolve(name string) (*vol.Volume, string, error) {
 	c := strings.TrimPrefix(path.Clean("/"+name), "/")
@@ -86,6 +90,7 @@ func (f *FS) Mkdir(ctx context.Context, name string, perm os.FileMode) error {
 	if v == nil || rel == "." {
 		return os.ErrPermission
 	}
+	defer f.ix.Touch(v, rel)
 	return v.Root.Mkdir(rel, perm)
 }
 
@@ -107,6 +112,9 @@ func (f *FS) OpenFile(ctx context.Context, name string, flag int, perm os.FileMo
 	if rel == "." {
 		return volRoot{fh}, nil
 	}
+	if flag&(os.O_WRONLY|os.O_RDWR|os.O_CREATE|os.O_TRUNC) != 0 {
+		return written{fh, func() { f.ix.Touch(v, rel) }}, nil
+	}
 	return fh, nil
 }
 
@@ -118,6 +126,7 @@ func (f *FS) RemoveAll(ctx context.Context, name string) error {
 	if v == nil || rel == "." {
 		return os.ErrPermission
 	}
+	defer f.ix.Touch(v, rel)
 	return v.Root.RemoveAll(rel)
 }
 
@@ -134,8 +143,10 @@ func (f *FS) Rename(ctx context.Context, oldName, newName string) error {
 		return os.ErrPermission
 	}
 	if v1 != v2 {
-		return api.Transfer(v1, v2, r1, r2, true)
+		return api.Transfer(f.ix, v1, v2, r1, r2, true)
 	}
+	defer f.ix.Touch(v1, r1)
+	defer f.ix.Touch(v2, r2)
 	return v1.Root.Rename(r1, r2)
 }
 
@@ -174,6 +185,17 @@ func (d dirInfo) Mode() fs.FileMode  { return fs.ModeDir | 0o555 }
 func (d dirInfo) ModTime() time.Time { return started }
 func (d dirInfo) IsDir() bool        { return true }
 func (d dirInfo) Sys() any           { return nil }
+
+type written struct {
+	*os.File
+	done func()
+}
+
+func (w written) Close() error {
+	err := w.File.Close()
+	w.done()
+	return err
+}
 
 type volRoot struct{ *os.File }
 

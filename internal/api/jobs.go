@@ -16,6 +16,7 @@ import (
 	"time"
 
 	"github.com/m1ngsama/filebox/internal/httpx"
+	"github.com/m1ngsama/filebox/internal/index"
 	"github.com/m1ngsama/filebox/internal/vol"
 )
 
@@ -37,9 +38,10 @@ type job struct {
 type Jobs struct {
 	mu sync.Mutex
 	m  map[string]*job
+	ix *index.Index
 }
 
-func NewJobs() *Jobs { return &Jobs{m: map[string]*job{}} }
+func NewJobs(ix *index.Index) *Jobs { return &Jobs{m: map[string]*job{}, ix: ix} }
 
 func (j *Jobs) Get(id string) (JobStatus, bool) {
 	j.mu.Lock()
@@ -60,8 +62,8 @@ func newID() string {
 	return hex.EncodeToString(b)
 }
 
-func Transfer(src, dst *vol.Volume, srel, drel string, move bool) error {
-	return run(src, dst, srel, drel, newID(), move, &job{})
+func Transfer(ix *index.Index, src, dst *vol.Volume, srel, drel string, move bool) error {
+	return run(ix, src, dst, srel, drel, newID(), move, &job{})
 }
 
 func (j *Jobs) Start(src, dst *vol.Volume, srel, drel string, move bool) string {
@@ -80,7 +82,7 @@ func (j *Jobs) Start(src, dst *vol.Volume, srel, drel string, move bool) string 
 	j.mu.Unlock()
 
 	go func() {
-		err := run(src, dst, srel, drel, id, move, x)
+		err := run(j.ix, src, dst, srel, drel, id, move, x)
 		x.mu.Lock()
 		x.state, x.finished = "done", time.Now()
 		if err != nil {
@@ -123,7 +125,13 @@ func ClearStaging(vols *vol.Set) {
 	}
 }
 
-func run(src, dst *vol.Volume, srel, drel, id string, move bool, x *job) error {
+func run(ix *index.Index, src, dst *vol.Volume, srel, drel, id string, move bool, x *job) error {
+	defer func() {
+		if move {
+			ix.Touch(src, srel)
+		}
+		ix.Touch(dst, drel)
+	}()
 	stage := path.Join(vol.JobsDir, id)
 	if err := dst.Root.MkdirAll(stage, 0o700); err != nil {
 		return err

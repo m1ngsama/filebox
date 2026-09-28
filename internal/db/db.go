@@ -58,6 +58,15 @@ var migrations = []string{
 	);`,
 	`ALTER TABLE tokens ADD COLUMN user_agent TEXT NOT NULL DEFAULT '';
 	ALTER TABLE tokens ADD COLUMN ip TEXT NOT NULL DEFAULT '';`,
+	`CREATE TABLE files (
+		vol TEXT NOT NULL,
+		path TEXT NOT NULL,
+		dir INTEGER NOT NULL,
+		size INTEGER NOT NULL,
+		mtime INTEGER NOT NULL,
+		PRIMARY KEY (vol, path)
+	) WITHOUT ROWID;
+	CREATE INDEX files_mtime ON files(mtime DESC);`,
 }
 
 type DB struct{ *sql.DB }

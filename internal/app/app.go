@@ -11,6 +11,7 @@ import (
 	"github.com/m1ngsama/filebox/internal/dav"
 	"github.com/m1ngsama/filebox/internal/db"
 	"github.com/m1ngsama/filebox/internal/httpx"
+	"github.com/m1ngsama/filebox/internal/index"
 	"github.com/m1ngsama/filebox/internal/passkey"
 	"github.com/m1ngsama/filebox/internal/serve"
 	"github.com/m1ngsama/filebox/internal/share"
@@ -30,15 +31,16 @@ type App struct {
 	Uploads  *upload.Server
 	Thumbs   *thumb.Service
 	Passkeys *passkey.Service
+	Index    *index.Index
 }
 
 func (a *App) Handler() http.Handler {
 	mux := http.NewServeMux()
 	mux.Handle("GET /raw/{vol}/{path...}", a.Auth.RequireAny(http.HandlerFunc(a.raw)))
 	mux.Handle("GET /thumb/{vol}/{path...}", a.Auth.RequireAny(http.HandlerFunc(a.thumb)))
-	(&api.API{Vols: a.Vols, DB: a.DB, Auth: a.Auth, Jobs: api.NewJobs()}).Register(mux)
+	(&api.API{Vols: a.Vols, DB: a.DB, Auth: a.Auth, Jobs: api.NewJobs(a.Index), Index: a.Index}).Register(mux)
 	a.Passkeys.Register(mux)
-	d := dav.Handler(a.Vols, a.Auth)
+	d := dav.Handler(a.Vols, a.Auth, a.Index)
 	mux.Handle("/dav", d)
 	mux.Handle("/dav/", d)
 	mux.Handle("/upload/", a.Uploads.Handler("/upload/", a.userUploads()))

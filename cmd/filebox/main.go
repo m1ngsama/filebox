@@ -20,6 +20,7 @@ import (
 	"github.com/m1ngsama/filebox/internal/app"
 	"github.com/m1ngsama/filebox/internal/auth"
 	"github.com/m1ngsama/filebox/internal/db"
+	"github.com/m1ngsama/filebox/internal/index"
 	"github.com/m1ngsama/filebox/internal/passkey"
 	"github.com/m1ngsama/filebox/internal/thumb"
 	"github.com/m1ngsama/filebox/internal/upload"
@@ -108,15 +109,20 @@ func serveCmd(args []string) error {
 	if err != nil {
 		return err
 	}
+	ix := index.New(d)
+	up.Index = ix
 	go func() {
 		for {
 			up.Sweep(24 * time.Hour)
 			d.PurgeTokens(time.Now().Unix())
 			pk.Sweep()
+			if err := ix.Scan(set); err != nil {
+				slog.Error("index scan", "err", err)
+			}
 			time.Sleep(time.Hour)
 		}
 	}()
-	a := &app.App{Vols: set, DB: d, Auth: au, Web: webFS, Uploads: up, Thumbs: thumb.New(*ffmpeg, filepath.Join(*data, "thumbs")), Passkeys: pk}
+	a := &app.App{Vols: set, DB: d, Auth: au, Web: webFS, Uploads: up, Thumbs: thumb.New(*ffmpeg, filepath.Join(*data, "thumbs")), Passkeys: pk, Index: ix}
 
 	srv := &http.Server{Addr: *listen, Handler: a.Handler(), ReadHeaderTimeout: 10 * time.Second, IdleTimeout: 2 * time.Minute}
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)

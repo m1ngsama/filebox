@@ -14,6 +14,7 @@ import (
 	"github.com/m1ngsama/filebox/internal/auth"
 	"github.com/m1ngsama/filebox/internal/db"
 	"github.com/m1ngsama/filebox/internal/httpx"
+	"github.com/m1ngsama/filebox/internal/index"
 	"github.com/m1ngsama/filebox/internal/vol"
 )
 
@@ -82,10 +83,11 @@ func List(root *os.Root, rel string) ([]Entry, error) {
 }
 
 type API struct {
-	Vols *vol.Set
-	DB   *db.DB
-	Auth *auth.Auth
-	Jobs *Jobs
+	Vols  *vol.Set
+	DB    *db.DB
+	Auth  *auth.Auth
+	Jobs  *Jobs
+	Index *index.Index
 }
 
 func (a *API) Register(mux *http.ServeMux) {
@@ -95,6 +97,7 @@ func (a *API) Register(mux *http.ServeMux) {
 	h("GET /api/me", a.me)
 	h("GET /api/ls", a.ls)
 	h("GET /api/stat", a.stat)
+	h("GET /api/recent", a.recent)
 	h("POST /api/mkdir", a.mkdir)
 	h("POST /api/mv", a.mv)
 	h("POST /api/cp", a.cp)
@@ -205,6 +208,7 @@ func (a *API) mkdir(w http.ResponseWriter, r *http.Request) {
 		httpx.Error(w, err)
 		return
 	}
+	a.Index.Touch(v, rel)
 	w.WriteHeader(201)
 }
 
@@ -256,6 +260,8 @@ func (a *API) mv(w http.ResponseWriter, r *http.Request) {
 			httpx.Error(w, err)
 			return
 		}
+		a.Index.Touch(src, srel)
+		a.Index.Touch(dst, drel)
 		w.WriteHeader(204)
 		return
 	}
@@ -292,13 +298,28 @@ func (a *API) rm(w http.ResponseWriter, r *http.Request) {
 		if err != nil {
 			_, msg := httpx.Status(err)
 			failed = append(failed, failure{p, msg})
+			continue
 		}
+		a.Index.Touch(v, rel)
 	}
 	if failed != nil {
 		httpx.JSON(w, 200, map[string]any{"failed": failed})
 		return
 	}
 	w.WriteHeader(204)
+}
+
+func (a *API) recent(w http.ResponseWriter, r *http.Request) {
+	limit, err := strconv.Atoi(r.URL.Query().Get("limit"))
+	if err != nil || limit <= 0 {
+		limit = 200
+	}
+	fs, err := a.Index.Recent(min(limit, 500))
+	if err != nil {
+		httpx.Error(w, err)
+		return
+	}
+	httpx.JSON(w, 200, map[string]any{"entries": fs, "scanning": !a.Index.Ready()})
 }
 
 func (a *API) job(w http.ResponseWriter, r *http.Request) {

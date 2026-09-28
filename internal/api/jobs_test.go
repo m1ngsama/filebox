@@ -33,7 +33,7 @@ func TestPlaceAcrossDevices(t *testing.T) {
 	os.WriteFile(filepath.Join(a, "tree/x.txt"), []byte("x"), 0o644)
 	os.WriteFile(filepath.Join(a, "tree/sub/y.txt"), []byte("y"), 0o644)
 	os.WriteFile(filepath.Join(a, "f.txt"), []byte("f"), 0o644)
-	if err := run(va, vb, "tree", "tree", "j1", true, &job{}); err != nil {
+	if err := run(nil, va, vb, "tree", "tree", "j1", true, &job{}); err != nil {
 		t.Fatalf("move dir: %v", err)
 	}
 	if got, _ := os.ReadFile(filepath.Join(b, "tree/sub/y.txt")); string(got) != "y" {
@@ -43,13 +43,13 @@ func TestPlaceAcrossDevices(t *testing.T) {
 		t.Fatal("source survived the move")
 	}
 	x := &job{}
-	if err := run(va, vb, "f.txt", "f.txt", "j2", false, x); err != nil {
+	if err := run(nil, va, vb, "f.txt", "f.txt", "j2", false, x); err != nil {
 		t.Fatalf("copy file: %v", err)
 	}
 	if d := x.done.Load(); d != 2 {
 		t.Fatalf("done %d, want the fallback copy counted", d)
 	}
-	js := NewJobs()
+	js := NewJobs(nil)
 	js.m["j2"] = x
 	if s, _ := js.Get("j2"); s.Total != 1 || s.Done != 1 {
 		t.Fatalf("reported %d/%d, want 1/1", s.Done, s.Total)
@@ -62,7 +62,7 @@ func TestPlaceAcrossDevices(t *testing.T) {
 	}
 
 	appear = func(r *os.Root, to string) { r.WriteFile(to, []byte("theirs"), 0o644) }
-	if err := run(va, vb, "f.txt", "g.txt", "j3", false, &job{}); errorCode(err) != "exists" {
+	if err := run(nil, va, vb, "f.txt", "g.txt", "j3", false, &job{}); errorCode(err) != "exists" {
 		t.Fatalf("file raced: %v", err)
 	}
 	if got, _ := os.ReadFile(filepath.Join(b, "g.txt")); string(got) != "theirs" {
@@ -70,7 +70,7 @@ func TestPlaceAcrossDevices(t *testing.T) {
 	}
 	os.MkdirAll(filepath.Join(a, "d"), 0o755)
 	appear = func(r *os.Root, to string) { r.Mkdir(to, 0o755) }
-	if err := run(va, vb, "d", "d", "j4", false, &job{}); errorCode(err) != "exists" {
+	if err := run(nil, va, vb, "d", "d", "j4", false, &job{}); errorCode(err) != "exists" {
 		t.Fatalf("dir raced: %v", err)
 	}
 }

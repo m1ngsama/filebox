@@ -271,7 +271,7 @@ func TestJobDestinationConflict(t *testing.T) {
 	if err := v.Root.WriteFile("copy/marker.txt", []byte("keep"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	jobs := api.NewJobs()
+	jobs := api.NewJobs(nil)
 	id := jobs.Start(v, v, "tree", "copy", false)
 	st := waitJobStatus(t, jobs, id)
 	if st.State != "error" {
@@ -290,7 +290,7 @@ func TestJobErrorCode(t *testing.T) {
 	f.write(t, "a.txt", "a")
 	f.write(t, "b.txt", "b")
 	v, _ := f.App.Vols.Get("v")
-	jobs := api.NewJobs()
+	jobs := api.NewJobs(nil)
 	st := waitJobStatus(t, jobs, jobs.Start(v, v, "a.txt", "b.txt", false))
 	if st.State != "error" || st.Code != "exists" {
 		t.Fatalf("status = %+v, want error with code exists", st)
@@ -317,7 +317,7 @@ func TestJobCopyCleansUpOnFailure(t *testing.T) {
 	if !ok {
 		t.Fatal("volume v missing")
 	}
-	jobs := api.NewJobs()
+	jobs := api.NewJobs(nil)
 	id := jobs.Start(v, v, "bad", "bad-copy", false)
 	st := waitJobStatus(t, jobs, id)
 	if st.State != "error" {
@@ -336,7 +336,7 @@ func TestJobCopyNeverExposesPartialDestination(t *testing.T) {
 	}
 	v, _ := f.App.Vols.Get("v")
 	w, _ := f.App.Vols.Get("w")
-	jobs := api.NewJobs()
+	jobs := api.NewJobs(nil)
 	id := jobs.Start(v, w, "big", "big", false)
 	for {
 		ents, err := os.ReadDir(filepath.Join(f.Dir2, "big"))
@@ -364,7 +364,7 @@ func TestJobPlacementIsExclusive(t *testing.T) {
 	w, _ := f.App.Vols.Get("w")
 	os.WriteFile(filepath.Join(f.Dir2, "a.txt"), []byte("foreign"), 0o644)
 	os.Mkdir(filepath.Join(f.Dir2, "tree"), 0o755)
-	jobs := api.NewJobs()
+	jobs := api.NewJobs(nil)
 	for _, p := range []string{"a.txt", "tree"} {
 		st := waitJobStatus(t, jobs, jobs.Start(v, w, p, p, true))
 		if st.State != "error" || st.Code != "exists" {
@@ -388,7 +388,7 @@ func TestJobMoveRefusesSymlinks(t *testing.T) {
 	os.Symlink("a.txt", filepath.Join(f.Dir, "tree/link"))
 	v, _ := f.App.Vols.Get("v")
 	w, _ := f.App.Vols.Get("w")
-	jobs := api.NewJobs()
+	jobs := api.NewJobs(nil)
 	st := waitJobStatus(t, jobs, jobs.Start(v, w, "tree", "tree", true))
 	if st.State != "error" || st.Code != "internal" {
 		t.Fatalf("status %+v", st)

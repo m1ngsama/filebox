@@ -25,6 +25,7 @@ import (
 	xslog "golang.org/x/exp/slog"
 
 	"github.com/m1ngsama/filebox/internal/httpx"
+	"github.com/m1ngsama/filebox/internal/index"
 	"github.com/m1ngsama/filebox/internal/vol"
 )
 
@@ -71,7 +72,8 @@ var (
 )
 
 type Server struct {
-	Now func() time.Time
+	Now   func() time.Time
+	Index *index.Index
 
 	vols     []*volume
 	byKey    map[string]*volume
@@ -294,6 +296,7 @@ func (s *Server) finish(u *volume, info handler.FileInfo) error {
 		return errFinalize
 	}
 	u.v.Root.Remove(path.Join(vol.UploadsDir, info.ID+".info"))
+	s.Index.Touch(u.v, path.Join(dir, name))
 	return nil
 }
 

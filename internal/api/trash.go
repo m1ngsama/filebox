@@ -128,6 +128,7 @@ func (a *API) trashRestore(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	v.Root.RemoveAll(dir)
+	a.Index.Touch(v, dst)
 	w.WriteHeader(204)
 }
 
