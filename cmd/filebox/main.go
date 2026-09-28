@@ -1,7 +1,6 @@
 package main
 
 import (
-	"bufio"
 	"context"
 	"errors"
 	"flag"
@@ -153,11 +152,10 @@ func passwdCmd(args []string) error {
 		return err
 	}
 	fmt.Fprint(os.Stderr, "new password: ")
-	line, err := bufio.NewReader(os.Stdin).ReadString('\n')
-	if err != nil && line == "" {
+	pw, err := readPassword(os.Stdin)
+	if err != nil {
 		return err
 	}
-	pw := strings.TrimRight(line, "\r\n")
 	if len(pw) < 8 {
 		return errors.New("password must be at least 8 characters")
 	}
