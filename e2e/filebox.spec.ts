@@ -1,6 +1,6 @@
 import { test, expect, type Page } from '@playwright/test'
 import { createHash } from 'node:crypto'
-import { closeSync, createReadStream, existsSync, openSync, readFileSync, rmSync, statSync, writeFileSync, writeSync } from 'node:fs'
+import { closeSync, createReadStream, existsSync, mkdirSync, openSync, readFileSync, rmSync, statSync, writeFileSync, writeSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { DIR } from './playwright.config'
@@ -82,6 +82,32 @@ test('browse and preview', async ({ page }) => {
   await page.keyboard.press('Escape')
   await page.locator('.crumbs a').first().click()
   await expect(page).toHaveURL(/\/files\/v\/$/)
+})
+
+test('rows select and open from the keyboard', async ({ page }) => {
+  mkdirSync(join(VOL, 'many'), { recursive: true })
+  for (let i = 0; i < 60; i++) writeFileSync(join(VOL, 'many', `k-${String(i).padStart(2, '0')}.txt`), `k${i}`)
+  await login(page)
+  await row(page, 'many').locator('button.name').click()
+  const first = row(page, 'k-00.txt')
+  await first.focus()
+  await page.keyboard.press('Space')
+  await expect(first).toHaveAttribute('aria-selected', 'true')
+  await expect(first.locator('input[type=checkbox]')).toBeChecked()
+  await page.keyboard.press('ArrowDown')
+  await expect(row(page, 'k-01.txt')).toBeFocused()
+  await expect(row(page, 'k-01.txt')).toHaveAttribute('aria-selected', 'false')
+  await page.keyboard.press('End')
+  const last = row(page, 'k-59.txt')
+  await expect(last).toBeFocused()
+  await expect(last).toBeInViewport()
+  await page.keyboard.press('Space')
+  await expect(page.getByRole('grid', { name: t.fileList }).getByRole('row', { selected: true })).toHaveCount(1)
+  await page.keyboard.press('Home')
+  await expect(first).toBeFocused()
+  await expect(first).toHaveAttribute('aria-selected', 'true')
+  await page.keyboard.press('Enter')
+  await expect(page.locator('.viewer pre')).toHaveText('k0')
 })
 
 test('resumable upload survives a dropped connection and a page reload', async ({ page }) => {

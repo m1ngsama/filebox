@@ -39,6 +39,7 @@ export const t = {
   close: '关闭',
   cancel: '取消',
   filter: '筛选文件',
+  fileList: '文件列表',
   name: '名称',
   size: '大小',
   mtime: '修改时间',

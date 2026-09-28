@@ -104,13 +104,16 @@ button.ghost { border-color: transparent; background: none; }
 .list-head.grid > input, .list-head.batch > input { margin: 0 14px 0 6px; }
 .list-head.batch { color: var(--fg); background: var(--sel); }
 .list-head .count { font-weight: 600; margin-right: 8px; }
-.list-head input, .row > input { justify-self: center; }
+.list-head input { justify-self: center; }
+.row > .cell { display: grid; place-items: center; min-width: 0; }
+.row > .name-cell { justify-items: start; }
 .scroller { flex: 1; min-height: 0; overflow: auto; position: relative; }
 .spacer { position: relative; width: 100%; }
 .empty { position: absolute; inset: 64px 16px auto; text-align: center; color: var(--muted); margin: 0; }
 .row { position: absolute; top: 0; left: 0; right: 0; height: 48px; padding: 0 8px; border-bottom: 1px solid var(--line); cursor: default; }
 .row:hover { background: var(--hover); }
 .row.sel, .card.sel { background: var(--sel); }
+.row:focus-visible, .card:focus-visible { outline-offset: -2px; }
 .thumb { display: grid; place-items: center; width: 32px; height: 32px; }
 .thumb img { width: 32px; height: 32px; object-fit: cover; border-radius: 6px; }
 .ficon { color: var(--muted); }

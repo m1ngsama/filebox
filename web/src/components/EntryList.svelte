@@ -4,7 +4,7 @@
 </script>
 
 <script lang="ts">
-  import { untrack, type Snippet } from 'svelte'
+  import { tick, untrack, type Snippet } from 'svelte'
   import { SvelteSet } from 'svelte/reactivity'
   import { ContextMenu, DropdownMenu } from 'bits-ui'
   import { createVirtualizer } from '@tanstack/svelte-virtual'
@@ -47,9 +47,12 @@
   let width = $state(0)
   let ctx = $state<Entry | null>(null)
   let anchor = -1
+  let cur = $state(0)
+  let want = -1
 
   const cols = $derived(grid ? Math.max(1, Math.floor((width - 16) / 172)) : 1)
   const rows = $derived(Math.ceil(entries.length / cols))
+  const tab = $derived(Math.min(cur, entries.length - 1))
   const all = $derived(!!selected && entries.length > 0 && entries.every((e) => selected.has(e.name)))
 
   const v = createVirtualizer<HTMLDivElement, HTMLDivElement>({
@@ -91,6 +94,37 @@
     }
     anchor = i
     toggle(entries[i].name)
+  }
+
+  function focusWanted() {
+    const el = scroller?.querySelector<HTMLElement>(`[data-i="${want}"]`)
+    if (!el) return
+    el.focus()
+    want = -1
+  }
+
+  $effect(() => {
+    $v.getVirtualItems()
+    if (want >= 0) tick().then(focusWanted)
+  })
+
+  function key(ev: KeyboardEvent, i: number) {
+    if (ev.target !== ev.currentTarget) return
+    const step = { ArrowDown: cols, ArrowUp: -cols, ArrowRight: grid ? 1 : 0, ArrowLeft: grid ? -1 : 0 }[ev.key]
+    if (ev.key === ' ') {
+      ev.preventDefault()
+      anchor = i
+      toggle(entries[i].name)
+    } else if (ev.key === 'Enter') {
+      ev.preventDefault()
+      onopen(entries[i])
+    } else if (step !== undefined || ev.key === 'Home' || ev.key === 'End') {
+      ev.preventDefault()
+      const to = ev.key === 'Home' ? 0 : ev.key === 'End' ? entries.length - 1 : Math.min(entries.length - 1, Math.max(0, i + step!))
+      cur = want = to
+      $v.scrollToIndex(Math.floor(to / cols))
+      focusWanted()
+    }
   }
 
   function selectAll() {
@@ -160,14 +194,25 @@
     {#snippet child({ props })}
       <div {...props} class="scroller" bind:this={scroller} bind:clientWidth={width} oncontextmenucapture={() => (ctx = null)}>
         {#if !entries.length}<p class="empty">{empty}</p>{/if}
-        <div class="spacer" style:height={`${$v.getTotalSize()}px`}>
+        <div class="spacer" role="grid" aria-label={t.fileList} aria-multiselectable={selected ? true : undefined} aria-rowcount={rows} style:height={`${$v.getTotalSize()}px`}>
           {#each $v.getVirtualItems().filter((r) => r.index < rows) as r (r.key)}
             {#if grid}
-              <div class="cards" style:transform={`translateY(${r.start}px)`} style:grid-template-columns={`repeat(${cols}, minmax(0, 1fr))`}>
+              <div class="cards" role="row" aria-rowindex={r.index + 1} style:transform={`translateY(${r.start}px)`} style:grid-template-columns={`repeat(${cols}, minmax(0, 1fr))`}>
                 {#each entries.slice(r.index * cols, r.index * cols + cols) as e, j (e.name)}
                   {@const s = src(e)}
-                  <!-- svelte-ignore a11y_click_events_have_key_events, a11y_no_static_element_interactions -->
-                  <div class="card" class:sel={selected?.has(e.name)} onclick={(ev) => pick(ev, r.index * cols + j)} oncontextmenu={() => (ctx = e)}>
+                  {@const i = r.index * cols + j}
+                  <div
+                    class="card"
+                    class:sel={selected?.has(e.name)}
+                    role="gridcell"
+                    aria-selected={selected ? selected.has(e.name) : undefined}
+                    tabindex={i === tab ? 0 : -1}
+                    data-i={i}
+                    onclick={(ev) => pick(ev, i)}
+                    onkeydown={(ev) => key(ev, i)}
+                    onfocus={() => (cur = i)}
+                    oncontextmenu={() => (ctx = e)}
+                  >
                     {@render check(e, 'card-check')}
                     <button class="card-open" onclick={() => onopen(e)} title={e.name}>
                       {#if s}<img src={s} alt="" onerror={() => broken.add(e.name)} />{:else}<FileIcon name={e.name} dir={e.dir} size={56} />{/if}
@@ -182,22 +227,28 @@
             {:else}
               {@const e = entries[r.index]}
               {@const s = src(e)}
-              <!-- svelte-ignore a11y_click_events_have_key_events, a11y_no_static_element_interactions -->
               <div
                 class="row"
                 class:sel={selected?.has(e.name)}
                 style:transform={`translateY(${r.start}px)`}
+                role="row"
+                aria-rowindex={r.index + 1}
+                aria-selected={selected ? selected.has(e.name) : undefined}
+                tabindex={r.index === tab ? 0 : -1}
+                data-i={r.index}
                 onclick={(ev) => pick(ev, r.index)}
+                onkeydown={(ev) => key(ev, r.index)}
+                onfocus={() => (cur = r.index)}
                 oncontextmenu={() => (ctx = e)}
               >
-                {@render check(e, '')}
-                <span class="thumb">
+                <span class="cell" role="gridcell">{@render check(e, '')}</span>
+                <span class="thumb" role="gridcell">
                   {#if s}<img src={s} alt="" onerror={() => broken.add(e.name)} />{:else}<FileIcon name={e.name} dir={e.dir} />{/if}
                 </span>
-                <button class="name" onclick={() => onopen(e)} title={e.name}>{e.name}</button>
-                {@render more(e)}
-                <span class="num size">{e.dir ? '' : size(e.size)}</span>
-                <span class="num mtime" title={date(e.mtime)}>{ago(e.mtime)}</span>
+                <span class="cell name-cell" role="gridcell"><button class="name" onclick={() => onopen(e)} title={e.name}>{e.name}</button></span>
+                <span class="cell" role="gridcell">{@render more(e)}</span>
+                <span class="num size" role="gridcell">{e.dir ? '' : size(e.size)}</span>
+                <span class="num mtime" role="gridcell" title={date(e.mtime)}>{ago(e.mtime)}</span>
               </div>
             {/if}
           {/each}
