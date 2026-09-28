@@ -6,6 +6,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 	"testing/fstest"
@@ -146,9 +147,14 @@ func TestSPA(t *testing.T) {
 		h := w.Header()
 		if w.Code != 200 || w.Body.String() != c.body || h.Get("Content-Encoding") != c.enc ||
 			h.Get("Vary") != "Accept-Encoding" || !strings.HasPrefix(h.Get("Content-Type"), "text/javascript") ||
-			h.Get("Cache-Control") != "public, max-age=31536000, immutable" {
+			h.Get("Cache-Control") != "public, max-age=31536000, immutable" ||
+			h.Get("Content-Length") != strconv.Itoa(len(c.body)) {
 			t.Errorf("Accept-Encoding %q: %d %q %v", c.accept, w.Code, w.Body.String(), h)
 		}
+	}
+	w = f.do("GET", "/assets/app-1.js", nil, "X-No-Auth", "1", "Accept-Encoding", "br", "Range", "bytes=1-2")
+	if w.Code != 206 || w.Body.String() != "s-" || w.Header().Get("Content-Length") != "2" || w.Header().Get("Content-Encoding") != "br" {
+		t.Errorf("range %d %q %v", w.Code, w.Body.String(), w.Header())
 	}
 	w = f.do("GET", "/assets/app-1.css", nil, "X-No-Auth", "1", "Accept-Encoding", "br, gzip")
 	if w.Body.String() != "css" || w.Header().Get("Content-Encoding") != "" || w.Header().Get("Vary") != "" {

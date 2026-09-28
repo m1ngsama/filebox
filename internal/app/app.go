@@ -128,6 +128,7 @@ func (a *App) precompressed(w http.ResponseWriter, r *http.Request, p string) bo
 		h.Add("Vary", "Accept-Encoding")
 		h.Set("Content-Encoding", e.name)
 		h.Set("Content-Type", cmp.Or(mime.TypeByExtension(path.Ext(p)), "application/octet-stream"))
+		h.Set("Content-Length", strconv.FormatInt(st.Size(), 10))
 		http.ServeContent(w, r, p, st.ModTime(), rs)
 		return true
 	}
