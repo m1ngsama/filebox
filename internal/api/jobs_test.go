@@ -46,8 +46,13 @@ func TestPlaceAcrossDevices(t *testing.T) {
 	if err := run(va, vb, "f.txt", "f.txt", "j2", false, x); err != nil {
 		t.Fatalf("copy file: %v", err)
 	}
-	if d, n := x.done.Load(), x.total.Load(); d != 2 || n != 2 {
-		t.Fatalf("progress %d/%d, want the fallback copy counted", d, n)
+	if d := x.done.Load(); d != 2 {
+		t.Fatalf("done %d, want the fallback copy counted", d)
+	}
+	js := NewJobs()
+	js.m["j2"] = x
+	if s, _ := js.Get("j2"); s.Total != 1 || s.Done != 1 {
+		t.Fatalf("reported %d/%d, want 1/1", s.Done, s.Total)
 	}
 	if got, _ := os.ReadFile(filepath.Join(b, "f.txt")); string(got) != "f" {
 		t.Fatalf("copied content %q", got)

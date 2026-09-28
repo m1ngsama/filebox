@@ -50,7 +50,8 @@ func (j *Jobs) Get(id string) (JobStatus, bool) {
 	}
 	x.mu.Lock()
 	defer x.mu.Unlock()
-	return JobStatus{ID: id, Total: x.total.Load(), Done: x.done.Load(), State: x.state, Code: x.code}, true
+	total := x.total.Load()
+	return JobStatus{ID: id, Total: total, Done: min(x.done.Load(), total), State: x.state, Code: x.code}, true
 }
 
 func newID() string {
@@ -129,6 +130,14 @@ func run(src, dst *vol.Volume, srel, drel, id string, move bool, x *job) error {
 	}
 	defer dst.Root.RemoveAll(stage)
 	tmp := path.Join(stage, "item")
+	fs.WalkDir(src.Root.FS(), srel, func(p string, d fs.DirEntry, err error) error {
+		if err == nil && d.Type().IsRegular() {
+			if fi, err := d.Info(); err == nil {
+				x.total.Add(fi.Size())
+			}
+		}
+		return nil
+	})
 	if err := copyTree(src, dst, srel, tmp, move, x); err != nil {
 		return err
 	}
@@ -176,16 +185,7 @@ func copyTree(src, dst *vol.Volume, srel, drel string, strict bool, x *job) erro
 	} else if strict && !fi.IsDir() && !fi.Mode().IsRegular() {
 		return errSpecial
 	}
-	sfs := src.Root.FS()
-	fs.WalkDir(sfs, srel, func(p string, d fs.DirEntry, err error) error {
-		if err == nil && d.Type().IsRegular() {
-			if fi, err := d.Info(); err == nil {
-				x.total.Add(fi.Size())
-			}
-		}
-		return nil
-	})
-	return fs.WalkDir(sfs, srel, func(p string, d fs.DirEntry, err error) error {
+	return fs.WalkDir(src.Root.FS(), srel, func(p string, d fs.DirEntry, err error) error {
 		if err != nil {
 			return err
 		}
