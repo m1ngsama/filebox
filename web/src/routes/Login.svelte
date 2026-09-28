@@ -1,4 +1,8 @@
 <script lang="ts">
+  import { onMount, tick } from 'svelte'
+  import Eye from '@lucide/svelte/icons/eye'
+  import EyeOff from '@lucide/svelte/icons/eye-off'
+  import Fingerprint from '@lucide/svelte/icons/fingerprint'
   import { api, HttpError } from '../lib/api'
   import { t } from '../lib/i18n'
   import { load, save } from '../lib/storage'
@@ -9,20 +13,30 @@
   let password = $state('')
   let error = $state('')
   let passkeys = $state(false)
+  let show = $state(false)
+  let busy = $state(false)
+  let user = $state<HTMLInputElement>()
+  let pass = $state<HTMLInputElement>()
   let autofill = false
   let live = true
   let since = 0
   let abort = () => {}
 
+  onMount(() => (name ? pass : user)?.focus())
+
   async function submit(e: SubmitEvent) {
     e.preventDefault()
+    busy = true
     try {
       await api.login(name.trim(), password)
       save('user', name.trim())
       onok()
     } catch (err) {
       error = err instanceof HttpError && err.status === 429 ? err.message : t.wrongLogin
+      await tick()
+      pass?.select()
     }
+    busy = false
   }
 
   async function passkey(conditional = false) {
@@ -31,11 +45,12 @@
       await passkeyLogin(conditional)
       onok()
     } catch (err) {
-      const msg = passkeyError(err)
-      if (conditional && msg === t.passkeyCancelled) return
-      error = msg
-      if (conditional) since = 0
-      else startAutofill()
+      if (conditional) {
+        since = 0
+        return
+      }
+      error = passkeyError(err)
+      startAutofill()
     }
   }
 
@@ -66,13 +81,45 @@
   })
 </script>
 
-<form class="login" onsubmit={submit}>
-  <h1>{t.brand}</h1>
+<form class="login" onsubmit={submit} aria-labelledby="login-title">
+  <header class="login-brand">
+    <img src="/icon.svg" alt="" width="48" height="48" />
+    <h1 id="login-title">{t.brand}</h1>
+    <p class="hint">{t.loginHint}</p>
+  </header>
   <label for="login-name" class="sr-only">{t.username}</label>
-  <input id="login-name" bind:value={name} placeholder={t.username} autocomplete="username webauthn" onfocus={refreshAutofill} autocapitalize="none" spellcheck="false" required />
-  <label for="login-password" class="sr-only">{t.password}</label>
-  <input id="login-password" type="password" bind:value={password} placeholder={t.password} autocomplete="current-password" required />
-  <button type="submit">{t.login}</button>
-  {#if passkeys}<button type="button" onclick={() => passkey()}>{t.passkeyLogin}</button>{/if}
-  {#if error}<p class="error">{error}</p>{/if}
+  <input
+    id="login-name"
+    bind:this={user}
+    bind:value={name}
+    placeholder={t.username}
+    autocomplete="username webauthn"
+    onfocus={refreshAutofill}
+    autocapitalize="none"
+    spellcheck="false"
+    required
+  />
+  <div class="password">
+    <label for="login-password" class="sr-only">{t.password}</label>
+    <input
+      id="login-password"
+      bind:this={pass}
+      type={show ? 'text' : 'password'}
+      bind:value={password}
+      placeholder={t.password}
+      autocomplete="current-password"
+      aria-invalid={!!error}
+      aria-describedby={error ? 'login-error' : undefined}
+      required
+    />
+    <button type="button" class="icon-btn" aria-label={t.showPassword} aria-pressed={show} onclick={() => (show = !show)}>
+      {#if show}<EyeOff size={18} />{:else}<Eye size={18} />{/if}
+    </button>
+  </div>
+  {#if error}<p class="error" id="login-error" role="alert">{error}</p>{/if}
+  <button type="submit" class="primary" disabled={busy}>{t.login}</button>
+  {#if passkeys}
+    <div class="login-or"><span>{t.or}</span></div>
+    <button type="button" onclick={() => passkey()}><Fingerprint size={18} />{t.passkeyLogin}</button>
+  {/if}
 </form>
