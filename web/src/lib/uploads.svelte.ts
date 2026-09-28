@@ -1,6 +1,6 @@
 import * as tus from 'tus-js-client'
 import { t } from './i18n'
-import { errorText } from './api'
+import { errorText, session } from './api'
 
 export type Item = {
   id: number
@@ -57,7 +57,10 @@ function run({ item, file, endpoint, meta }: Job) {
         Promise.resolve(['tus', endpoint, meta.vol, meta.dir, meta.relativePath ?? '', file.name, file.size, file.lastModified].join('|')),
       onProgress: (sent) => (item.sent = sent),
       onSuccess: () => resolve(),
-      onError: (e) => reject(new Error(errorMessage(e))),
+      onError: (e) => {
+        if (endpoint === '/upload/' && (e as tus.DetailedError).originalResponse?.getStatus() === 401) session.lost()
+        reject(new Error(errorMessage(e)))
+      },
     })
     item.ctl.signal.addEventListener(
       'abort',

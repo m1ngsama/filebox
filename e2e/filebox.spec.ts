@@ -12,6 +12,10 @@ const row = (p: Page, name: string) => p.locator('.row', { hasText: name })
 
 async function login(page: Page) {
   await page.goto('/')
+  await signIn(page)
+}
+
+async function signIn(page: Page) {
   await page.getByPlaceholder(t.username).fill('admin')
   await page.getByPlaceholder(t.password).fill('pw-pw-pw-pw')
   await page.getByRole('button', { name: t.login, exact: true }).click()
@@ -122,6 +126,32 @@ test('closing details opened from my shares clears the query', async ({ page }) 
   await page.reload()
   await expect(row(page, 'docs')).toBeVisible()
   await expect(page.locator('.details')).toHaveCount(0)
+})
+
+test('an upload that loses the session returns to login and resumes after it', async ({ page, context }) => {
+  const src = bigFile(160)
+  await login(page)
+  let expired = false
+  await page.route('**/upload/*', async (route) => {
+    if (expired || route.request().method() !== 'PATCH') return route.continue()
+    const response = await route.fetch()
+    await context.clearCookies()
+    expired = true
+    await route.fulfill({ response })
+  })
+  await fileInput(page).setInputFiles(src)
+  await expect(page.getByRole('button', { name: t.login, exact: true })).toBeVisible({ timeout: 60_000 })
+  await page.unrouteAll()
+  await signIn(page)
+  await expect(page.locator('.uploads li.error')).toContainText(t.errors[401])
+  const offsets: number[] = []
+  page.on('request', (r) => {
+    if (r.method() === 'PATCH') offsets.push(Number(r.headers()['upload-offset']))
+  })
+  await fileInput(page).setInputFiles(src)
+  await expect(page.locator('.uploads li.done')).toHaveCount(1, { timeout: 120_000 })
+  expect(offsets[0]).toBeGreaterThan(0)
+  expect(await sha(join(VOL, 'filebox-e2e-160.bin'))).toBe(await sha(src))
 })
 
 test('password share opens anonymously', async ({ page, browser }) => {
