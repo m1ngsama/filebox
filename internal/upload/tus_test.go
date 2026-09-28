@@ -420,3 +420,31 @@ func TestTusLockContention(t *testing.T) {
 		t.Fatalf("head %d", w.StatusCode)
 	}
 }
+
+func TestTusSweepDuringPatch(t *testing.T) {
+	e := setup(t)
+	loc := e.create(t, 10, "p.bin")
+	id := strings.TrimPrefix(loc, "/up/")
+	pr, pw := io.Pipe()
+	done := make(chan int)
+	go func() {
+		done <- e.send("PATCH", loc, pr, "Upload-Offset", "0", "Content-Type", "application/offset+octet-stream").StatusCode
+	}()
+	pw.Write([]byte("01234"))
+	for {
+		if fi, err := os.Stat(filepath.Join(e.dir, vol.UploadsDir, id)); err == nil && fi.Size() == 5 {
+			break
+		}
+		time.Sleep(time.Millisecond)
+	}
+	e.srv.Now = func() time.Time { return time.Now().Add(25 * time.Hour) }
+	e.srv.Sweep(24 * time.Hour)
+	pw.Write([]byte("56789"))
+	pw.Close()
+	if code := <-done; code != 204 {
+		t.Fatalf("patch %d", code)
+	}
+	if b, _ := os.ReadFile(filepath.Join(e.dir, "p.bin")); string(b) != "0123456789" {
+		t.Fatalf("content %q", b)
+	}
+}
