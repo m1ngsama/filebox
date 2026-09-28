@@ -283,6 +283,11 @@ button.ghost { border-color: transparent; background: none; }
 .toast-action:hover:not(:disabled) { background: var(--viewer-hover); }
 @keyframes rise { from { opacity: 0; translate: 0 8px; } }
 
+.trash-note { max-width: 960px; margin: 0 0 var(--space-3); font-size: var(--text-sm); }
+.trash-head { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); max-width: 960px; min-height: 44px; padding: 0 var(--space-2); border-bottom: 1px solid var(--line); border-radius: var(--radius-md) var(--radius-md) 0 0; }
+.trash-head > input { margin-right: var(--space-2); }
+.trash-head.batch { background: var(--sel); }
+.trash-head .count { font-weight: 600; margin-right: var(--space-2); white-space: nowrap; }
 .toolbar { display: flex; align-items: center; gap: var(--space-2); flex-wrap: wrap; max-width: 960px; margin-bottom: 12px; }
 .chips { display: flex; gap: 6px; flex-wrap: wrap; }
 .rows { list-style: none; margin: 0; padding: 0; max-width: 960px; }

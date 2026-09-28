@@ -106,6 +106,7 @@ func (a *API) Register(mux *http.ServeMux) {
 	h("GET /api/trash", a.trashList)
 	h("POST /api/trash/restore", a.trashRestore)
 	h("POST /api/trash/empty", a.trashEmpty)
+	h("POST /api/trash/delete", a.trashDelete)
 	h("GET /api/tokens", a.tokens)
 	h("POST /api/tokens", a.tokenNew)
 	h("DELETE /api/tokens/{id}", a.tokenDel)

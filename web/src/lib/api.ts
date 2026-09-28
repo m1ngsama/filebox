@@ -86,6 +86,7 @@ export const api = {
   trash: (vol: string) => req<{ items: TrashItem[] }>('GET', `/api/trash?${q({ vol })}`),
   restore: (vol: string, id: string) => req<void>('POST', '/api/trash/restore', { vol, id }),
   emptyTrash: (vol: string) => req<void>('POST', '/api/trash/empty', { vol }),
+  purge: (vol: string, ids: string[]) => req<void>('POST', '/api/trash/delete', { vol, ids }),
   tokens: () => req<{ tokens: Token[] }>('GET', '/api/tokens'),
   newToken: (label: string, readonly: boolean) => req<{ token: string }>('POST', '/api/tokens', { label, readonly }),
   delToken: (id: number) => req<void>('DELETE', `/api/tokens/${id}`),

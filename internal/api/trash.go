@@ -133,6 +133,35 @@ func (a *API) trashRestore(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(204)
 }
 
+func (a *API) trashDelete(w http.ResponseWriter, r *http.Request) {
+	var in struct {
+		Vol string   `json:"vol"`
+		IDs []string `json:"ids"`
+	}
+	if err := httpx.Read(r, &in); err != nil {
+		httpx.Fail(w, 400, "bad request")
+		return
+	}
+	v, ok := a.Vols.Get(in.Vol)
+	if !ok {
+		httpx.Error(w, fs.ErrNotExist)
+		return
+	}
+	for _, id := range in.IDs {
+		if !vol.ValidName(id) {
+			httpx.Error(w, vol.ErrBadPath)
+			return
+		}
+	}
+	for _, id := range in.IDs {
+		if err := v.Root.RemoveAll(path.Join(vol.TrashDir, id)); err != nil {
+			httpx.Error(w, err)
+			return
+		}
+	}
+	w.WriteHeader(204)
+}
+
 func (a *API) trashEmpty(w http.ResponseWriter, r *http.Request) {
 	var in struct {
 		Vol string `json:"vol"`

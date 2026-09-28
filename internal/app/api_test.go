@@ -188,6 +188,19 @@ func TestTrash(t *testing.T) {
 	if b, _ := os.ReadFile(filepath.Join(f.Dir, "d/keep.txt")); string(b) != "k" {
 		t.Fatalf("restored %q", b)
 	}
+	f.write(t, "gone.txt", "g")
+	f.write(t, "stay.txt", "s")
+	ids := decode[struct{ Trashed []struct{ ID string } }](t, f.do("POST", "/api/rm", body(`{"vol":"v","paths":["gone.txt","stay.txt"]}`))).Trashed
+	if w := f.do("POST", "/api/trash/delete", body(`{"vol":"v","ids":["`+ids[0].ID+`","../d"]}`)); w.Code != 400 {
+		t.Fatalf("delete with a bad id %d", w.Code)
+	}
+	if w := f.do("POST", "/api/trash/delete", body(`{"vol":"v","ids":["`+ids[0].ID+`"]}`)); w.Code != 204 {
+		t.Fatalf("delete %d %s", w.Code, w.Body)
+	}
+	left := decode[struct{ Items []struct{ Name string } }](t, f.do("GET", "/api/trash?vol=v", nil)).Items
+	if len(left) != 1 || left[0].Name != "stay.txt" {
+		t.Fatalf("after delete %+v", left)
+	}
 	f.do("POST", "/api/rm", body(`{"vol":"v","paths":["d"]}`))
 	if w := f.do("POST", "/api/trash/empty", body(`{"vol":"v"}`)); w.Code != 204 {
 		t.Fatalf("empty %d", w.Code)
