@@ -160,6 +160,16 @@ func TestSPA(t *testing.T) {
 	}
 }
 
+func TestSPAPolicyHashesInlineScripts(t *testing.T) {
+	if got := spaPolicy([]byte(`<script type="module" src="/a.js"></script>`)); got != spaCSP {
+		t.Fatalf("no inline script: %q", got)
+	}
+	got := spaPolicy([]byte("<head><script>alert(1)</script></head>"))
+	if !strings.HasSuffix(got, "; script-src 'self' 'sha256-bhHHL3z2vDgxUt0W3dWQOrprscmda2Y5pLsLg4GF+pI='") {
+		t.Fatalf("inline script: %q", got)
+	}
+}
+
 func TestCrossOriginBlocked(t *testing.T) {
 	f := newTestApp(t)
 	w := f.do("POST", "/raw/v/a.txt", nil, "Sec-Fetch-Site", "cross-site")

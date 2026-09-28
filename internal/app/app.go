@@ -2,11 +2,14 @@ package app
 
 import (
 	"cmp"
+	"crypto/sha256"
+	"encoding/base64"
 	"io"
 	"io/fs"
 	"mime"
 	"net/http"
 	"path"
+	"regexp"
 	"strconv"
 	"strings"
 
@@ -149,8 +152,24 @@ func acceptEncodings(h string) map[string]bool {
 	return m
 }
 
+var inlineScript = regexp.MustCompile(`(?s)<script>(.*?)</script>`)
+
+func spaPolicy(index []byte) string {
+	csp := spaCSP
+	if m := inlineScript.FindAllSubmatch(index, -1); m != nil {
+		csp += "; script-src 'self'"
+		for _, s := range m {
+			sum := sha256.Sum256(s[1])
+			csp += " 'sha256-" + base64.StdEncoding.EncodeToString(sum[:]) + "'"
+		}
+	}
+	return csp
+}
+
 func (a *App) spa() http.Handler {
 	files := http.FileServerFS(a.Web)
+	index, indexErr := fs.ReadFile(a.Web, "index.html")
+	csp := spaPolicy(index)
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodGet && r.Method != http.MethodHead {
 			httpx.Fail(w, 405, "method not allowed")
@@ -168,14 +187,13 @@ func (a *App) spa() http.Handler {
 				return
 			}
 		}
-		b, err := fs.ReadFile(a.Web, "index.html")
-		if err != nil {
+		if indexErr != nil {
 			http.Error(w, "frontend not built", 404)
 			return
 		}
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
 		w.Header().Set("Cache-Control", "no-cache")
-		w.Header().Set("Content-Security-Policy", spaCSP)
-		w.Write(b)
+		w.Header().Set("Content-Security-Policy", csp)
+		w.Write(index)
 	})
 }

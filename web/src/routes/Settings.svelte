@@ -9,6 +9,7 @@
   import { addPasskey, deviceName, passkeyError, validPasskeyName } from '../lib/passkey'
   import { date, ago, device } from '../lib/format'
   import { t } from '../lib/i18n'
+  import { theme, setTheme, type Theme } from '../lib/theme'
 
   let { vols }: { vols: string[] } = $props()
 
@@ -28,6 +29,7 @@
   let adding = $state(false)
   let renaming = $state<Passkey | null>(null)
   let removing = $state<Passkey | null>(null)
+  let mode = $state(theme())
   const dav = `${location.origin}/dav/`
   const vol = $derived(encodeURIComponent(vols[0] ?? ''))
 
@@ -78,6 +80,13 @@
 </script>
 
 <section class="settings">
+  <h2>{t.appearance}</h2>
+  <div class="chips" role="group" aria-label={t.appearance}>
+    {#each Object.entries(t.themes) as [k, label] (k)}
+      <button type="button" class="chip" aria-pressed={mode === k} onclick={() => setTheme((mode = k as Theme))}>{label}</button>
+    {/each}
+  </div>
+
   <h2>{t.sessions}</h2>
   {#if sessionsError}<p class="error">{sessionsError}</p>{/if}
   {#if sessions}

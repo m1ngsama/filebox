@@ -137,6 +137,29 @@ test('the file list loads one script and settings loads its own chunk', async ({
   await expect.poll(() => scripts.length).toBeGreaterThan(1)
 })
 
+test('the theme choice applies before the app loads', async ({ page }) => {
+  const blocked: string[] = []
+  page.on('console', (m) => {
+    if (m.type() === 'error') blocked.push(m.text())
+  })
+  await page.emulateMedia({ colorScheme: 'light' })
+  await login(page)
+  await page.goto('/settings')
+  await page.getByRole('button', { name: t.themes.dark }).click()
+  const bg = () => page.evaluate(() => getComputedStyle(document.body).backgroundColor)
+  await expect.poll(bg).toBe('rgb(21, 24, 29)')
+  await page.route('**/assets/*.js', (r) => r.abort())
+  await page.goto('/', { waitUntil: 'domcontentloaded' })
+  await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark')
+  expect(await bg()).toBe('rgb(21, 24, 29)')
+  await page.unroute('**/assets/*.js')
+  await page.goto('/settings')
+  await page.getByRole('button', { name: t.themes.system }).click()
+  await expect(page.locator('html')).not.toHaveAttribute('data-theme')
+  expect(await bg()).toBe('rgb(255, 255, 255)')
+  expect(blocked.filter((m) => m.includes('Content Security Policy'))).toEqual([])
+})
+
 test('rows select and open from the keyboard', async ({ page, server }) => {
   mkdirSync(join(server.vol, 'many'), { recursive: true })
   for (let i = 0; i < 60; i++) writeFileSync(join(server.vol, 'many', `k-${String(i).padStart(2, '0')}.txt`), `k${i}`)

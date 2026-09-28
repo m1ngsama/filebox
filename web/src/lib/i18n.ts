@@ -23,6 +23,8 @@ export const t = {
   recentScanning: '正在建立文件索引，完成后这里会列出最近改动的文件。',
   openFolder: '打开所在文件夹',
   settings: '设置',
+  appearance: '外观',
+  themes: { system: '跟随系统', light: '浅色', dark: '深色' },
   breadcrumb: '当前位置',
   new: '新建',
   upload: '上传文件',
