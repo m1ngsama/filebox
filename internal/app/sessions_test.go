@@ -127,3 +127,14 @@ func TestSessionRevokeOthers(t *testing.T) {
 		t.Fatal("revoke-others dropped the app token")
 	}
 }
+
+func TestTokenDeleteIgnoresSessions(t *testing.T) {
+	f := newTestApp(t)
+	id := f.sessions(t, f.Cookie).Sessions[0].ID
+	if code := f.do("DELETE", "/api/tokens/"+itoa(id), nil).Code; code != 404 {
+		t.Fatalf("token delete of a session id %d", code)
+	}
+	if code := f.do("GET", "/api/me", nil).Code; code != 200 {
+		t.Fatalf("session lost to token delete %d", code)
+	}
+}
