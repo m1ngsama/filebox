@@ -17,6 +17,7 @@
   import LayoutGrid from '@lucide/svelte/icons/layout-grid'
   import List from '@lucide/svelte/icons/list'
   import ChevronRight from '@lucide/svelte/icons/chevron-right'
+  import SearchX from '@lucide/svelte/icons/search-x'
   import { api, filesURL, rawURL, thumbURL, type Entry, type Move } from '../lib/api'
   import { toast, fail } from '../lib/toast.svelte'
   import { navigate, link, route } from '../lib/router.svelte'
@@ -25,6 +26,7 @@
   import { t } from '../lib/i18n'
   import { load, save } from '../lib/storage'
   import NavToggle from '../components/NavToggle.svelte'
+  import EmptyState from '../components/EmptyState.svelte'
   import EntryList, { type Action } from '../components/EntryList.svelte'
 
   let { vol, path, vols }: { vol: string; path: string; vols: string[] } = $props()
@@ -268,8 +270,19 @@
         onopen={open}
         {batch}
         loading={at !== here}
-        empty={error ? '' : query ? t.noMatch : t.empty}
-      />
+      >
+        {#snippet empty()}
+          {#if query}
+            <EmptyState icon={SearchX} title={t.noMatch} hint={t.noMatchHint}>
+              <button onclick={() => (filter = '')}>{t.clearFilter}</button>
+            </EmptyState>
+          {:else if !error}
+            <EmptyState icon={FolderOpen} title={t.folderEmpty} hint={t.emptyHint}>
+              <button class="primary" onclick={() => files?.click()}><Upload size={16} />{t.upload}</button>
+            </EmptyState>
+          {/if}
+        {/snippet}
+      </EntryList>
     {/key}
 
     {#if dragging}<div class="dropzone">{t.dropHere}</div>{/if}

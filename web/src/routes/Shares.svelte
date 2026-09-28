@@ -1,6 +1,8 @@
 <script lang="ts">
   import Link from '@lucide/svelte/icons/link'
   import Trash from '@lucide/svelte/icons/trash'
+  import Link2 from '@lucide/svelte/icons/link-2'
+  import EmptyState from '../components/EmptyState.svelte'
   import ConfirmDialog from '../components/ConfirmDialog.svelte'
   import CopyButton from '../components/CopyButton.svelte'
   import RowList from '../components/RowList.svelte'
@@ -50,7 +52,7 @@
       <Trash size={18} />
     </button>
   {/snippet}
-  {#snippet empty()}<p class="hint">{t.sharesEmpty}</p>{/snippet}
+  {#snippet empty()}<EmptyState icon={Link2} title={t.noShares} hint={t.sharesEmptyHint} />{/snippet}
 </RowList>
 
 {#if removing}

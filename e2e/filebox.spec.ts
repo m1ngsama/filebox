@@ -209,6 +209,23 @@ test('names sort naturally with folders first and the filter narrows them', asyn
   await expect(names).toHaveCount(4)
 })
 
+test('empty folders and empty filters say what to do next', async ({ page, server }) => {
+  mkdirSync(join(server.vol, 'hollow'))
+  await login(page)
+  await page.getByLabel(t.filter).fill('zzz')
+  await expect(page.getByText(t.noMatch)).toBeVisible()
+  await page.getByRole('button', { name: t.clearFilter }).click()
+  await expect(page.getByLabel(t.filter)).toHaveValue('')
+  await expect(row(page, 'docs')).toBeVisible()
+  await row(page, 'hollow').locator('button.name').click()
+  await expect(page.getByText(t.folderEmpty)).toBeVisible()
+  const chooser = page.waitForEvent('filechooser')
+  await page.locator('.empty-state').getByRole('button', { name: t.upload }).click()
+  await chooser
+  await page.goto('/shares')
+  await expect(page.getByText(t.noShares)).toBeVisible()
+})
+
 test('theme colours do not need light-dark() support', async ({ page }) => {
   await login(page)
   const css = await page.evaluate(() => Promise.all([...document.styleSheets].map((s) => fetch(s.href!).then((r) => r.text()))))

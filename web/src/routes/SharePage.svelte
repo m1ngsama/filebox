@@ -7,6 +7,7 @@
   import Lock from '@lucide/svelte/icons/lock'
   import EntryList, { type Action } from '../components/EntryList.svelte'
   import FileIcon from '../components/FileIcon.svelte'
+  import EmptyState from '../components/EmptyState.svelte'
   import Preview from '../components/Preview.svelte'
   import { api, HttpError, shareRawURL, shareThumbURL, shareURL, validShareToken, type Entry, type ShareInfo } from '../lib/api'
   import { route, link, navigate } from '../lib/router.svelte'
@@ -221,8 +222,11 @@
           {onaction}
           onopen={open}
           loading={at !== p}
-          empty={error ? '' : canUpload ? t.empty : t.folderEmpty}
-        />
+        >
+          {#snippet empty()}
+            {#if !error}<EmptyState icon={FolderOpen} title={t.folderEmpty} hint={canUpload ? t.dropHere : ''} />{/if}
+          {/snippet}
+        </EntryList>
       {/key}
     </section>
   {/if}

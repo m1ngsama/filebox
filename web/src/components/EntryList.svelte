@@ -44,7 +44,7 @@
     onaction: (id: string, e: Entry | null) => void
     onopen: (e: Entry) => void
     batch?: Snippet
-    empty: string
+    empty?: Snippet
     loading?: boolean
     id?: (e: Entry) => string
     sub?: (e: Entry) => string
@@ -208,7 +208,7 @@
               <div class={grid ? 'sk-card' : 'sk-row'}><span class="sk sk-icon"></span><span class="sk sk-line" style:width={`${30 + ((i * 37) % 45)}%`}></span></div>
             {/each}
           </div>
-        {:else if !entries.length}<p class="empty">{empty}</p>{/if}
+        {:else if !entries.length && empty}<div class="empty">{@render empty()}</div>{/if}
         <div class="spacer" role="grid" aria-label={t.fileList} aria-multiselectable={selected ? true : undefined} aria-rowcount={rows} style:height={`${$v.getTotalSize()}px`}>
           {#each $v.getVirtualItems().filter((r) => r.index < rows) as r (r.key)}
             {#if grid}

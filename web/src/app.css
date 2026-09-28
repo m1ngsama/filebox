@@ -125,7 +125,15 @@ button.ghost { border-color: transparent; background: none; }
 .row > .name-cell { justify-items: start; }
 .scroller { flex: 1; min-height: 0; overflow: auto; position: relative; }
 .spacer { position: relative; width: 100%; }
-.empty { position: absolute; inset: 64px 16px auto; text-align: center; color: var(--muted); margin: 0; }
+.empty { position: absolute; inset: 48px 16px auto; }
+.empty-state { display: flex; flex-direction: column; align-items: center; gap: var(--space-2); padding: var(--space-6) var(--space-4); text-align: center; }
+.empty-state p { margin: 0; max-width: 36em; }
+.empty-state > :is(button, a):last-child { margin-top: var(--space-2); }
+.empty-icon { display: grid; place-items: center; width: 56px; height: 56px; border-radius: 50%; background: var(--nav); color: var(--muted); margin-bottom: var(--space-1); }
+.empty-title { font-weight: 600; }
+.empty-state.compact { flex-direction: row; justify-content: flex-start; flex-wrap: wrap; gap: var(--space-2) var(--space-3); padding: var(--space-3) var(--space-2); text-align: left; }
+.empty-state.compact .empty-icon { width: 32px; height: 32px; margin: 0; }
+.empty-state.compact .empty-title { font-weight: 400; color: var(--muted); }
 .skeleton { animation: appear 0s 150ms both; }
 .skeleton.grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: var(--space-3); padding: 6px 12px; }
 .sk-row { display: flex; align-items: center; gap: var(--space-3); height: 48px; padding: 0 var(--space-2) 0 52px; border-bottom: 1px solid var(--line); }

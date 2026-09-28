@@ -2,6 +2,8 @@
   import Eye from '@lucide/svelte/icons/eye'
   import Download from '@lucide/svelte/icons/download'
   import FolderOpen from '@lucide/svelte/icons/folder-open'
+  import Clock from '@lucide/svelte/icons/clock'
+  import EmptyState from '../components/EmptyState.svelte'
   import EntryList, { type Action } from '../components/EntryList.svelte'
   import Preview from '../components/Preview.svelte'
   import { api, filesURL, rawURL, thumbURL, type Entry, type RecentFile } from '../lib/api'
@@ -57,6 +59,10 @@
   }
 </script>
 
+{#snippet recentEmpty()}
+  <EmptyState icon={Clock} title={scanning ? t.recentScanning : t.recentEmpty} />
+{/snippet}
+
 <section class="files" aria-label={t.recent}>
   {#if error}<p class="error banner">{error}</p>{/if}
   <EntryList
@@ -70,7 +76,7 @@
     {onaction}
     onopen={(e) => (preview = e)}
     loading={!loaded && !error}
-    empty={!loaded ? '' : scanning ? t.recentScanning : t.recentEmpty}
+    empty={recentEmpty}
     id={(e) => `${loc(e).vol}:${loc(e).path}`}
     sub={(e) => `${loc(e).vol}:/${parent(loc(e).path)}`}
   />
