@@ -1,4 +1,4 @@
-import { test as base, expect, type Page } from '@playwright/test'
+import { test as base, expect, type Locator, type Page } from '@playwright/test'
 import { execFileSync, spawn } from 'node:child_process'
 import { createHash } from 'node:crypto'
 import { closeSync, cpSync, createReadStream, existsSync, mkdirSync, mkdtempSync, openSync, readFileSync, rmSync, statSync, writeFileSync, writeSync } from 'node:fs'
@@ -213,6 +213,35 @@ test('a missing chunk reloads the page once, then offers a retry', async ({ page
   await page.getByRole('link', { name: t.settings }).click()
   await expect(page.getByText(t.loadFailed)).toBeVisible()
   await expect(page.getByRole('button', { name: t.retry })).toBeVisible()
+})
+
+test('filled buttons keep AA contrast in both themes, hovered or not', async ({ page }) => {
+  const contrast = (l: Locator) =>
+    l.evaluate((el) => {
+      const lum = (c: string) => {
+        const ctx = document.createElement('canvas').getContext('2d')!
+        ctx.fillStyle = c
+        ctx.fillRect(0, 0, 1, 1)
+        const [r, g, b] = [...ctx.getImageData(0, 0, 1, 1).data].map((v) => ((v /= 255) <= 0.04045 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4))
+        return 0.2126 * r + 0.7152 * g + 0.0722 * b
+      }
+      const s = getComputedStyle(el)
+      const [hi, lo] = [lum(s.color), lum(s.backgroundColor)].sort((a, b) => b - a)
+      return (hi + 0.05) / (lo + 0.05)
+    })
+  await login(page)
+  await row(page, 'docs').locator('input[type=checkbox]').check()
+  await page.locator('.list-head').getByRole('button', { name: t.remove, exact: true }).click()
+  const danger = page.locator('.dialog').getByRole('button', { name: t.remove, exact: true })
+  const primary = page.getByRole('button', { name: t.new })
+  for (const scheme of ['light', 'dark'] as const) {
+    await page.emulateMedia({ colorScheme: scheme })
+    await page.mouse.move(0, 0)
+    expect(await contrast(primary), `${scheme} primary`).toBeGreaterThanOrEqual(4.5)
+    expect(await contrast(danger), `${scheme} danger`).toBeGreaterThanOrEqual(4.5)
+    await danger.hover()
+    expect(await contrast(danger), `${scheme} danger hovered`).toBeGreaterThanOrEqual(4.5)
+  }
 })
 
 test('rows select and open from the keyboard', async ({ page, server }) => {

@@ -10,7 +10,7 @@
   --on-accent: light-dark(#fff, #0c1522);
   --sel: light-dark(#e5effb, #1d2c42);
   --danger: light-dark(#c42b2b, #ff7474);
-  --on-danger: #fff;
+  --on-danger: light-dark(#fff, #1f0a0a);
   --scrim: rgb(8 12 18 / 0.45);
   --shadow: 0 10px 30px light-dark(rgb(15 25 40 / 0.16), rgb(0 0 0 / 0.5)), 0 1px 3px light-dark(rgb(15 25 40 / 0.1), rgb(0 0 0 / 0.4));
   --viewer-bg: rgb(6 8 12 / 0.94);
@@ -59,6 +59,7 @@ button:disabled { opacity: 0.45; cursor: default; }
 button.primary, a.button.primary { background: var(--accent); border-color: var(--accent); color: var(--on-accent); font-weight: 600; }
 button.primary:hover:not(:disabled), a.button.primary:hover { background: color-mix(in srgb, var(--accent) 88%, var(--fg)); }
 button.danger-fill { background: var(--danger); border-color: var(--danger); color: var(--on-danger); font-weight: 600; }
+button.danger-fill:hover:not(:disabled) { background: color-mix(in srgb, var(--danger) 88%, var(--fg)); }
 button.ghost { border-color: transparent; background: none; }
 .danger { color: var(--danger); }
 .icon-btn {
