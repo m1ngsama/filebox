@@ -1,8 +1,12 @@
 package app
 
 import (
+	"cmp"
+	"io"
 	"io/fs"
+	"mime"
 	"net/http"
+	"path"
 	"strconv"
 	"strings"
 
@@ -96,6 +100,55 @@ func (a *App) thumb(w http.ResponseWriter, r *http.Request) {
 	a.Thumbs.Serve(w, r, v, rel)
 }
 
+var encodings = [...]struct{ name, ext string }{{"br", ".br"}, {"gzip", ".gz"}}
+
+func (a *App) precompressed(w http.ResponseWriter, r *http.Request, p string) bool {
+	accept := acceptEncodings(r.Header.Get("Accept-Encoding"))
+	vary := false
+	for _, e := range encodings {
+		f, err := a.Web.Open(p + e.ext)
+		if err != nil {
+			continue
+		}
+		vary = true
+		if !accept[e.name] {
+			f.Close()
+			continue
+		}
+		defer f.Close()
+		st, err := f.Stat()
+		rs, ok := f.(io.ReadSeeker)
+		if err != nil || !ok {
+			return false
+		}
+		h := w.Header()
+		h.Add("Vary", "Accept-Encoding")
+		h.Set("Content-Encoding", e.name)
+		h.Set("Content-Type", cmp.Or(mime.TypeByExtension(path.Ext(p)), "application/octet-stream"))
+		http.ServeContent(w, r, p, st.ModTime(), rs)
+		return true
+	}
+	if vary {
+		w.Header().Add("Vary", "Accept-Encoding")
+	}
+	return false
+}
+
+func acceptEncodings(h string) map[string]bool {
+	m := map[string]bool{}
+	for part := range strings.SplitSeq(h, ",") {
+		name, params, _ := strings.Cut(part, ";")
+		q := strings.TrimSpace(params)
+		if v, ok := strings.CutPrefix(q, "q="); ok {
+			if f, err := strconv.ParseFloat(v, 64); err != nil || f <= 0 {
+				continue
+			}
+		}
+		m[strings.ToLower(strings.TrimSpace(name))] = true
+	}
+	return m
+}
+
 func (a *App) spa() http.Handler {
 	files := http.FileServerFS(a.Web)
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -107,6 +160,9 @@ func (a *App) spa() http.Handler {
 			if st, err := fs.Stat(a.Web, p); err == nil && !st.IsDir() {
 				if strings.HasPrefix(p, "assets/") {
 					w.Header().Set("Cache-Control", "public, max-age=31536000, immutable")
+					if a.precompressed(w, r, p) {
+						return
+					}
 				}
 				files.ServeHTTP(w, r)
 				return

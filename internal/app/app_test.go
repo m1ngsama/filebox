@@ -6,6 +6,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"testing/fstest"
 
@@ -47,8 +48,11 @@ func newTestApp(t *testing.T) *fixture {
 	sess, _ := a.Login("admin", "pw-pw-pw-pw", "127.0.0.1", "")
 	bearer, _ := a.NewAppToken(uid, "test", false)
 	web := fstest.MapFS{
-		"index.html":      {Data: []byte("<!doctype html>app")},
-		"assets/app-1.js": {Data: []byte("js")},
+		"index.html":         {Data: []byte("<!doctype html>app")},
+		"assets/app-1.js":    {Data: []byte("js")},
+		"assets/app-1.js.br": {Data: []byte("js-br")},
+		"assets/app-1.js.gz": {Data: []byte("js-gz")},
+		"assets/app-1.css":   {Data: []byte("css")},
 	}
 	up, err := upload.New(vols)
 	if err != nil {
@@ -130,6 +134,29 @@ func TestSPA(t *testing.T) {
 	w = f.do("GET", "/assets/app-1.js", nil, "X-No-Auth", "1")
 	if w.Code != 200 || w.Header().Get("Cache-Control") != "public, max-age=31536000, immutable" {
 		t.Fatalf("asset %d %q", w.Code, w.Header().Get("Cache-Control"))
+	}
+	for _, c := range []struct{ accept, body, enc string }{
+		{"", "js", ""},
+		{"gzip, deflate", "js-gz", "gzip"},
+		{"gzip, deflate, br, zstd", "js-br", "br"},
+		{"br;q=0, gzip", "js-gz", "gzip"},
+		{"identity", "js", ""},
+	} {
+		w = f.do("GET", "/assets/app-1.js", nil, "X-No-Auth", "1", "Accept-Encoding", c.accept)
+		h := w.Header()
+		if w.Code != 200 || w.Body.String() != c.body || h.Get("Content-Encoding") != c.enc ||
+			h.Get("Vary") != "Accept-Encoding" || !strings.HasPrefix(h.Get("Content-Type"), "text/javascript") ||
+			h.Get("Cache-Control") != "public, max-age=31536000, immutable" {
+			t.Errorf("Accept-Encoding %q: %d %q %v", c.accept, w.Code, w.Body.String(), h)
+		}
+	}
+	w = f.do("GET", "/assets/app-1.css", nil, "X-No-Auth", "1", "Accept-Encoding", "br, gzip")
+	if w.Body.String() != "css" || w.Header().Get("Content-Encoding") != "" || w.Header().Get("Vary") != "" {
+		t.Errorf("uncompressed asset %q %v", w.Body.String(), w.Header())
+	}
+	w = f.do("GET", "/", nil, "X-No-Auth", "1", "Accept-Encoding", "br, gzip")
+	if w.Header().Get("Content-Encoding") != "" || w.Body.String() != "<!doctype html>app" {
+		t.Errorf("index %q %v", w.Body.String(), w.Header())
 	}
 }
 
