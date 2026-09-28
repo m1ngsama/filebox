@@ -142,6 +142,20 @@ test('a slow folder shows skeleton rows and a broken image offers a download', a
   await expect(viewer.getByRole('button', { name: t.close })).toBeFocused()
 })
 
+test('without thumbnails small images fall back to the original and others get a typed icon', async ({ page, server }) => {
+  const png = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==', 'base64')
+  writeFileSync(join(server.vol, 'docs/pic.png'), png)
+  writeFileSync(join(server.vol, 'docs/big.png'), Buffer.concat([png, Buffer.alloc(3 << 20)]))
+  writeFileSync(join(server.vol, 'docs/code.go'), 'package main')
+  await login(page)
+  await row(page, 'docs').locator('button.name').click()
+  await expect(row(page, 'pic.png').locator('img')).toHaveAttribute('src', '/raw/v/docs/pic.png')
+  await expect.poll(() => row(page, 'pic.png').locator('img').evaluate((i: HTMLImageElement) => i.naturalWidth)).toBe(1)
+  await expect(row(page, 'big.png').locator('img')).toHaveCount(0)
+  await expect(row(page, 'big.png').locator('svg.ficon.image')).toHaveCount(1)
+  await expect(row(page, 'code.go').locator('svg.ficon.code')).toHaveCount(1)
+})
+
 test('the file list loads one script and settings loads its own chunk', async ({ page }) => {
   const scripts: string[] = []
   page.on('response', (r) => {

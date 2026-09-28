@@ -21,7 +21,7 @@
   import { toast, fail } from '../lib/toast.svelte'
   import { navigate, link, route } from '../lib/router.svelte'
   import { enqueue } from '../lib/uploads.svelte'
-  import { thumbable, arrange, type Sort } from '../lib/format'
+  import { thumbable, rawThumb, arrange, type Sort } from '../lib/format'
   import { t } from '../lib/i18n'
   import { load, save } from '../lib/storage'
   import NavToggle from '../components/NavToggle.svelte'
@@ -54,6 +54,7 @@
   const shown = $derived(arrange(at === here ? entries : [], query, sort, desc))
   const selectedFiles = $derived(entries.filter((e) => !e.dir && selected.has(e.name)).map((e) => e.name))
   const thumb = (e: Entry) => (!e.dir && thumbable(e.name) ? thumbURL(vol, join(e.name)) : null)
+  const raw = (e: Entry) => (rawThumb(e) ? rawURL(vol, join(e.name)) : null)
 
   async function refresh() {
     const want = here
@@ -261,6 +262,7 @@
         bind:sort
         bind:desc
         {thumb}
+        {raw}
         {actions}
         {onaction}
         onopen={open}
@@ -276,7 +278,7 @@
   {#if details}
     {#await import('../components/Details.svelte') then { default: Details }}
       {#key details.name}
-        <Details {vol} path={join(details.name)} entry={details} thumb={thumb(details)} onclose={closeDetails} />
+        <Details {vol} path={join(details.name)} entry={details} thumbs={[thumb(details), raw(details)]} onclose={closeDetails} />
       {/key}
     {/await}
   {/if}

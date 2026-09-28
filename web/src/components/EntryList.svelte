@@ -5,7 +5,7 @@
 
 <script lang="ts">
   import { tick, untrack, type Snippet } from 'svelte'
-  import { SvelteSet } from 'svelte/reactivity'
+  import { SvelteSet, SvelteMap } from 'svelte/reactivity'
   import { ContextMenu, DropdownMenu } from 'bits-ui'
   import { createVirtualizer } from '@tanstack/svelte-virtual'
   import Ellipsis from '@lucide/svelte/icons/ellipsis'
@@ -13,7 +13,7 @@
   import ArrowDown from '@lucide/svelte/icons/arrow-down'
   import FileIcon from './FileIcon.svelte'
   import type { Entry } from '../lib/api'
-  import { size, date, ago, type Sort } from '../lib/format'
+  import { size, date, ago, look, type Sort } from '../lib/format'
   import { t } from '../lib/i18n'
 
   let {
@@ -23,6 +23,7 @@
     sort = $bindable('name'),
     desc = $bindable(false),
     thumb,
+    raw,
     actions,
     onaction,
     onopen,
@@ -38,6 +39,7 @@
     sort?: Sort
     desc?: boolean
     thumb: (e: Entry) => string | null
+    raw?: (e: Entry) => string | null
     actions: (e: Entry | null) => Action[]
     onaction: (id: string, e: Entry | null) => void
     onopen: (e: Entry) => void
@@ -48,7 +50,7 @@
     sub?: (e: Entry) => string
   } = $props()
 
-  const broken = new SvelteSet<string>()
+  const broken = new SvelteMap<string, number>()
   let scroller = $state<HTMLDivElement>()
   let width = $state(0)
   let ctx = $state.raw<Entry | null>(null)
@@ -139,7 +141,8 @@
     else for (const e of entries) selected.add(id(e))
   }
 
-  const src = (e: Entry) => (e.dir || broken.has(id(e)) ? null : thumb(e))
+  const src = (e: Entry) => (e.dir ? null : ([thumb(e), raw?.(e)].filter(Boolean)[broken.get(id(e)) ?? 0] ?? null))
+  const miss = (e: Entry) => broken.set(id(e), (broken.get(id(e)) ?? 0) + 1)
 </script>
 
 {#snippet items(e: Entry | null)}
@@ -226,8 +229,8 @@
                     oncontextmenu={() => (ctx = e)}
                   >
                     {@render check(e, 'card-check')}
-                    <button class="card-open" onclick={() => onopen(e)} title={e.name}>
-                      {#if s}<img src={s} alt="" onerror={() => broken.add(id(e))} />{:else}<FileIcon name={e.name} dir={e.dir} size={56} />{/if}
+                    <button class="card-open" data-look={e.dir ? 'dir' : look(e.name)} onclick={() => onopen(e)} title={e.name}>
+                      {#if s}<img src={s} alt="" loading="lazy" decoding="async" onerror={() => miss(e)} />{:else}<FileIcon name={e.name} dir={e.dir} size={56} />{/if}
                     </button>
                     <div class="card-foot">
                       <span class="card-name" title={e.name}>{e.name}</span>
@@ -255,7 +258,7 @@
               >
                 <span class="cell" role="gridcell">{@render check(e, '')}</span>
                 <span class="thumb" role="gridcell">
-                  {#if s}<img src={s} alt="" onerror={() => broken.add(id(e))} />{:else}<FileIcon name={e.name} dir={e.dir} />{/if}
+                  {#if s}<img src={s} alt="" loading="lazy" decoding="async" onerror={() => miss(e)} />{:else}<FileIcon name={e.name} dir={e.dir} />{/if}
                 </span>
                 <span class="cell name-cell" role="gridcell">
                   <button class="name" onclick={() => onopen(e)} title={e.name}>{e.name}</button>

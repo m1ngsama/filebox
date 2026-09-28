@@ -6,7 +6,7 @@
   import Preview from '../components/Preview.svelte'
   import { api, filesURL, rawURL, thumbURL, type Entry, type RecentFile } from '../lib/api'
   import { navigate } from '../lib/router.svelte'
-  import { thumbable, arrange, type Sort } from '../lib/format'
+  import { thumbable, rawThumb, arrange, type Sort } from '../lib/format'
   import { t } from '../lib/i18n'
 
   let files = $state.raw<RecentFile[]>([])
@@ -65,6 +65,7 @@
     bind:sort
     bind:desc
     thumb={(e) => (thumbable(e.name) ? thumbURL(loc(e).vol, loc(e).path) : null)}
+    raw={(e) => (rawThumb(e) ? rawURL(loc(e).vol, loc(e).path) : null)}
     actions={(e) => (e ? actions : [])}
     {onaction}
     onopen={(e) => (preview = e)}

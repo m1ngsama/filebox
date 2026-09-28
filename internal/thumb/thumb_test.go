@@ -208,3 +208,53 @@ func TestSymlinkEscapeQuiet(t *testing.T) {
 		t.Fatalf("logged %s", buf.String())
 	}
 }
+
+func fakeFFmpeg(t *testing.T, encoders string) string {
+	t.Helper()
+	p := filepath.Join(t.TempDir(), "ffmpeg")
+	os.WriteFile(p, []byte("#!/bin/sh\nprintf '%s' '"+encoders+"'\n"), 0o755)
+	return p
+}
+
+func TestProbe(t *testing.T) {
+	cases := []struct {
+		encoders, ext string
+		enabled       bool
+	}{
+		{" V....D libwebp              libwebp WebP image (codec webp)\n VFS..D mjpeg                MJPEG\n", "webp", true},
+		{" VFS..D mjpeg                MJPEG (Motion JPEG)\n A....D libwebp_fake  audio\n", "jpg", true},
+		{" A....D aac                  AAC\n", "", false},
+	}
+	for _, c := range cases {
+		s, _, _ := setup(t, fakeFFmpeg(t, c.encoders))
+		s.Probe(context.Background())
+		if (s.FFmpeg != "") != c.enabled || (c.enabled && s.format.ext != c.ext) {
+			t.Errorf("%q: ffmpeg %q ext %q", c.encoders, s.FFmpeg, s.format.ext)
+		}
+	}
+	s, _, _ := setup(t, "/nonexistent-ffmpeg")
+	s.Probe(context.Background())
+	if s.FFmpeg != "" {
+		t.Fatal("unrunnable ffmpeg left enabled")
+	}
+}
+
+func TestRenderJPEG(t *testing.T) {
+	ff, err := exec.LookPath("ffmpeg")
+	if err != nil {
+		t.Skip("ffmpeg not installed")
+	}
+	s, v, dir := setup(t, ff)
+	s.format = jpeg
+	if out, err := exec.Command(ff, "-v", "error", "-y", "-f", "lavfi", "-i", "color=blue:s=640x480", "-frames:v", "1", filepath.Join(dir, "b.png")).CombinedOutput(); err != nil {
+		t.Fatalf("fixture: %v %s", err, out)
+	}
+	w := get(s, v, "b.png")
+	b := w.Body.Bytes()
+	if w.Code != 200 || w.Header().Get("Content-Type") != "image/jpeg" || len(b) < 3 || !bytes.Equal(b[:3], []byte{0xff, 0xd8, 0xff}) {
+		t.Fatalf("%d %q %d bytes", w.Code, w.Header().Get("Content-Type"), len(b))
+	}
+	if cached, _ := filepath.Glob(filepath.Join(s.Dir, "*", "*.jpg")); len(cached) != 1 {
+		t.Fatalf("cache %v", cached)
+	}
+}

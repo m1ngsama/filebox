@@ -122,7 +122,9 @@ func serveCmd(args []string) error {
 			time.Sleep(time.Hour)
 		}
 	}()
-	a := &app.App{Vols: set, DB: d, Auth: au, Web: webFS, Uploads: up, Thumbs: thumb.New(*ffmpeg, filepath.Join(*data, "thumbs")), Passkeys: pk, Index: ix}
+	thumbs := thumb.New(*ffmpeg, filepath.Join(*data, "thumbs"))
+	thumbs.Probe(context.Background())
+	a := &app.App{Vols: set, DB: d, Auth: au, Web: webFS, Uploads: up, Thumbs: thumbs, Passkeys: pk, Index: ix}
 
 	srv := &http.Server{Addr: *listen, Handler: a.Handler(), ReadHeaderTimeout: 10 * time.Second, IdleTimeout: 2 * time.Minute}
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)

@@ -76,5 +76,17 @@ const kinds = new Map(Object.entries(groups).flatMap(([k, v]) => v.split(' ').ma
 
 export const kind = (n: string) => (kinds.get(ext(n)) ?? '') as 'image' | 'video' | 'audio' | 'pdf' | 'text' | ''
 
+const looks: Record<string, string> = {
+  code: 'go js ts py rs c h cpp java kt sh fish zsh sql html css json yaml yml toml xml',
+  archive: 'zip tar gz tgz bz2 xz zst 7z rar',
+  sheet: 'csv tsv xls xlsx ods numbers',
+}
+const icons = new Map(Object.entries(looks).flatMap(([k, v]) => v.split(' ').map((e) => [e, k] as const)))
+
+export type Look = ReturnType<typeof kind> | 'code' | 'archive' | 'sheet'
+export const look = (n: string) => (icons.get(ext(n)) ?? kind(n)) as Look
+
+export const rawThumb = (e: { name: string; size: number; dir: boolean }) => !e.dir && kind(e.name) === 'image' && e.size < 2 << 20
+
 const thumbs = new Set('jpg jpeg png gif webp bmp tif tiff heic avif mp4 m4v mkv mov avi webm ts flv wmv mpg mpeg'.split(' '))
 export const thumbable = (n: string) => thumbs.has(ext(n))

@@ -11,7 +11,7 @@
   import { api, HttpError, shareRawURL, shareThumbURL, shareURL, validShareToken, type Entry, type ShareInfo } from '../lib/api'
   import { route, link, navigate } from '../lib/router.svelte'
   import { enqueue } from '../lib/uploads.svelte'
-  import { arrange, size, thumbable, type Sort } from '../lib/format'
+  import { arrange, size, thumbable, rawThumb, type Sort } from '../lib/format'
   import { t } from '../lib/i18n'
 
   let { token }: { token: string } = $props()
@@ -29,7 +29,7 @@
   let dragging = $state(false)
   let depth = 0
   let picker = $state<HTMLInputElement>()
-  let broken = $state(false)
+  let tries = $state(0)
 
   const base = $derived(shareURL(token))
   const p = $derived(new URLSearchParams(route.search).get('p') ?? '')
@@ -41,6 +41,7 @@
   const canUpload = $derived(shared?.mode === 'upload' || shared?.mode === 'drop')
   const listed = $derived(!!shared?.dir && shared.mode !== 'drop')
   const file = $derived<Entry | null>(shared && !shared.dir ? { name: shared.name, dir: false, size: shared.size ?? 0, mtime: 0 } : null)
+  const fileSrc = $derived(file && [thumbable(file.name) && shareThumbURL(token, ''), rawThumb(file) && shareRawURL(token, '')].filter(Boolean)[tries])
 
   async function load() {
     fatal = ''
@@ -188,8 +189,8 @@
   {:else if file}
     <div class="public-file">
       <div class="details-thumb">
-        {#if thumbable(file.name) && !broken}
-          <img src={shareThumbURL(token, '')} alt="" onerror={() => (broken = true)} />
+        {#if fileSrc}
+          <img src={fileSrc} alt="" onerror={() => tries++} />
         {:else}
           <FileIcon name={file.name} dir={false} size={72} />
         {/if}
@@ -215,6 +216,7 @@
           bind:sort
           bind:desc
           thumb={(e) => (!e.dir && thumbable(e.name) ? shareThumbURL(token, join(e.name)) : null)}
+          raw={(e) => (rawThumb(e) ? shareRawURL(token, join(e.name)) : null)}
           {actions}
           {onaction}
           onopen={open}

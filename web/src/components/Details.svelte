@@ -7,14 +7,15 @@
   import { size, date } from '../lib/format'
   import { t } from '../lib/i18n'
 
-  let { vol, path, entry, thumb, onclose }: { vol: string; path: string; entry: Entry; thumb: string | null; onclose: () => void } = $props()
-  let broken = $state(false)
+  let { vol, path, entry, thumbs, onclose }: { vol: string; path: string; entry: Entry; thumbs: (string | null)[]; onclose: () => void } = $props()
+  let tries = $state(0)
+  const src = $derived(thumbs.filter(Boolean)[tries])
 </script>
 
 <aside class="details" aria-label={t.details}>
   <header>
     <div class="details-thumb">
-      {#if thumb && !broken}<img src={thumb} alt="" onerror={() => (broken = true)} />{:else}<FileIcon name={entry.name} dir={entry.dir} size={64} />{/if}
+      {#if src}<img {src} alt="" onerror={() => tries++} />{:else}<FileIcon name={entry.name} dir={entry.dir} size={64} />{/if}
     </div>
     <button class="icon-btn details-close" aria-label={t.close} onclick={onclose}><X size={20} /></button>
     <h2 title={entry.name}>{entry.name}</h2>

@@ -5,11 +5,15 @@
   import FileVideo from '@lucide/svelte/icons/file-video-camera'
   import FileMusic from '@lucide/svelte/icons/file-music'
   import FileText from '@lucide/svelte/icons/file-text'
-  import { kind } from '../lib/format'
+  import FileCode from '@lucide/svelte/icons/file-code'
+  import FileArchive from '@lucide/svelte/icons/file-archive'
+  import FileSpreadsheet from '@lucide/svelte/icons/file-spreadsheet'
+  import { look } from '../lib/format'
 
   let { name, dir, size = 24 }: { name: string; dir: boolean; size?: number } = $props()
-  const icons = { image: FileImage, video: FileVideo, audio: FileMusic, pdf: FileText, text: FileText, '': File }
-  const Icon = $derived(dir ? Folder : icons[kind(name)])
+  const icons = { image: FileImage, video: FileVideo, audio: FileMusic, pdf: FileText, text: FileText, code: FileCode, archive: FileArchive, sheet: FileSpreadsheet, '': File }
+  const k = $derived(dir ? 'dir' : look(name))
+  const Icon = $derived(k === 'dir' ? Folder : icons[k])
 </script>
 
-<Icon {size} class={dir ? 'ficon dir' : 'ficon'} aria-hidden="true" />
+<Icon {size} class={`ficon ${k}`} aria-hidden="true" />
