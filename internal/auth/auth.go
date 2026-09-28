@@ -46,13 +46,13 @@ func From(ctx context.Context) (Principal, bool) {
 }
 
 type Auth struct {
-	DB         *db.DB
-	Now        func() time.Time
-	lim, basic *limiter
+	DB                *db.DB
+	Now               func() time.Time
+	lim, share, basic *limiter
 }
 
 func New(d *db.DB) *Auth {
-	return &Auth{DB: d, Now: time.Now, lim: newLimiter(20), basic: newLimiter(0)}
+	return &Auth{DB: d, Now: time.Now, lim: newLimiter(20), share: newLimiter(20), basic: newLimiter(0)}
 }
 
 func HashPassword(pw string) (string, error) {
@@ -260,4 +260,6 @@ func SetCookie(w http.ResponseWriter, r *http.Request, name, value, path string,
 }
 
 func (a *Auth) Throttled(ip string) bool { return !a.lim.allow(ip, a.Now()) }
-func (a *Auth) Failed(ip string)         { a.lim.fail(ip, a.Now()) }
+
+func (a *Auth) ShareThrottled(ip string) bool { return !a.share.allow(ip, a.Now()) }
+func (a *Auth) ShareFailed(ip string)         { a.share.fail(ip, a.Now()) }

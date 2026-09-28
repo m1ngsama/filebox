@@ -262,3 +262,39 @@ func TestShareLockedInfoHidesName(t *testing.T) {
 		t.Fatalf("locked info %d %s", c, b)
 	}
 }
+
+func TestShareUnlockAndLoginLimitsSeparate(t *testing.T) {
+	setup := func() (unlock, login func(ip, pw string) int) {
+		f := newTestApp(t)
+		f.write(t, "p/a.txt", "x")
+		tok := mkShare(t, f, `{"vol":"v","path":"p","mode":"read","password":"open sesame"}`)
+		unlock = func(ip, pw string) int {
+			return f.pkFrom(ip, "POST", "/s/"+tok+"/unlock", map[string]string{"password": pw}, nil).Code
+		}
+		login = func(ip, pw string) int {
+			return f.pkFrom(ip, "POST", "/api/login", map[string]string{"name": "admin", "password": pw}, nil).Code
+		}
+		return
+	}
+	flood := func(try func(ip, pw string) int) {
+		for i := range 30 {
+			try("10.0.0."+strconv.Itoa(i/5), "wrong")
+		}
+	}
+	unlock, login := setup()
+	flood(unlock)
+	if c := unlock("10.0.1.1", "open sesame"); c != 429 {
+		t.Fatalf("share budget not enforced %d", c)
+	}
+	if c := login("10.0.0.0", "pw-pw-pw-pw"); c != 204 {
+		t.Fatalf("admin login after bad share unlocks %d", c)
+	}
+	unlock, login = setup()
+	flood(login)
+	if c := login("10.0.1.1", "pw-pw-pw-pw"); c != 429 {
+		t.Fatalf("login budget not enforced %d", c)
+	}
+	if c := unlock("10.0.0.0", "open sesame"); c != 204 {
+		t.Fatalf("share unlock after bad logins %d", c)
+	}
+}

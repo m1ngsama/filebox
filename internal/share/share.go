@@ -200,7 +200,7 @@ func (s *Service) unlock(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	ip := auth.ClientIP(r)
-	if s.Auth.Throttled(ip) {
+	if s.Auth.ShareThrottled(ip) {
 		httpx.Fail(w, 429, "too many attempts")
 		return
 	}
@@ -212,7 +212,7 @@ func (s *Service) unlock(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if o.sh.PasswordHash == "" || !auth.CheckPassword(o.sh.PasswordHash, in.Password) {
-		s.Auth.Failed(ip)
+		s.Auth.ShareFailed(ip)
 		httpx.Fail(w, 401, "wrong password")
 		return
 	}

@@ -256,7 +256,10 @@ func TestGlobalFailureBudget(t *testing.T) {
 		t.Fatalf("err = %v, want rate limited", err)
 	}
 	if !a.Throttled("10.0.1.2") {
-		t.Fatal("share unlock not covered by the global budget")
+		t.Fatal("passkey login not covered by the global budget")
+	}
+	if a.ShareThrottled("10.0.1.2") {
+		t.Fatal("bad logins throttled share unlock")
 	}
 	c.t = c.t.Add(time.Minute)
 	if _, err := a.Login("admin", "correct horse", "10.0.1.1"); err != nil {
