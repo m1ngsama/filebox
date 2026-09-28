@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"net/url"
 	"strconv"
 
 	_ "modernc.org/sqlite"
@@ -86,8 +87,9 @@ type Share struct {
 }
 
 func Open(path string) (*DB, error) {
-	dsn := "file:" + path + "?_pragma=journal_mode(WAL)&_pragma=busy_timeout(5000)&_pragma=foreign_keys(1)&_pragma=synchronous(NORMAL)"
-	s, err := sql.Open("sqlite", dsn)
+	q := url.Values{"_pragma": {"journal_mode(WAL)", "busy_timeout(5000)", "foreign_keys(1)", "synchronous(NORMAL)"}}
+	dsn := url.URL{Scheme: "file", OmitHost: true, Path: path, RawQuery: q.Encode()}
+	s, err := sql.Open("sqlite", dsn.String())
 	if err != nil {
 		return nil, err
 	}

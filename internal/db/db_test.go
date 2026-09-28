@@ -3,6 +3,7 @@ package db
 import (
 	"database/sql"
 	"errors"
+	"os"
 	"path/filepath"
 	"strconv"
 	"testing"
@@ -258,5 +259,28 @@ func TestUserNames(t *testing.T) {
 	d.SetPassword("bob", "h")
 	if ns, _ := d.UserNames(); len(ns) != 2 || ns[0] != "bob" || ns[1] != "m1ng" {
 		t.Fatalf("%v", ns)
+	}
+}
+
+func TestOpenOddPath(t *testing.T) {
+	dir := filepath.Join(t.TempDir(), "a?b#c%20d e")
+	if err := os.Mkdir(dir, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	p := filepath.Join(dir, "t.db")
+	d, err := Open(p)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer d.Close()
+	if _, err := d.SetPassword("admin", "h"); err != nil {
+		t.Fatal(err)
+	}
+	var mode string
+	if err := d.QueryRow(`PRAGMA journal_mode`).Scan(&mode); err != nil || mode != "wal" {
+		t.Fatalf("journal mode %q %v", mode, err)
+	}
+	if _, err := os.Stat(p); err != nil {
+		t.Fatal(err)
 	}
 }
