@@ -295,8 +295,23 @@ button.ghost { border-color: transparent; background: none; }
 .tags { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
 .tag { font-size: var(--text-xs); padding: 0 var(--space-2); border-radius: var(--radius-full); border: 1px solid var(--line); background: var(--nav); color: var(--muted); }
 .tag.warn { color: var(--danger); border-color: currentColor; }
-.settings { max-width: 720px; display: flex; flex-direction: column; gap: var(--space-3); }
-.settings > .hint { margin: 0; font-size: var(--text-sm); }
+.settings-layout { display: grid; grid-template-columns: minmax(0, 760px); gap: var(--space-6); }
+.settings-nav { display: none; }
+.settings { display: flex; flex-direction: column; gap: var(--space-4); min-width: 0; }
+.card-section { display: flex; flex-direction: column; gap: var(--space-3); padding: var(--space-4) var(--space-5) var(--space-5); border: 1px solid var(--line); border-radius: var(--radius-lg); background: var(--panel); scroll-margin-top: var(--space-4); }
+.card-section > header { display: flex; align-items: flex-start; gap: var(--space-3); }
+.card-section > header > div { flex: 1; min-width: 0; }
+.card-section > header p { margin: 2px 0 0; font-size: var(--text-sm); }
+.card-section .rows li:last-child { border-bottom: 0; }
+.card-section .rows li { padding-inline: 0; }
+button.quiet { border-color: transparent; background: none; color: var(--muted); }
+button.quiet:hover:not(:disabled) { color: var(--danger); background: color-mix(in srgb, var(--danger) 10%, transparent); }
+@media (min-width: 1024px) {
+  .settings-layout { grid-template-columns: 160px minmax(0, 760px); }
+  .settings-nav { display: flex; flex-direction: column; gap: 2px; position: sticky; top: 0; align-self: start; }
+  .settings-nav a { padding: 6px 10px; border-radius: var(--radius-md); color: var(--muted); }
+  .settings-nav a:hover { background: var(--hover); color: var(--fg); }
+}
 .token-form { display: flex; align-items: flex-end; gap: var(--space-3); flex-wrap: wrap; }
 .token-form .field { flex: 1 1 220px; }
 .check { display: inline-flex; align-items: center; gap: 6px; height: 36px; }

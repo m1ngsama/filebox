@@ -553,6 +553,18 @@ test('passkey registration and login', async ({ page, context, server }) => {
   await expect(row).not.toContainText(t.neverUsed)
 })
 
+test('settings sections have headings, a sub-nav and quiet destructive buttons', async ({ page }) => {
+  await login(page)
+  await page.goto('/settings')
+  for (const h of [t.appearance, t.sessions, t.appPasswords]) await expect(page.getByRole('region', { name: h })).toBeVisible()
+  await expect(page.getByRole('region', { name: t.appPasswords }).getByText(t.noTokens)).toBeVisible()
+  const out = page.getByRole('list', { name: t.sessions }).getByRole('button', { name: t.signOut, exact: true })
+  const muted = (b: Element) => getComputedStyle(b).color === getComputedStyle(b.closest('li')!.querySelector('.hint')!).color
+  expect(await out.evaluate(muted)).toBe(true)
+  await page.getByRole('navigation', { name: t.settings }).getByRole('link', { name: t.appPasswords }).click()
+  await expect(page.getByRole('heading', { name: t.appPasswords })).toBeInViewport()
+})
+
 test('signing out another device sends it back to login', async ({ page, browser, server }) => {
   const other = await browser.newPage({ baseURL: server.url, userAgent: 'Mozilla/5.0 (X11; Linux x86_64) Firefox/140.0' })
   await login(other)

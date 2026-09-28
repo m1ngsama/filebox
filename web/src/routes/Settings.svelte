@@ -2,6 +2,11 @@
   import KeyRound from '@lucide/svelte/icons/key-round'
   import Fingerprint from '@lucide/svelte/icons/fingerprint'
   import MonitorSmartphone from '@lucide/svelte/icons/monitor-smartphone'
+  import Plus from '@lucide/svelte/icons/plus'
+  import LogOut from '@lucide/svelte/icons/log-out'
+  import type { Snippet } from 'svelte'
+  import RowList from '../components/RowList.svelte'
+  import EmptyState from '../components/EmptyState.svelte'
   import CopyButton from '../components/CopyButton.svelte'
   import ConfirmDialog from '../components/ConfirmDialog.svelte'
   import NameDialog from '../components/NameDialog.svelte'
@@ -33,6 +38,17 @@
   let mode = $state(theme())
   const dav = `${location.origin}/dav/`
   const vol = $derived(encodeURIComponent(vols[0] ?? ''))
+  const sections = $derived([
+    ['appearance', t.appearance],
+    ['sessions', t.sessions],
+    ...(passkeysOn ? [['passkeys', t.passkeys]] : []),
+    ['tokens', t.appPasswords],
+  ])
+
+  function jump(e: MouseEvent, id: string) {
+    e.preventDefault()
+    document.getElementById(id)?.scrollIntoView({ behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth' })
+  }
 
   async function load() {
     try {
@@ -80,20 +96,38 @@
   }
 </script>
 
-<section class="settings">
-  <h2>{t.appearance}</h2>
-  <div class="chips" role="group" aria-label={t.appearance}>
-    {#each Object.entries(t.themes) as [k, label] (k)}
-      <button type="button" class="chip" aria-pressed={mode === k} onclick={() => setTheme((mode = k as Theme))}>{label}</button>
-    {/each}
-  </div>
+{#snippet head(id: string, title: string, hint: string, action?: Snippet)}
+  <header>
+    <div>
+      <h2 id={`${id}-title`}>{title}</h2>
+      <p class="hint">{hint}</p>
+    </div>
+    {@render action?.()}
+  </header>
+{/snippet}
 
-  <h2>{t.sessions}</h2>
-  {#if sessionsError}<p class="error">{sessionsError}</p>{/if}
-  {#if sessions}
-    <ul class="rows" aria-label={t.sessions}>
-      {#each sessions as s (s.id)}
-        <li>
+{#snippet addKey()}<button onclick={() => (adding = true)}><Plus size={16} />{t.addPasskey}</button>{/snippet}
+
+<div class="settings-layout">
+  <nav class="settings-nav" aria-label={t.settings}>
+    {#each sections as [id, label] (id)}
+      <a href={`#${id}`} onclick={(e) => jump(e, id)}>{label}</a>
+    {/each}
+  </nav>
+  <div class="settings">
+    <section class="card-section" id="appearance" aria-labelledby="appearance-title">
+      {@render head('appearance', t.appearance, t.appearanceHint)}
+      <div class="chips" role="group" aria-label={t.appearance}>
+        {#each Object.entries(t.themes) as [k, label] (k)}
+          <button type="button" class="chip" aria-pressed={mode === k} onclick={() => setTheme((mode = k as Theme))}>{label}</button>
+        {/each}
+      </div>
+    </section>
+
+    <section class="card-section" id="sessions" aria-labelledby="sessions-title">
+      {@render head('sessions', t.sessions, t.sessionsHint)}
+      <RowList items={sessions} error={sessionsError} key={(s) => s.id} label={t.sessions}>
+        {#snippet row(s)}
           <MonitorSmartphone size={18} class="row-icon" />
           <div class="row-main">
             <span class="row-title" title={s.user_agent}>{device(s.user_agent) || t.unknownDevice}</span>
@@ -103,79 +137,70 @@
               <span class="hint" title={date(s.last_used * 1000)}>{t.lastUsed(ago(s.last_used * 1000))}</span>
             </span>
           </div>
-          <button class="danger" onclick={() => (signingOut = s)}>{t.signOut}</button>
-        </li>
-      {/each}
-    </ul>
-    {#if sessions.length > 1}
-      <div><button class="danger" onclick={() => (signingOut = 'others')}>{t.signOutOthers}</button></div>
+          <button class="quiet" onclick={() => (signingOut = s)}>{t.signOut}</button>
+        {/snippet}
+        {#snippet empty()}{/snippet}
+      </RowList>
+      {#if sessions && sessions.length > 1}
+        <div><button onclick={() => (signingOut = 'others')}><LogOut size={16} />{t.signOutOthers}</button></div>
+      {/if}
+    </section>
+
+    {#if passkeysOn}
+      <section class="card-section" id="passkeys" aria-labelledby="passkeys-title">
+        {@render head('passkeys', t.passkeys, t.passkeysHint, addKey)}
+        <RowList items={passkeys} error={passkeysError} key={(k) => k.id}>
+          {#snippet row(k)}
+            <Fingerprint size={18} class="row-icon" />
+            <div class="row-main">
+              <span class="row-title" title={k.name}>{k.name}</span>
+              <span class="tags">
+                <span class="hint">{t.addedAt(date(k.created * 1000))}</span>
+                {#if k.last_used}
+                  <span class="hint" title={date(k.last_used * 1000)}>{t.lastUsed(ago(k.last_used * 1000))}</span>
+                {:else}
+                  <span class="hint">{t.neverUsed}</span>
+                {/if}
+              </span>
+            </div>
+            <button class="ghost" onclick={() => (renaming = k)}>{t.rename}</button>
+            <button class="quiet" onclick={() => (removing = k)}>{t.remove}</button>
+          {/snippet}
+          {#snippet empty()}<EmptyState compact icon={Fingerprint} title={t.noPasskeys} />{/snippet}
+        </RowList>
+      </section>
     {/if}
-  {/if}
 
-  {#if passkeysOn}
-    <h2>{t.passkeys}</h2>
-    <p class="hint">{t.passkeysHint}</p>
-    <div><button class="primary" onclick={() => (adding = true)}>{t.addPasskey}</button></div>
-    {#if passkeysError}<p class="error">{passkeysError}</p>{/if}
-  {/if}
-  {#if passkeysOn && passkeys}
-    <ul class="rows">
-      {#each passkeys as k (k.id)}
-        <li>
-          <Fingerprint size={18} class="row-icon" />
-          <div class="row-main">
-            <span class="row-title" title={k.name}>{k.name}</span>
-            <span class="tags">
-              <span class="hint">{t.addedAt(date(k.created * 1000))}</span>
-              {#if k.last_used}
-                <span class="hint" title={date(k.last_used * 1000)}>{t.lastUsed(ago(k.last_used * 1000))}</span>
-              {:else}
-                <span class="hint">{t.neverUsed}</span>
-              {/if}
-            </span>
-          </div>
-          <button onclick={() => (renaming = k)}>{t.rename}</button>
-          <button class="danger" onclick={() => (removing = k)}>{t.remove}</button>
-        </li>
-      {:else}
-        <li class="hint">{t.noPasskeys}</li>
-      {/each}
-    </ul>
-  {/if}
+    <section class="card-section" id="tokens" aria-labelledby="tokens-title">
+      {@render head('tokens', t.appPasswords, t.appPasswordsHint)}
+      <form class="token-form" onsubmit={create}>
+        <label class="field grow">
+          <span>{t.label}</span>
+          <input bind:value={label} placeholder={t.labelPlaceholder} required maxlength="64" />
+        </label>
+        <label class="check"><input type="checkbox" bind:checked={readonly} />{t.readonly}</label>
+        <button class="primary" disabled={busy || !label.trim()}>{t.newToken}</button>
+      </form>
+      {#if error}<p class="error">{error}</p>{/if}
 
-  <h2>{t.appPasswords}</h2>
-  <p class="hint">{t.appPasswordsHint}</p>
+      {#if created}
+        <div class="token-new" role="status">
+          <p>{t.tokenOnce}</p>
+          <div class="code-line"><code>{created}</code><CopyButton text={created} label={t.copy} done={t.copied} /></div>
+          <dl>
+            <dt>{t.webdavURL}</dt>
+            <dd class="code-line"><code>{dav}</code><CopyButton text={dav} label={t.copy} done={t.copied} /></dd>
+            <dd class="hint">{t.webdavLogin}</dd>
+            <dt>{t.curlUpload}</dt>
+            <dd><code>curl -T file.txt -u :{created} {dav}{vol}/</code></dd>
+            <dt>{t.curlDownload}</dt>
+            <dd><code>curl -C - -O -u :{created} {dav}{vol}/file.txt</code></dd>
+          </dl>
+        </div>
+      {/if}
 
-  <form class="token-form" onsubmit={create}>
-    <label class="field grow">
-      <span>{t.label}</span>
-      <input bind:value={label} placeholder={t.labelPlaceholder} required maxlength="64" />
-    </label>
-    <label class="check"><input type="checkbox" bind:checked={readonly} />{t.readonly}</label>
-    <button class="primary" disabled={busy || !label.trim()}>{t.newToken}</button>
-  </form>
-  {#if error}<p class="error">{error}</p>{/if}
-
-  {#if created}
-    <div class="token-new" role="status">
-      <p>{t.tokenOnce}</p>
-      <div class="code-line"><code>{created}</code><CopyButton text={created} label={t.copy} done={t.copied} /></div>
-      <dl>
-        <dt>{t.webdavURL}</dt>
-        <dd class="code-line"><code>{dav}</code><CopyButton text={dav} label={t.copy} done={t.copied} /></dd>
-        <dd class="hint">{t.webdavLogin}</dd>
-        <dt>{t.curlUpload}</dt>
-        <dd><code>curl -T file.txt -u :{created} {dav}{vol}/</code></dd>
-        <dt>{t.curlDownload}</dt>
-        <dd><code>curl -C - -O -u :{created} {dav}{vol}/file.txt</code></dd>
-      </dl>
-    </div>
-  {/if}
-
-  {#if tokens}
-    <ul class="rows">
-      {#each tokens as k (k.id)}
-        <li>
+      <RowList items={tokens ?? (error ? [] : null)} key={(k) => k.id}>
+        {#snippet row(k)}
           <KeyRound size={18} class="row-icon" />
           <div class="row-main">
             <span class="row-title" title={k.label}>{k.label}</span>
@@ -188,14 +213,13 @@
               {/if}
             </span>
           </div>
-          <button class="danger" onclick={() => (revoking = k)}>{t.revoke}</button>
-        </li>
-      {:else}
-        <li class="hint">{t.noTokens}</li>
-      {/each}
-    </ul>
-  {/if}
-</section>
+          <button class="quiet" onclick={() => (revoking = k)}>{t.revoke}</button>
+        {/snippet}
+        {#snippet empty()}<EmptyState compact icon={KeyRound} title={t.noTokens} />{/snippet}
+      </RowList>
+    </section>
+  </div>
+</div>
 
 {#if revoking}
   {@const k = revoking}
