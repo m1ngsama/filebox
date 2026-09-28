@@ -4,11 +4,7 @@
   import { t } from './lib/i18n'
   import Login from './routes/Login.svelte'
   import Browser from './routes/Browser.svelte'
-  import Shares from './routes/Shares.svelte'
-  import Settings from './routes/Settings.svelte'
-  import Trash from './routes/Trash.svelte'
-  import Recent from './routes/Recent.svelte'
-  import SharePage from './routes/SharePage.svelte'
+  import Lazy from './components/Lazy.svelte'
   import UploadPanel from './components/UploadPanel.svelte'
   import Nav from './components/Nav.svelte'
   import NavToggle from './components/NavToggle.svelte'
@@ -58,7 +54,7 @@
 </script>
 
 {#if isShare}
-  <SharePage token={parts[1]} />
+  <Lazy load={() => import('./routes/SharePage.svelte')} token={parts[1]} />
   <UploadPanel />
 {:else if error}
   <div class="load-error">
@@ -79,17 +75,17 @@
           <h1>{titles[parts[0]] ?? t.brand}</h1>
         </header>
         {#if me.vols.length && parts[0] === 'recent'}
-          <Recent />
+          <Lazy load={() => import('./routes/Recent.svelte')} />
         {:else}
           <div class="page">
             {#if !me.vols.length}
               <p class="error">{t.noVolumes}</p>
             {:else if parts[0] === 'shares'}
-              <Shares />
+              <Lazy load={() => import('./routes/Shares.svelte')} />
             {:else if parts[0] === 'settings'}
-              <Settings vols={me.vols} />
+              <Lazy load={() => import('./routes/Settings.svelte')} vols={me.vols} />
             {:else if parts[0] === 'trash'}
-              <Trash vol={parts[1] ?? me.vols[0]} vols={me.vols} />
+              <Lazy load={() => import('./routes/Trash.svelte')} vol={parts[1] ?? me.vols[0]} vols={me.vols} />
             {/if}
           </div>
         {/if}

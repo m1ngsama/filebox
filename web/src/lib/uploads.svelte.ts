@@ -1,4 +1,4 @@
-import * as tus from 'tus-js-client'
+import type * as tus from 'tus-js-client'
 import { t } from './i18n'
 import { errorText, session } from './api'
 
@@ -41,12 +41,13 @@ function errorMessage(e: Error) {
   return `HTTP ${res.getStatus()} ${body.split('\n')[0]}`.trim()
 }
 
-function run({ item, file, endpoint, meta }: Job) {
+async function run({ item, file, endpoint, meta }: Job) {
+  const { Upload } = await import('tus-js-client')
   return new Promise<void>((resolve, reject) => {
     const metadata = Object.fromEntries(
       Object.entries({ ...meta, filename: file.name }).filter(([, v]) => v !== undefined && v !== ''),
     )
-    const upload = new tus.Upload(file, {
+    const upload = new Upload(file, {
       endpoint,
       metadata,
       chunkSize: 32 << 20,

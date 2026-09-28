@@ -122,6 +122,21 @@ test('browse and preview', async ({ page }) => {
   await expect(page).toHaveURL(/\/files\/v\/$/)
 })
 
+test('the file list loads one script and settings loads its own chunk', async ({ page }) => {
+  const scripts: string[] = []
+  page.on('response', (r) => {
+    if (r.url().endsWith('.js')) scripts.push(r.url())
+  })
+  await login(page)
+  await expect(row(page, 'docs')).toBeVisible()
+  expect(scripts).toHaveLength(1)
+  const js = await page.request.get(scripts[0], { headers: { 'Accept-Encoding': 'br' } })
+  expect(js.headers()['content-encoding']).toBe('br')
+  await page.goto('/settings')
+  await expect(page.getByRole('heading', { name: t.settings })).toBeVisible()
+  await expect.poll(() => scripts.length).toBeGreaterThan(1)
+})
+
 test('rows select and open from the keyboard', async ({ page, server }) => {
   mkdirSync(join(server.vol, 'many'), { recursive: true })
   for (let i = 0; i < 60; i++) writeFileSync(join(server.vol, 'many', `k-${String(i).padStart(2, '0')}.txt`), `k${i}`)

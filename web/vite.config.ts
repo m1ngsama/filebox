@@ -25,6 +25,11 @@ const precompress = (): Plugin => ({
 
 export default defineConfig({
   plugins: [svelte(), precompress()],
-  build: { outDir: 'dist', emptyOutDir: true, target: 'es2022' },
+  build: {
+    outDir: 'dist',
+    emptyOutDir: true,
+    target: 'es2022',
+    rolldownOptions: { output: { codeSplitting: { groups: [{ name: 'app', tags: ['$initial'] }] } } },
+  },
   server: { proxy: Object.fromEntries(['/api', '/raw', '/thumb', '/upload', '/s/'].map((p) => [p, api])) },
 })

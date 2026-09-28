@@ -25,11 +25,6 @@
   import { load, save } from '../lib/storage'
   import NavToggle from '../components/NavToggle.svelte'
   import EntryList, { type Action } from '../components/EntryList.svelte'
-  import Preview from '../components/Preview.svelte'
-  import Details from '../components/Details.svelte'
-  import NameDialog from '../components/NameDialog.svelte'
-  import ConfirmDialog from '../components/ConfirmDialog.svelte'
-  import MoveDialog from '../components/MoveDialog.svelte'
 
   let { vol, path, vols }: { vol: string; path: string; vols: string[] } = $props()
 
@@ -246,9 +241,11 @@
   </section>
 
   {#if details}
-    {#key details.name}
-      <Details {vol} path={join(details.name)} entry={details} thumb={thumb(details)} onclose={closeDetails} />
-    {/key}
+    {#await import('../components/Details.svelte') then { default: Details }}
+      {#key details.name}
+        <Details {vol} path={join(details.name)} entry={details} thumb={thumb(details)} onclose={closeDetails} />
+      {/key}
+    {/await}
   {/if}
 </div>
 
@@ -256,63 +253,69 @@
 <input bind:this={folder} type="file" webkitdirectory hidden onchange={(e) => upload(e.currentTarget.files, true)} />
 
 {#if preview}
-  <Preview bind:entry={preview} entries={shown} url={(e, dl) => rawURL(vol, join(e.name), dl)} onclose={() => (preview = null)} />
+  {#await import('../components/Preview.svelte') then { default: Preview }}
+    <Preview bind:entry={preview} entries={shown} url={(e, dl) => rawURL(vol, join(e.name), dl)} onclose={() => (preview = null)} />
+  {/await}
 {/if}
 
-{#if dialog?.kind === 'mkdir'}
-  <NameDialog
-    title={t.newFolder}
-    label={t.folderName}
-    action={t.create}
-    onsave={(n) => api.mkdir(vol, join(n)).then(refresh)}
-    onclose={() => (dialog = null)}
-  />
-{:else if dialog?.kind === 'rename'}
-  {@const e = dialog.e}
-  <NameDialog
-    title={t.rename}
-    label={t.newName}
-    action={t.rename}
-    value={e.name}
-    stem={!e.dir}
-    onsave={async (n) => {
-      await api.mv({ vol, path: join(e.name) }, { vol, path: join(n) })
-      selected.clear()
-      if (details?.name === e.name) closeDetails()
-      await refresh()
-    }}
-    onclose={() => (dialog = null)}
-  />
-{:else if dialog?.kind === 'delete'}
-  {@const names = dialog.names}
-  <ConfirmDialog
-    title={t.confirmDeleteTitle}
-    message={t.confirmDelete(what(names))}
-    action={t.remove}
-    onconfirm={async () => {
-      const failed = new Set((await api.rm(vol, names.map(join)))?.failed.map((f) => f.path))
-      const left = names.filter((n) => failed.has(join(n)))
-      selected.clear()
-      if (details && names.includes(details.name) && !left.includes(details.name)) closeDetails()
-      await refresh()
-      if (left.length) {
-        dialog = { kind: 'delete', names: left }
-        throw new Error(t.removeFailed(left))
-      }
-    }}
-    onclose={() => (dialog = null)}
-  />
-{:else if dialog?.kind === 'move'}
-  <MoveDialog
-    {vols}
-    {vol}
-    dir={path}
-    names={dialog.names}
-    ondone={() => {
-      selected.clear()
-      closeDetails()
-      refresh()
-    }}
-    onclose={() => (dialog = null)}
-  />
+{#if dialog}
+  {#await Promise.all([import('../components/NameDialog.svelte'), import('../components/ConfirmDialog.svelte'), import('../components/MoveDialog.svelte')]) then [{ default: NameDialog }, { default: ConfirmDialog }, { default: MoveDialog }]}
+    {#if dialog?.kind === 'mkdir'}
+      <NameDialog
+        title={t.newFolder}
+        label={t.folderName}
+        action={t.create}
+        onsave={(n) => api.mkdir(vol, join(n)).then(refresh)}
+        onclose={() => (dialog = null)}
+      />
+    {:else if dialog?.kind === 'rename'}
+      {@const e = dialog.e}
+      <NameDialog
+        title={t.rename}
+        label={t.newName}
+        action={t.rename}
+        value={e.name}
+        stem={!e.dir}
+        onsave={async (n) => {
+          await api.mv({ vol, path: join(e.name) }, { vol, path: join(n) })
+          selected.clear()
+          if (details?.name === e.name) closeDetails()
+          await refresh()
+        }}
+        onclose={() => (dialog = null)}
+      />
+    {:else if dialog?.kind === 'delete'}
+      {@const names = dialog.names}
+      <ConfirmDialog
+        title={t.confirmDeleteTitle}
+        message={t.confirmDelete(what(names))}
+        action={t.remove}
+        onconfirm={async () => {
+          const failed = new Set((await api.rm(vol, names.map(join)))?.failed.map((f) => f.path))
+          const left = names.filter((n) => failed.has(join(n)))
+          selected.clear()
+          if (details && names.includes(details.name) && !left.includes(details.name)) closeDetails()
+          await refresh()
+          if (left.length) {
+            dialog = { kind: 'delete', names: left }
+            throw new Error(t.removeFailed(left))
+          }
+        }}
+        onclose={() => (dialog = null)}
+      />
+    {:else if dialog?.kind === 'move'}
+      <MoveDialog
+        {vols}
+        {vol}
+        dir={path}
+        names={dialog.names}
+        ondone={() => {
+          selected.clear()
+          closeDetails()
+          refresh()
+        }}
+        onclose={() => (dialog = null)}
+      />
+    {/if}
+  {/await}
 {/if}

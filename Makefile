@@ -7,7 +7,9 @@ web:
 	cd web && bun install --frozen-lockfile && bun run check && bun run build
 
 size: web
-	@n=$$(cat web/dist/assets/*.js | gzip -9 | wc -c | tr -d ' '); echo "js gzip: $$n bytes (budget 122880)"; test $$n -le 122880
+	@e=$$(grep -o 'assets/index-[^"]*\.js' web/dist/index.html); n=$$(gzip -9c web/dist/$$e | wc -c | tr -d ' '); \
+	a=$$(for f in web/dist/assets/*.js; do gzip -9c $$f | wc -c; done | awk '{s+=$$1} END {print s}'); \
+	echo "entry js gzip: $$n bytes (budget 122880), all js gzip: $$a bytes"; test $$n -le 122880
 
 build: web
 	$(GOBUILD) -o bin/filebox ./cmd/filebox

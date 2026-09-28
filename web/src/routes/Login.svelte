@@ -1,9 +1,8 @@
 <script lang="ts">
-  import { browserSupportsWebAuthn, browserSupportsWebAuthnAutofill, WebAuthnAbortService } from '@simplewebauthn/browser'
   import { api, HttpError } from '../lib/api'
   import { t } from '../lib/i18n'
   import { load, save } from '../lib/storage'
-  import { passkeyLogin, passkeyError } from '../lib/passkey'
+  import { passkeyLogin, passkeyError, webauthn } from '../lib/passkey'
 
   let { onok }: { onok: () => void } = $props()
   let name = $state(load('user') ?? '')
@@ -13,6 +12,7 @@
   let autofill = false
   let live = true
   let since = 0
+  let abort = () => {}
 
   async function submit(e: SubmitEvent) {
     e.preventDefault()
@@ -50,15 +50,18 @@
   $effect(() => {
     api.passkeysEnabled().then(
       async ({ enabled }) => {
-        passkeys = enabled && browserSupportsWebAuthn()
-        autofill = passkeys && (await browserSupportsWebAuthnAutofill())
+        if (!enabled || !live) return
+        const w = await webauthn()
+        abort = () => w.WebAuthnAbortService.cancelCeremony()
+        passkeys = w.browserSupportsWebAuthn()
+        autofill = passkeys && (await w.browserSupportsWebAuthnAutofill())
         startAutofill()
       },
       () => {},
     )
     return () => {
       live = false
-      WebAuthnAbortService.cancelCeremony()
+      abort()
     }
   })
 </script>

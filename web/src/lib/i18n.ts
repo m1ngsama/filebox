@@ -12,6 +12,7 @@ export const t = {
   loginPaused: (s: number) => `最近失败的尝试太多，验证已暂停，${wait(s)}后恢复`,
   loadFailed: '加载失败，请检查网络后重试。',
   retry: '重试',
+  loading: '正在加载',
   noVolumes: '服务器没有配置任何卷。',
   navigation: '导航',
   openNav: '打开导航',
