@@ -218,7 +218,8 @@
           {actions}
           {onaction}
           onopen={open}
-          empty={at !== p || error ? '' : canUpload ? t.empty : t.folderEmpty}
+          loading={at !== p}
+          empty={error ? '' : canUpload ? t.empty : t.folderEmpty}
         />
       {/key}
     </section>

@@ -28,6 +28,7 @@
     onopen,
     batch,
     empty,
+    loading = false,
     id = (e) => e.name,
     sub,
   }: {
@@ -42,6 +43,7 @@
     onopen: (e: Entry) => void
     batch?: Snippet
     empty: string
+    loading?: boolean
     id?: (e: Entry) => string
     sub?: (e: Entry) => string
   } = $props()
@@ -197,7 +199,13 @@
   <ContextMenu.Trigger disabled={!ctx && !actions(null).length}>
     {#snippet child({ props })}
       <div {...props} class="scroller" bind:this={scroller} bind:clientWidth={width} oncontextmenucapture={() => (ctx = null)}>
-        {#if !entries.length}<p class="empty">{empty}</p>{/if}
+        {#if !entries.length && loading}
+          <div class="skeleton" class:grid role="status" aria-label={t.loading}>
+            {#each { length: grid ? 12 : 10 }, i (i)}
+              <div class={grid ? 'sk-card' : 'sk-row'}><span class="sk sk-icon"></span><span class="sk sk-line" style:width={`${30 + ((i * 37) % 45)}%`}></span></div>
+            {/each}
+          </div>
+        {:else if !entries.length}<p class="empty">{empty}</p>{/if}
         <div class="spacer" role="grid" aria-label={t.fileList} aria-multiselectable={selected ? true : undefined} aria-rowcount={rows} style:height={`${$v.getTotalSize()}px`}>
           {#each $v.getVirtualItems().filter((r) => r.index < rows) as r (r.key)}
             {#if grid}

@@ -74,6 +74,8 @@ export const t = {
   prev: '上一张',
   next: '下一张',
   noPreview: '这个格式没法在浏览器里预览，可以直接下载。',
+  previewFailed: '预览加载失败，可以下载后查看。',
+  cantPlay: '浏览器无法播放这个视频，可以下载后观看。',
   truncated: '文件太大，只显示了前 1 MiB。',
   uploads: '上传',
   clearDone: '清除已完成',

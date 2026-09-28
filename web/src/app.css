@@ -126,6 +126,16 @@ button.ghost { border-color: transparent; background: none; }
 .scroller { flex: 1; min-height: 0; overflow: auto; position: relative; }
 .spacer { position: relative; width: 100%; }
 .empty { position: absolute; inset: 64px 16px auto; text-align: center; color: var(--muted); margin: 0; }
+.skeleton { animation: appear 0s 150ms both; }
+.skeleton.grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: var(--space-3); padding: 6px 12px; }
+.sk-row { display: flex; align-items: center; gap: var(--space-3); height: 48px; padding: 0 var(--space-2) 0 52px; border-bottom: 1px solid var(--line); }
+.sk-card { display: flex; flex-direction: column; gap: var(--space-2); height: 200px; padding: 6px; }
+.sk-card .sk-icon { flex: 1; width: auto; height: auto; border-radius: var(--radius-md); }
+.sk { display: block; background: var(--hover); border-radius: var(--radius-sm); animation: pulse 1.2s ease-in-out infinite alternate; }
+.sk-icon { width: 32px; height: 32px; flex: none; }
+.sk-line { height: 12px; }
+.rows.skeleton .sk-line { width: 40%; }
+@keyframes pulse { to { opacity: 0.45; } }
 .row { position: absolute; top: 0; left: 0; right: 0; height: 48px; padding: 0 var(--space-2); border-bottom: 1px solid var(--line); cursor: default; }
 .row:hover { background: var(--hover); }
 .row.sel, .card.sel { background: var(--sel); }
@@ -215,6 +225,11 @@ button.ghost { border-color: transparent; background: none; }
 .viewer img, .viewer video { max-width: 100%; max-height: 100%; }
 .viewer iframe { width: 100%; height: 100%; border: 0; background: var(--panel); }
 .viewer pre { align-self: stretch; width: 100%; margin: 0; white-space: pre-wrap; word-break: break-all; background: var(--viewer-code); padding: var(--space-3); border-radius: var(--radius-sm); }
+.viewer .spinner { position: absolute; top: 50%; left: 50%; width: 32px; height: 32px; margin: -16px; border: 3px solid var(--viewer-hover); border-top-color: var(--viewer-fg); border-radius: 50%; animation: spin 0.8s linear infinite, appear 0.2s 0.15s both; }
+.viewer img.dim { opacity: 0; }
+.viewer-error { display: flex; flex-direction: column; align-items: center; gap: var(--space-3); text-align: center; max-width: 360px; }
+.viewer-error p { margin: 0; }
+.viewer-error svg { color: var(--viewer-icon); }
 .viewer .step { position: absolute; top: 50%; width: 48px; height: 48px; margin-top: -24px; border-radius: var(--radius-full); background: var(--viewer-step); }
 .viewer .prev { left: 16px; }
 .viewer .next { right: 16px; }
@@ -310,6 +325,7 @@ button.ghost { border-color: transparent; background: none; }
 }
 @media (prefers-reduced-motion: reduce) {
   .nav { transition: none; }
-  .loading { animation-name: none, appear; }
+  .loading, .viewer .spinner { animation-name: none, appear; }
   .toast { animation: none; }
+  .sk { animation: none; }
 }

@@ -265,7 +265,8 @@
         {onaction}
         onopen={open}
         {batch}
-        empty={at !== here || error ? '' : query ? t.noMatch : t.empty}
+        loading={at !== here}
+        empty={error ? '' : query ? t.noMatch : t.empty}
       />
     {/key}
 

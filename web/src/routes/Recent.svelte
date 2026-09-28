@@ -68,6 +68,7 @@
     actions={(e) => (e ? actions : [])}
     {onaction}
     onopen={(e) => (preview = e)}
+    loading={!loaded && !error}
     empty={!loaded ? '' : scanning ? t.recentScanning : t.recentEmpty}
     id={(e) => `${loc(e).vol}:${loc(e).path}`}
     sub={(e) => `${loc(e).vol}:/${parent(loc(e).path)}`}

@@ -122,6 +122,26 @@ test('browse and preview', async ({ page }) => {
   await expect(page).toHaveURL(/\/files\/v\/$/)
 })
 
+test('a slow folder shows skeleton rows and a broken image offers a download', async ({ page, server }) => {
+  writeFileSync(join(server.vol, 'docs/broken.jpg'), 'not an image')
+  await login(page)
+  let release = () => {}
+  const held = new Promise<void>((r) => (release = r))
+  await page.route('**/api/ls?*', async (r) => {
+    if (r.request().url().includes('docs')) await held
+    await r.continue()
+  })
+  await row(page, 'docs').locator('button.name').click()
+  await expect(page.locator('.skeleton')).toBeVisible()
+  release()
+  await expect(page.locator('.skeleton')).toHaveCount(0)
+  await row(page, 'broken.jpg').locator('button.name').click()
+  const viewer = page.getByRole('dialog', { name: 'broken.jpg' })
+  await expect(viewer.getByRole('alert')).toContainText(t.previewFailed)
+  await expect(viewer.getByRole('alert').getByRole('link', { name: t.download })).toHaveAttribute('href', /broken\.jpg\?dl$/)
+  await expect(viewer.getByRole('button', { name: t.close })).toBeFocused()
+})
+
 test('the file list loads one script and settings loads its own chunk', async ({ page }) => {
   const scripts: string[] = []
   page.on('response', (r) => {
