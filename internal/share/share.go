@@ -200,8 +200,8 @@ func (s *Service) unlock(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	ip := auth.ClientIP(r)
-	if s.Auth.ShareThrottled(ip) {
-		httpx.Fail(w, 429, "too many attempts")
+	if err := s.Auth.ShareLimit(ip); err != nil {
+		auth.Refuse(w, err)
 		return
 	}
 	var in struct {

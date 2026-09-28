@@ -6,6 +6,7 @@ import (
 	"net/http/httptest"
 	"path/filepath"
 	"strconv"
+	"strings"
 	"testing"
 	"time"
 
@@ -255,10 +256,10 @@ func TestGlobalFailureBudget(t *testing.T) {
 	if _, err := a.Login("admin", "correct horse", "10.0.1.1"); !errors.Is(err, ErrRateLimited) {
 		t.Fatalf("err = %v, want rate limited", err)
 	}
-	if !a.Throttled("10.0.1.2") {
+	if a.LoginLimit("10.0.1.2") == nil {
 		t.Fatal("passkey login not covered by the global budget")
 	}
-	if a.ShareThrottled("10.0.1.2") {
+	if a.ShareLimit("10.0.1.2") != nil {
 		t.Fatal("bad logins throttled share unlock")
 	}
 	c.t = c.t.Add(time.Minute)
@@ -276,7 +277,7 @@ func TestLimiterFloodKeepsBans(t *testing.T) {
 	for i := range maxEntries + 10 {
 		l.fail("f"+strconv.Itoa(i), now)
 	}
-	if l.allow("6.6.6.6", now) {
+	if l.check("6.6.6.6", now) == nil {
 		t.Fatal("flood lifted an existing ban")
 	}
 	if len(l.m) > maxEntries {
@@ -325,5 +326,35 @@ func TestAppTokenNeverUsed(t *testing.T) {
 	a.App(r)
 	if ts, _ := a.DB.ListTokens(uid, "app"); ts[0].LastUsedAt != c.t.Unix() {
 		t.Fatalf("used token %+v", ts)
+	}
+}
+
+func TestRefuseSaysWhichLimit(t *testing.T) {
+	a, c, _ := setup(t)
+	refuse := func(err error) (string, string) {
+		w := httptest.NewRecorder()
+		Refuse(w, err)
+		if w.Code != 429 {
+			t.Fatalf("code %d", w.Code)
+		}
+		return w.Header().Get("Retry-After"), strings.TrimSpace(w.Body.String())
+	}
+	for range 5 {
+		a.Login("admin", "wrong", "2.2.2.2")
+	}
+	_, err := a.Login("admin", "correct horse", "2.2.2.2")
+	if h, b := refuse(err); h != "1" || b != `{"error":"too many attempts","retry_after":1}` {
+		t.Fatalf("per-IP %q %s", h, b)
+	}
+	for i := range 21 {
+		a.Login("admin", "wrong", "10.0.0."+strconv.Itoa(i))
+	}
+	c.t = c.t.Add(15 * time.Second)
+	_, err = a.Login("admin", "correct horse", "10.0.1.1")
+	if h, b := refuse(err); h != "45" || b != `{"error":"login paused","retry_after":45}` {
+		t.Fatalf("global %q %s", h, b)
+	}
+	if err := a.ShareLimit("10.0.1.1"); err != nil {
+		t.Fatalf("share unlock paused by bad logins: %v", err)
 	}
 }

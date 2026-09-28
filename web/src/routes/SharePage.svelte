@@ -85,7 +85,7 @@
       unlockError = ''
       await load()
     } catch (err) {
-      unlockError = err instanceof HttpError && err.status === 429 ? t.tooMany : err instanceof HttpError && err.status === 401 ? t.wrongPassword : (err as Error).message
+      unlockError = err instanceof HttpError && err.status === 401 ? t.wrongPassword : (err as Error).message
     }
   }
 

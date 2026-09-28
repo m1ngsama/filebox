@@ -13,7 +13,7 @@ export async function addPasskey(name: string) {
 }
 
 export function passkeyError(e: unknown) {
-  if (e instanceof HttpError) return e.status === 429 ? t.tooMany : t.passkeyInvalid
+  if (e instanceof HttpError) return e.status === 429 ? e.message : t.passkeyInvalid
   const { name, code } = e as WebAuthnError
   if (name === 'NotAllowedError' || name === 'AbortError' || code === 'ERROR_CEREMONY_ABORTED') return t.passkeyCancelled
   if (code === 'ERROR_AUTHENTICATOR_PREVIOUSLY_REGISTERED') return t.passkeyExists

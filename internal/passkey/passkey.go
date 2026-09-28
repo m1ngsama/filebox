@@ -199,8 +199,8 @@ func (s *Service) loginBegin(w http.ResponseWriter, r *http.Request) {
 		httpx.Fail(w, 404, "not found")
 		return
 	}
-	if s.Auth.Throttled(auth.ClientIP(r)) {
-		httpx.Fail(w, 429, "too many attempts")
+	if err := s.Auth.LoginLimit(auth.ClientIP(r)); err != nil {
+		auth.Refuse(w, err)
 		return
 	}
 	opts, data, err := s.wa.BeginDiscoverableLogin(webauthn.WithLoginRelyingPartyID(p.id), webauthn.WithLoginOrigin(p.origin),
@@ -232,7 +232,7 @@ func (s *Service) loginFinish(w http.ResponseWriter, r *http.Request) {
 	})
 	switch {
 	case errors.Is(err, auth.ErrRateLimited):
-		httpx.Fail(w, 429, "too many attempts")
+		auth.Refuse(w, err)
 	case err != nil:
 		httpx.Fail(w, 401, "unauthorized")
 	default:

@@ -101,8 +101,8 @@ func (a *Auth) Login(name, pw, ip string) (string, error) {
 }
 
 func (a *Auth) LoginWith(ip string, verify func() (userID int64, ok bool)) (string, error) {
-	if !a.lim.allow(ip, a.Now()) {
-		return "", ErrRateLimited
+	if err := a.lim.check(ip, a.Now()); err != nil {
+		return "", err
 	}
 	uid, ok := verify()
 	if !ok {
@@ -219,8 +219,9 @@ func (a *Auth) RequireBasic(h http.Handler) http.Handler {
 		}
 		if _, _, sent := r.BasicAuth(); sent {
 			ip := ClientIP(r)
-			if !a.basic.allow(ip, a.Now()) {
-				http.Error(w, "too many attempts", 429)
+			if err := a.basic.check(ip, a.Now()); err != nil {
+				w.Header().Set("Retry-After", strconv.Itoa(seconds(err)))
+				http.Error(w, err.Error(), 429)
 				return
 			}
 			a.basic.fail(ip, a.Now())
@@ -259,7 +260,20 @@ func SetCookie(w http.ResponseWriter, r *http.Request, name, value, path string,
 	http.SetCookie(w, c)
 }
 
-func (a *Auth) Throttled(ip string) bool { return !a.lim.allow(ip, a.Now()) }
+func (a *Auth) LoginLimit(ip string) error { return a.lim.check(ip, a.Now()) }
+func (a *Auth) ShareLimit(ip string) error { return a.share.check(ip, a.Now()) }
+func (a *Auth) ShareFailed(ip string)      { a.share.fail(ip, a.Now()) }
 
-func (a *Auth) ShareThrottled(ip string) bool { return !a.share.allow(ip, a.Now()) }
-func (a *Auth) ShareFailed(ip string)         { a.share.fail(ip, a.Now()) }
+func seconds(err error) int {
+	var l *Limited
+	if !errors.As(err, &l) {
+		return 1
+	}
+	return max(1, int((l.Wait+time.Second-1)/time.Second))
+}
+
+func Refuse(w http.ResponseWriter, err error) {
+	s := seconds(err)
+	w.Header().Set("Retry-After", strconv.Itoa(s))
+	httpx.JSON(w, 429, map[string]any{"error": err.Error(), "retry_after": s})
+}

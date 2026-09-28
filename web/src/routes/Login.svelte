@@ -21,7 +21,7 @@
       save('user', name.trim())
       onok()
     } catch (err) {
-      error = err instanceof HttpError && err.status === 429 ? t.tooMany : t.wrongLogin
+      error = err instanceof HttpError && err.status === 429 ? err.message : t.wrongLogin
     }
   }
 

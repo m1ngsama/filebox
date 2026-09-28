@@ -22,14 +22,30 @@ type entry struct {
 
 func newLimiter(budget int) *limiter { return &limiter{m: map[string]*entry{}, budget: budget} }
 
-func (l *limiter) allow(ip string, now time.Time) bool {
+type Limited struct {
+	Global bool
+	Wait   time.Duration
+}
+
+func (e *Limited) Error() string {
+	if e.Global {
+		return "login paused"
+	}
+	return "too many attempts"
+}
+
+func (e *Limited) Is(target error) bool { return target == ErrRateLimited }
+
+func (l *limiter) check(ip string, now time.Time) error {
 	l.mu.Lock()
 	defer l.mu.Unlock()
-	if l.budget > 0 && l.fails > l.budget && now.Sub(l.start) < time.Minute {
-		return false
+	if end := l.start.Add(time.Minute); l.budget > 0 && l.fails > l.budget && now.Before(end) {
+		return &Limited{Global: true, Wait: end.Sub(now)}
 	}
-	e := l.m[ip]
-	return e == nil || !now.Before(e.until)
+	if e := l.m[ip]; e != nil && now.Before(e.until) {
+		return &Limited{Wait: e.until.Sub(now)}
+	}
+	return nil
 }
 
 func (l *limiter) fail(ip string, now time.Time) {

@@ -31,11 +31,13 @@ async function req<T>(method: string, url: string, body?: unknown): Promise<T> {
   const text = await r.text()
   if (r.status === 401 && url.startsWith('/api/') && url !== '/api/login') session.lost()
   if (!r.ok) {
-    let msg = r.statusText
+    let body: { error?: string; retry_after?: number } = {}
     try {
-      msg = JSON.parse(text).error ?? msg
+      body = JSON.parse(text)
     } catch {}
-    throw new HttpError(r.status, errorText(r.status) ?? msg)
+    const wait = body.retry_after
+    const limited = wait && (body.error === 'login paused' ? t.loginPaused(wait) : t.tooMany(wait))
+    throw new HttpError(r.status, limited || errorText(r.status) || body.error || r.statusText)
   }
   return (text ? JSON.parse(text) : undefined) as T
 }

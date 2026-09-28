@@ -1,3 +1,5 @@
+const wait = (s: number) => (s < 60 ? `${s} 秒` : `${Math.ceil(s / 60)} 分钟`)
+
 export const t = {
   brand: 'filebox',
   username: '用户名',
@@ -6,7 +8,8 @@ export const t = {
   logout: '退出登录',
   wrongPassword: '密码不对',
   wrongLogin: '用户名或密码不对',
-  tooMany: '尝试次数太多，请稍后再试',
+  tooMany: (s: number) => `当前 IP 尝试失败的次数太多，请 ${wait(s)}后再试`,
+  loginPaused: (s: number) => `最近失败的尝试太多，验证已暂停，${wait(s)}后恢复`,
   loadFailed: '加载失败，请检查网络后重试。',
   retry: '重试',
   noVolumes: '服务器没有配置任何卷。',

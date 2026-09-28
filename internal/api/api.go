@@ -130,7 +130,7 @@ func (a *API) login(w http.ResponseWriter, r *http.Request) {
 	tok, err := a.Auth.Login(in.Name, in.Password, auth.ClientIP(r))
 	switch {
 	case errors.Is(err, auth.ErrRateLimited):
-		httpx.Fail(w, 429, "too many attempts")
+		auth.Refuse(w, err)
 	case err != nil:
 		httpx.Fail(w, 401, "wrong password")
 	default:

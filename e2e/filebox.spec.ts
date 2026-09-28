@@ -122,6 +122,21 @@ test('password share opens anonymously', async ({ page, browser }) => {
   await anon.close()
 })
 
+test('repeated wrong share passwords say when to retry', async ({ page, browser }) => {
+  await login(page)
+  const url = await shareDocs(page, 'read', 'other-pass')
+  const anon = await browser.newPage()
+  await anon.goto(url)
+  for (let fails = 0; fails < 7; ) {
+    if ((await anon.request.post(`${url}/unlock`, { data: { password: 'wrong' } })).status() === 401) fails++
+    else await anon.waitForTimeout(250)
+  }
+  await anon.getByPlaceholder(t.password).fill('wrong')
+  await anon.getByRole('button', { name: t.unlock, exact: true }).click()
+  await expect(anon.getByText(new RegExp(`^${t.tooMany(9).replace('9', '\\d+')}$`))).toBeVisible()
+  await anon.close()
+})
+
 test('malformed share token never reaches the API', async ({ page }) => {
   await login(page)
   const paths: string[] = []
