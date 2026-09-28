@@ -77,7 +77,7 @@ func TestTokens(t *testing.T) {
 	if len(ts) != 1 || ts[0].Label != "phone" {
 		t.Fatalf("ListTokens = %+v", ts)
 	}
-	d.DeleteToken(uid, live.ID)
+	d.DeleteToken(uid, live.ID, "app")
 	if _, err := d.TokenByHash("aa", 100); !errors.Is(err, ErrNotFound) {
 		t.Fatal("deleted token returned")
 	}
@@ -199,6 +199,43 @@ func TestMigrateFromV1(t *testing.T) {
 	}
 	if _, err := d.ListPasskeys(u.ID); err != nil {
 		t.Fatal(err)
+	}
+}
+
+func TestMigrateFromV2(t *testing.T) {
+	p := filepath.Join(t.TempDir(), "t.db")
+	s, err := sql.Open("sqlite", "file:"+p)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, q := range []string{migrations[0], migrations[1], `PRAGMA user_version = 2`,
+		`INSERT INTO users (name, password_hash) VALUES ('admin', 'h')`,
+		`INSERT INTO tokens (user_id, kind, hash, created_at) VALUES (1, 'session', 'x', 1)`} {
+		if _, err := s.Exec(q); err != nil {
+			t.Fatal(err)
+		}
+	}
+	s.Close()
+	d, err := Open(p)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer d.Close()
+	var v int
+	d.QueryRow(`PRAGMA user_version`).Scan(&v)
+	if v != len(migrations) {
+		t.Fatalf("user_version = %d", v)
+	}
+	ts, err := d.ListTokens(1, "session")
+	if err != nil || len(ts) != 1 || ts[0].UserAgent != "" || ts[0].IP != "" {
+		t.Fatalf("tokens %+v %v", ts, err)
+	}
+	tk := Token{UserID: 1, Kind: "session", Hash: "y", CreatedAt: 2, UserAgent: "ua", IP: "10.0.0.1"}
+	if err := d.InsertToken(&tk); err != nil {
+		t.Fatal(err)
+	}
+	if got, _ := d.TokenByHash("y", 0); got.UserAgent != "ua" || got.IP != "10.0.0.1" {
+		t.Fatalf("token %+v", got)
 	}
 }
 

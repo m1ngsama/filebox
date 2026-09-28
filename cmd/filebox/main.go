@@ -257,7 +257,7 @@ func tokenCmd(args []string) error {
 		if err != nil {
 			return err
 		}
-		return d.DeleteToken(u.ID, id)
+		return d.DeleteToken(u.ID, id, "app")
 	default:
 		return errors.New(usage)
 	}

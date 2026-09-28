@@ -106,6 +106,9 @@ func (a *API) Register(mux *http.ServeMux) {
 	h("GET /api/tokens", a.tokens)
 	h("POST /api/tokens", a.tokenNew)
 	h("DELETE /api/tokens/{id}", a.tokenDel)
+	h("GET /api/sessions", a.sessions)
+	h("DELETE /api/sessions/{id}", a.sessionDel)
+	h("POST /api/sessions/revoke-others", a.sessionsRevokeOthers)
 	mux.HandleFunc("/api/", func(w http.ResponseWriter, r *http.Request) { httpx.Fail(w, 404, "not found") })
 }
 
@@ -127,7 +130,7 @@ func (a *API) login(w http.ResponseWriter, r *http.Request) {
 			in.Name = ns[0]
 		}
 	}
-	tok, err := a.Auth.Login(in.Name, in.Password, auth.ClientIP(r))
+	tok, err := a.Auth.Login(in.Name, in.Password, auth.ClientIP(r), r.UserAgent())
 	switch {
 	case errors.Is(err, auth.ErrRateLimited):
 		auth.Refuse(w, err)
@@ -347,7 +350,48 @@ func (a *API) tokenDel(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	p, _ := auth.From(r.Context())
-	if err := a.DB.DeleteToken(p.UserID, id); err != nil {
+	if err := a.DB.DeleteToken(p.UserID, id, "app"); err != nil {
+		httpx.Error(w, err)
+		return
+	}
+	w.WriteHeader(204)
+}
+
+func (a *API) sessions(w http.ResponseWriter, r *http.Request) {
+	p, _ := auth.From(r.Context())
+	ts, err := a.DB.ListTokens(p.UserID, "session")
+	if err != nil {
+		httpx.Error(w, err)
+		return
+	}
+	out := []map[string]any{}
+	for _, t := range ts {
+		out = append(out, map[string]any{"id": t.ID, "user_agent": t.UserAgent, "ip": t.IP,
+			"created": t.CreatedAt, "last_used": max(t.LastUsedAt, t.CreatedAt), "current": t.ID == p.TokenID})
+	}
+	httpx.JSON(w, 200, map[string]any{"sessions": out})
+}
+
+func (a *API) sessionDel(w http.ResponseWriter, r *http.Request) {
+	id, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
+	if err != nil {
+		httpx.Fail(w, 400, "bad id")
+		return
+	}
+	p, _ := auth.From(r.Context())
+	if err := a.DB.DeleteToken(p.UserID, id, "session"); err != nil {
+		httpx.Error(w, err)
+		return
+	}
+	if id == p.TokenID {
+		auth.SetCookie(w, r, auth.CookieName, "", "/", -1)
+	}
+	w.WriteHeader(204)
+}
+
+func (a *API) sessionsRevokeOthers(w http.ResponseWriter, r *http.Request) {
+	p, _ := auth.From(r.Context())
+	if _, err := a.DB.DeleteOtherSessions(p.UserID, p.TokenID); err != nil {
 		httpx.Error(w, err)
 		return
 	}

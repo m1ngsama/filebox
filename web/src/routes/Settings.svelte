@@ -1,12 +1,13 @@
 <script lang="ts">
   import KeyRound from '@lucide/svelte/icons/key-round'
   import Fingerprint from '@lucide/svelte/icons/fingerprint'
+  import MonitorSmartphone from '@lucide/svelte/icons/monitor-smartphone'
   import CopyButton from '../components/CopyButton.svelte'
   import ConfirmDialog from '../components/ConfirmDialog.svelte'
   import NameDialog from '../components/NameDialog.svelte'
-  import { api, type Passkey, type Token } from '../lib/api'
+  import { api, session, type Passkey, type Session, type Token } from '../lib/api'
   import { addPasskey, deviceName, passkeyError, validPasskeyName } from '../lib/passkey'
-  import { date, ago } from '../lib/format'
+  import { date, ago, device } from '../lib/format'
   import { t } from '../lib/i18n'
 
   let { vols }: { vols: string[] } = $props()
@@ -18,6 +19,9 @@
   let error = $state('')
   let busy = $state(false)
   let revoking = $state<Token | null>(null)
+  let sessions = $state<Session[] | null>(null)
+  let sessionsError = $state('')
+  let signingOut = $state<Session | 'others' | null>(null)
   let passkeysOn = $state(false)
   let passkeys = $state<Passkey[] | null>(null)
   let passkeysError = $state('')
@@ -35,6 +39,16 @@
     }
   }
   load()
+
+  async function loadSessions() {
+    try {
+      sessions = (await api.sessions()).sessions
+      sessionsError = ''
+    } catch (e) {
+      sessionsError = (e as Error).message
+    }
+  }
+  loadSessions()
 
   async function loadPasskeys() {
     try {
@@ -64,6 +78,30 @@
 </script>
 
 <section class="settings">
+  <h2>{t.sessions}</h2>
+  {#if sessionsError}<p class="error">{sessionsError}</p>{/if}
+  {#if sessions}
+    <ul class="rows" aria-label={t.sessions}>
+      {#each sessions as s (s.id)}
+        <li>
+          <MonitorSmartphone size={18} class="row-icon" />
+          <div class="row-main">
+            <span class="row-title" title={s.user_agent}>{device(s.user_agent) || t.unknownDevice}</span>
+            <span class="tags">
+              {#if s.current}<span class="tag">{t.thisDevice}</span>{/if}
+              {#if s.ip}<span class="hint">{s.ip}</span>{/if}
+              <span class="hint" title={date(s.last_used * 1000)}>{t.lastUsed(ago(s.last_used * 1000))}</span>
+            </span>
+          </div>
+          <button class="danger" onclick={() => (signingOut = s)}>{t.signOut}</button>
+        </li>
+      {/each}
+    </ul>
+    {#if sessions.length > 1}
+      <div><button class="danger" onclick={() => (signingOut = 'others')}>{t.signOutOthers}</button></div>
+    {/if}
+  {/if}
+
   {#if passkeysOn}
     <h2>{t.passkeys}</h2>
     <p class="hint">{t.passkeysHint}</p>
@@ -160,6 +198,22 @@
       await load()
     }}
     onclose={() => (revoking = null)}
+  />
+{/if}
+
+{#if signingOut}
+  {@const s = signingOut}
+  <ConfirmDialog
+    title={s === 'others' ? t.signOutOthers : t.signOutTitle}
+    message={s === 'others' ? t.signOutOthersMessage : s.current ? t.signOutSelfMessage : t.signOutMessage(device(s.user_agent) || t.unknownDevice)}
+    action={t.signOut}
+    onconfirm={async () => {
+      if (s === 'others') await api.revokeOtherSessions()
+      else await api.delSession(s.id)
+      if (s !== 'others' && s.current) session.lost()
+      else await loadSessions()
+    }}
+    onclose={() => (signingOut = null)}
   />
 {/if}
 

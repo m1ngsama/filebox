@@ -80,17 +80,17 @@ func random(n int) []byte {
 	return b
 }
 
-func (a *Auth) issue(userID int64, kind, label, scope, tok string, ttl time.Duration) error {
+func (a *Auth) issue(t db.Token, tok string, ttl time.Duration) error {
 	now := a.Now()
-	t := &db.Token{UserID: userID, Kind: kind, Hash: Hash(tok), Label: label, Scope: scope, CreatedAt: now.Unix()}
+	t.Hash, t.CreatedAt = Hash(tok), now.Unix()
 	if ttl > 0 {
 		t.ExpiresAt = now.Add(ttl).Unix()
 	}
-	return a.DB.InsertToken(t)
+	return a.DB.InsertToken(&t)
 }
 
-func (a *Auth) Login(name, pw, ip string) (string, error) {
-	return a.LoginWith(ip, func() (int64, bool) {
+func (a *Auth) Login(name, pw, ip, ua string) (string, error) {
+	return a.LoginWith(ip, ua, func() (int64, bool) {
 		u, err := a.DB.UserByName(name)
 		hash := u.PasswordHash
 		if err != nil {
@@ -100,7 +100,7 @@ func (a *Auth) Login(name, pw, ip string) (string, error) {
 	})
 }
 
-func (a *Auth) LoginWith(ip string, verify func() (userID int64, ok bool)) (string, error) {
+func (a *Auth) LoginWith(ip, ua string, verify func() (userID int64, ok bool)) (string, error) {
 	if err := a.lim.check(ip, a.Now()); err != nil {
 		return "", err
 	}
@@ -111,7 +111,7 @@ func (a *Auth) LoginWith(ip string, verify func() (userID int64, ok bool)) (stri
 	}
 	a.lim.ok(ip)
 	tok := base64.RawURLEncoding.EncodeToString(random(32))
-	return tok, a.issue(uid, "session", "", "", tok, SessionTTL)
+	return tok, a.issue(db.Token{UserID: uid, Kind: "session", UserAgent: ua[:min(len(ua), 256)], IP: ip}, tok, SessionTTL)
 }
 
 func (a *Auth) Logout(tok string) error { return a.DB.DeleteTokenByHash(Hash(tok)) }
@@ -122,12 +122,12 @@ func (a *Auth) NewAppToken(userID int64, label string, readOnly bool) (string, e
 	if readOnly {
 		scope = "ro"
 	}
-	return tok, a.issue(userID, "app", label, scope, tok, 0)
+	return tok, a.issue(db.Token{UserID: userID, Kind: "app", Label: label, Scope: scope}, tok, 0)
 }
 
 func (a *Auth) NewShareToken(userID, shareID int64) (string, error) {
 	tok := base64.RawURLEncoding.EncodeToString(random(32))
-	return tok, a.issue(userID, "share", "", strconv.FormatInt(shareID, 10), tok, shareTTL)
+	return tok, a.issue(db.Token{UserID: userID, Kind: "share", Scope: strconv.FormatInt(shareID, 10)}, tok, shareTTL)
 }
 
 func (a *Auth) lookup(tok, kind string) (t db.Token, ok, renewed bool) {

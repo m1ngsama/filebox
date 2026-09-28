@@ -227,7 +227,7 @@ func (s *Service) loginFinish(w http.ResponseWriter, r *http.Request) {
 		Response json.RawMessage `json:"response"`
 	}
 	readErr := httpx.Read(r, &in)
-	tok, err := s.Auth.LoginWith(auth.ClientIP(r), func() (int64, bool) {
+	tok, err := s.Auth.LoginWith(auth.ClientIP(r), r.UserAgent(), func() (int64, bool) {
 		return s.verify(in.Ceremony, in.Response, readErr == nil)
 	})
 	switch {

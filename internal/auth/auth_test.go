@@ -40,10 +40,10 @@ func withCookie(tok string) *http.Request {
 
 func TestLoginAndSession(t *testing.T) {
 	a, c, uid := setup(t)
-	if _, err := a.Login("admin", "wrong", "1.1.1.1"); !errors.Is(err, ErrBadLogin) {
+	if _, err := a.Login("admin", "wrong", "1.1.1.1", ""); !errors.Is(err, ErrBadLogin) {
 		t.Fatalf("err = %v", err)
 	}
-	tok, err := a.Login("admin", "correct horse", "1.1.1.1")
+	tok, err := a.Login("admin", "correct horse", "1.1.1.1", "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -68,16 +68,16 @@ func TestLoginAndSession(t *testing.T) {
 func TestRateLimit(t *testing.T) {
 	a, c, _ := setup(t)
 	for i := 0; i < 5; i++ {
-		a.Login("admin", "wrong", "2.2.2.2")
+		a.Login("admin", "wrong", "2.2.2.2", "")
 	}
-	if _, err := a.Login("admin", "correct horse", "2.2.2.2"); !errors.Is(err, ErrRateLimited) {
+	if _, err := a.Login("admin", "correct horse", "2.2.2.2", ""); !errors.Is(err, ErrRateLimited) {
 		t.Fatalf("err = %v, want rate limited", err)
 	}
-	if _, err := a.Login("admin", "correct horse", "3.3.3.3"); err != nil {
+	if _, err := a.Login("admin", "correct horse", "3.3.3.3", ""); err != nil {
 		t.Fatal("other IP was blocked")
 	}
 	c.t = c.t.Add(20 * time.Minute)
-	if _, err := a.Login("admin", "correct horse", "2.2.2.2"); err != nil {
+	if _, err := a.Login("admin", "correct horse", "2.2.2.2", ""); err != nil {
 		t.Fatalf("still blocked after backoff: %v", err)
 	}
 }
@@ -100,11 +100,11 @@ func TestAppTokens(t *testing.T) {
 		t.Fatal("bearer rejected")
 	}
 	ts, _ := a.DB.ListTokens(uid, "app")
-	a.DB.DeleteToken(uid, ts[0].ID)
+	a.DB.DeleteToken(uid, ts[0].ID, "app")
 	if _, ok := a.App(r); ok {
 		t.Fatal("revoked token accepted")
 	}
-	st, _ := a.Login("admin", "correct horse", "1.1.1.1")
+	st, _ := a.Login("admin", "correct horse", "1.1.1.1", "")
 	r.Header.Set("Authorization", "Bearer "+st)
 	if _, ok := a.App(r); ok {
 		t.Fatal("session token accepted as app token")
@@ -190,7 +190,7 @@ func TestRequireSession(t *testing.T) {
 		t.Fatalf("code %d content-type %q", w.Code, w.Header().Get("Content-Type"))
 	}
 
-	tok, _ := a.Login("admin", "correct horse", "1.1.1.1")
+	tok, _ := a.Login("admin", "correct horse", "1.1.1.1", "")
 	w = httptest.NewRecorder()
 	h.ServeHTTP(w, withCookie(tok))
 	if w.Code != 200 || gotUID != uid {
@@ -229,7 +229,7 @@ func TestBasicAndLoginLimitsSeparate(t *testing.T) {
 	a, _, uid := setup(t)
 	tok, _ := a.NewAppToken(uid, "dav", false)
 	for range 5 {
-		a.Login("admin", "wrong", "4.4.4.4")
+		a.Login("admin", "wrong", "4.4.4.4", "")
 	}
 	if c := dav(a, "4.4.4.4", tok); c != 200 {
 		t.Fatalf("valid token after bad web logins %d", c)
@@ -243,7 +243,7 @@ func TestBasicAndLoginLimitsSeparate(t *testing.T) {
 	if c := dav(a, "5.5.5.5", tok); c != 200 {
 		t.Fatalf("valid token throttled %d", c)
 	}
-	if _, err := a.Login("admin", "correct horse", "5.5.5.5"); err != nil {
+	if _, err := a.Login("admin", "correct horse", "5.5.5.5", ""); err != nil {
 		t.Fatalf("bad basic attempts blocked web login: %v", err)
 	}
 }
@@ -251,9 +251,9 @@ func TestBasicAndLoginLimitsSeparate(t *testing.T) {
 func TestGlobalFailureBudget(t *testing.T) {
 	a, c, _ := setup(t)
 	for i := range 21 {
-		a.Login("admin", "wrong", "10.0.0."+strconv.Itoa(i))
+		a.Login("admin", "wrong", "10.0.0."+strconv.Itoa(i), "")
 	}
-	if _, err := a.Login("admin", "correct horse", "10.0.1.1"); !errors.Is(err, ErrRateLimited) {
+	if _, err := a.Login("admin", "correct horse", "10.0.1.1", ""); !errors.Is(err, ErrRateLimited) {
 		t.Fatalf("err = %v, want rate limited", err)
 	}
 	if a.LoginLimit("10.0.1.2") == nil {
@@ -263,7 +263,7 @@ func TestGlobalFailureBudget(t *testing.T) {
 		t.Fatal("bad logins throttled share unlock")
 	}
 	c.t = c.t.Add(time.Minute)
-	if _, err := a.Login("admin", "correct horse", "10.0.1.1"); err != nil {
+	if _, err := a.Login("admin", "correct horse", "10.0.1.1", ""); err != nil {
 		t.Fatalf("still limited after the window: %v", err)
 	}
 }
@@ -292,7 +292,7 @@ func TestLimiterFloodKeepsBans(t *testing.T) {
 
 func TestSessionCookieRenewed(t *testing.T) {
 	a, c, _ := setup(t)
-	tok, _ := a.Login("admin", "correct horse", "1.1.1.1")
+	tok, _ := a.Login("admin", "correct horse", "1.1.1.1", "")
 	h := a.RequireSession(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {}))
 	serve := func() *http.Cookie {
 		w := httptest.NewRecorder()
@@ -340,17 +340,17 @@ func TestRefuseSaysWhichLimit(t *testing.T) {
 		return w.Header().Get("Retry-After"), strings.TrimSpace(w.Body.String())
 	}
 	for range 5 {
-		a.Login("admin", "wrong", "2.2.2.2")
+		a.Login("admin", "wrong", "2.2.2.2", "")
 	}
-	_, err := a.Login("admin", "correct horse", "2.2.2.2")
+	_, err := a.Login("admin", "correct horse", "2.2.2.2", "")
 	if h, b := refuse(err); h != "1" || b != `{"error":"too many attempts","retry_after":1}` {
 		t.Fatalf("per-IP %q %s", h, b)
 	}
 	for i := range 21 {
-		a.Login("admin", "wrong", "10.0.0."+strconv.Itoa(i))
+		a.Login("admin", "wrong", "10.0.0."+strconv.Itoa(i), "")
 	}
 	c.t = c.t.Add(15 * time.Second)
-	_, err = a.Login("admin", "correct horse", "10.0.1.1")
+	_, err = a.Login("admin", "correct horse", "10.0.1.1", "")
 	if h, b := refuse(err); h != "45" || b != `{"error":"login paused","retry_after":45}` {
 		t.Fatalf("global %q %s", h, b)
 	}

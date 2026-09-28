@@ -35,6 +35,12 @@ export function ago(ms: number) {
   return ''
 }
 
+const browsers: [RegExp, string][] = [[/Edg/, 'Edge'], [/OPR\//, 'Opera'], [/Firefox\/|FxiOS/, 'Firefox'], [/Chrome\/|CriOS/, 'Chrome'], [/Safari\//, 'Safari']]
+const systems: [RegExp, string][] = [[/iPhone/, 'iOS'], [/iPad/, 'iPadOS'], [/Android/, 'Android'], [/Mac OS X/, 'macOS'], [/Windows/, 'Windows'], [/CrOS/, 'ChromeOS'], [/Linux/, 'Linux']]
+const pick = (ua: string, l: [RegExp, string][]) => l.find(([r]) => r.test(ua))?.[1]
+
+export const device = (ua: string) => [pick(ua, browsers), pick(ua, systems)].filter(Boolean).join(' · ') || ua
+
 const ext = (n: string) => (n.includes('.') ? n.slice(n.lastIndexOf('.') + 1).toLowerCase() : '')
 
 const groups: Record<string, string> = {

@@ -56,6 +56,8 @@ var migrations = []string{
 		created_at INTEGER NOT NULL,
 		last_used_at INTEGER NOT NULL DEFAULT 0
 	);`,
+	`ALTER TABLE tokens ADD COLUMN user_agent TEXT NOT NULL DEFAULT '';
+	ALTER TABLE tokens ADD COLUMN ip TEXT NOT NULL DEFAULT '';`,
 }
 
 type DB struct{ *sql.DB }
@@ -69,6 +71,7 @@ type Token struct {
 	ID, UserID                       int64
 	Kind, Hash, Label, Scope         string
 	CreatedAt, LastUsedAt, ExpiresAt int64
+	UserAgent, IP                    string
 }
 
 type Passkey struct {
@@ -172,18 +175,18 @@ func (d *DB) UserByID(id int64) (User, error) {
 	return u, notFound(err)
 }
 
-const tokenCols = `id, user_id, kind, hash, label, scope, created_at, last_used_at, expires_at`
+const tokenCols = `id, user_id, kind, hash, label, scope, created_at, last_used_at, expires_at, user_agent, ip`
 
 func scanToken(r interface{ Scan(...any) error }) (Token, error) {
 	var t Token
-	err := r.Scan(&t.ID, &t.UserID, &t.Kind, &t.Hash, &t.Label, &t.Scope, &t.CreatedAt, &t.LastUsedAt, &t.ExpiresAt)
+	err := r.Scan(&t.ID, &t.UserID, &t.Kind, &t.Hash, &t.Label, &t.Scope, &t.CreatedAt, &t.LastUsedAt, &t.ExpiresAt, &t.UserAgent, &t.IP)
 	return t, notFound(err)
 }
 
 func (d *DB) InsertToken(t *Token) error {
-	return d.QueryRow(`INSERT INTO tokens (user_id, kind, hash, label, scope, created_at, last_used_at, expires_at)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?) RETURNING id`,
-		t.UserID, t.Kind, t.Hash, t.Label, t.Scope, t.CreatedAt, t.LastUsedAt, t.ExpiresAt).Scan(&t.ID)
+	return d.QueryRow(`INSERT INTO tokens (user_id, kind, hash, label, scope, created_at, last_used_at, expires_at, user_agent, ip)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING id`,
+		t.UserID, t.Kind, t.Hash, t.Label, t.Scope, t.CreatedAt, t.LastUsedAt, t.ExpiresAt, t.UserAgent, t.IP).Scan(&t.ID)
 }
 
 func (d *DB) TokenByHash(hash string, now int64) (Token, error) {
@@ -196,9 +199,12 @@ func (d *DB) TouchToken(id, now, expiresAt int64) error {
 	return err
 }
 
-func (d *DB) DeleteToken(userID, id int64) error {
-	_, err := d.Exec(`DELETE FROM tokens WHERE user_id = ? AND id = ?`, userID, id)
-	return err
+func (d *DB) DeleteToken(userID, id int64, kind string) error {
+	return one(d.Exec(`DELETE FROM tokens WHERE user_id = ? AND id = ? AND kind = ?`, userID, id, kind))
+}
+
+func (d *DB) DeleteOtherSessions(userID, keepID int64) (int64, error) {
+	return affected(d.Exec(`DELETE FROM tokens WHERE user_id = ? AND kind = 'session' AND id != ?`, userID, keepID))
 }
 
 func (d *DB) DeleteTokenByHash(hash string) error {

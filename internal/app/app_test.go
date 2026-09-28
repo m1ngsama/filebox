@@ -43,7 +43,7 @@ func newTestApp(t *testing.T) *fixture {
 	h, _ := auth.HashPassword("pw-pw-pw-pw")
 	uid, _ := d.SetPassword("admin", h)
 	a := auth.New(d)
-	sess, _ := a.Login("admin", "pw-pw-pw-pw", "127.0.0.1")
+	sess, _ := a.Login("admin", "pw-pw-pw-pw", "127.0.0.1", "")
 	bearer, _ := a.NewAppToken(uid, "test", false)
 	web := fstest.MapFS{
 		"index.html":      {Data: []byte("<!doctype html>app")},

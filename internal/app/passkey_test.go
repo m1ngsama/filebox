@@ -278,8 +278,11 @@ func TestPasskeyChallengeSingleUse(t *testing.T) {
 	}
 	k.count = 1
 	a := f.assertion(t, k)
-	if w := f.finish(a); w.Code != 204 {
+	if w := f.pkFrom("10.1.2.3", "POST", "/api/passkeys/login/finish", a, nil); w.Code != 204 {
 		t.Fatalf("login %d %s", w.Code, w.Body)
+	}
+	if ts, _ := f.App.DB.ListTokens(f.UserID, "session"); ts[len(ts)-1].IP != "10.1.2.3" {
+		t.Fatalf("passkey session %+v", ts[len(ts)-1])
 	}
 	if w := f.finish(a); w.Code != 401 {
 		t.Fatalf("replayed assertion %d", w.Code)
@@ -290,7 +293,7 @@ func TestPasskeyRegistrationCeremonyBoundToUser(t *testing.T) {
 	f, _ := withPasskeys(t)
 	h, _ := auth.HashPassword("bob-bob-bob")
 	f.App.DB.SetPassword("bob", h)
-	bob, _ := f.App.Auth.Login("bob", "bob-bob-bob", "10.9.9.9")
+	bob, _ := f.App.Auth.Login("bob", "bob-bob-bob", "10.9.9.9", "")
 	bc := &http.Cookie{Name: auth.CookieName, Value: bob}
 	k := newSoftKey(t)
 	b := decode[begun](t, f.pk("POST", "/api/passkeys/register/begin", nil, f.Cookie))
@@ -326,7 +329,7 @@ func TestPasskeyForeignUser(t *testing.T) {
 	id := decode[passkeyList](t, f.pk("GET", "/api/passkeys", nil, f.Cookie)).Passkeys[0].ID
 	h, _ := auth.HashPassword("bob-bob-bob")
 	f.App.DB.SetPassword("bob", h)
-	bob, _ := f.App.Auth.Login("bob", "bob-bob-bob", "10.9.9.9")
+	bob, _ := f.App.Auth.Login("bob", "bob-bob-bob", "10.9.9.9", "")
 	bc := &http.Cookie{Name: auth.CookieName, Value: bob}
 	if l := decode[passkeyList](t, f.pk("GET", "/api/passkeys", nil, bc)); len(l.Passkeys) != 0 {
 		t.Fatalf("bob sees %+v", l)
