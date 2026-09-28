@@ -145,9 +145,11 @@ func (f *FS) Rename(ctx context.Context, oldName, newName string) error {
 	if v1 != v2 {
 		return api.Transfer(f.ix, v1, v2, r1, r2, true)
 	}
-	defer f.ix.Touch(v1, r1)
-	defer f.ix.Touch(v2, r2)
-	return v1.Root.Rename(r1, r2)
+	if err := v1.Root.Rename(r1, r2); err != nil {
+		return err
+	}
+	f.ix.Rename(v1, r1, r2)
+	return nil
 }
 
 func (f *FS) Stat(ctx context.Context, name string) (os.FileInfo, error) {

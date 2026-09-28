@@ -260,8 +260,7 @@ func (a *API) mv(w http.ResponseWriter, r *http.Request) {
 			httpx.Error(w, err)
 			return
 		}
-		a.Index.Touch(src, srel)
-		a.Index.Touch(dst, drel)
+		a.Index.Rename(src, srel, drel)
 		w.WriteHeader(204)
 		return
 	}

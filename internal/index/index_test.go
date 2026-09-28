@@ -1,9 +1,12 @@
 package index
 
 import (
+	"bytes"
 	"fmt"
+	"log/slog"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -157,4 +160,76 @@ func TestScanLargeTree(t *testing.T) {
 	start = time.Now()
 	e.scan(t)
 	t.Logf("rescan of %d files took %v", n, time.Since(start))
+}
+
+func (e *env) paths(t *testing.T) []string {
+	t.Helper()
+	rows, err := e.x.db.Query(`SELECT path FROM files WHERE vol = 'v' ORDER BY path`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer rows.Close()
+	var out []string
+	for rows.Next() {
+		var p string
+		rows.Scan(&p)
+		out = append(out, p)
+	}
+	return out
+}
+
+func TestRenameRewritesRowsWithoutWalking(t *testing.T) {
+	e := setup(t)
+	v, _ := e.vols.Get("v")
+	const n = 20000
+	b := &batch{db: e.x.db, vol: "v"}
+	b.add(row{path: "a", dir: true})
+	b.add(row{path: "a/b", dir: true})
+	for i := range n {
+		b.add(row{path: fmt.Sprintf("a/b/f%05d", i), size: 1, mtime: 1})
+	}
+	for _, p := range []string{"a/bc", "a/b-x", "a/b.txt", "z.txt"} {
+		b.add(row{path: p, size: 1, mtime: 2})
+	}
+	b.add(row{path: "c/old", size: 1, mtime: 3})
+	if err := b.flush(); err != nil {
+		t.Fatal(err)
+	}
+	start := time.Now()
+	e.x.Rename(v, "a/b", "c")
+	t.Logf("renamed %d rows in %v", n, time.Since(start))
+	got := e.paths(t)
+	if len(got) != n+6 || got[0] != "a" || got[1] != "a/b-x" || got[2] != "a/b.txt" || got[3] != "a/bc" || got[4] != "c" || got[5] != "c/f00000" || got[len(got)-1] != "z.txt" {
+		t.Fatalf("after dir rename %d rows: %v ... %v", len(got), got[:6], got[len(got)-2:])
+	}
+	e.x.Rename(v, "a/bc", "a/bd")
+	if got := e.paths(t); got[3] != "a/bd" || len(got) != n+6 {
+		t.Fatalf("after file rename %v", got[:6])
+	}
+}
+
+func TestScanKeepsUnreadableSubtree(t *testing.T) {
+	if os.Geteuid() == 0 {
+		t.Skip("root reads everything")
+	}
+	e := setup(t)
+	e.write(t, "locked/a.txt", "a", time.Now())
+	e.write(t, "locked/deep/b.txt", "b", time.Now())
+	e.write(t, "open.txt", "o", time.Now())
+	e.scan(t)
+	locked := filepath.Join(e.dir, "locked")
+	os.Chmod(locked, 0)
+	t.Cleanup(func() { os.Chmod(locked, 0o755) })
+	var logs bytes.Buffer
+	old := slog.Default()
+	slog.SetDefault(slog.New(slog.NewTextHandler(&logs, nil)))
+	t.Cleanup(func() { slog.SetDefault(old) })
+	os.Remove(filepath.Join(e.dir, "open.txt"))
+	e.scan(t)
+	if m := e.recent(t); len(m) != 2 || m["locked/deep/b.txt"].Name != "b.txt" {
+		t.Fatalf("after rescan %+v", m)
+	}
+	if c := strings.Count(logs.String(), "level=WARN"); c != 1 || !strings.Contains(logs.String(), "path=locked") {
+		t.Fatalf("logs %q", logs.String())
+	}
 }

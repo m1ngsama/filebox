@@ -22,6 +22,10 @@ const upsert = `INSERT INTO files (vol, path, dir, size, mtime) VALUES (?, ?, ?,
 	ON CONFLICT (vol, path) DO UPDATE SET dir = excluded.dir, size = excluded.size, mtime = excluded.mtime
 	WHERE dir != excluded.dir OR size != excluded.size OR mtime != excluded.mtime`
 
+const subtree = `(vol = ? AND path = ?) OR (vol = ? AND path > ? AND path < ?)`
+
+func under(vol, rel string) []any { return []any{vol, rel, vol, rel + "/", rel + "0"} }
+
 type File struct {
 	Vol   string `json:"vol"`
 	Path  string `json:"path"`
@@ -58,6 +62,37 @@ func (x *Index) Touch(v *vol.Volume, rel string) {
 	if err := x.sync(v, rel); err != nil {
 		slog.Warn("index update", "vol", v.Name, "path", rel, "err", err)
 	}
+}
+
+func (x *Index) Rename(v *vol.Volume, from, to string) {
+	if x == nil {
+		return
+	}
+	x.mu.Lock()
+	if x.touched != nil {
+		x.touched[pending{v, from}] = struct{}{}
+		x.touched[pending{v, to}] = struct{}{}
+	}
+	x.mu.Unlock()
+	if err := x.rename(v.Name, from, to); err != nil {
+		slog.Warn("index rename", "vol", v.Name, "from", from, "to", to, "err", err)
+	}
+}
+
+func (x *Index) rename(vol, from, to string) error {
+	tx, err := x.db.Begin()
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+	if _, err := tx.Exec(`DELETE FROM files WHERE `+subtree, under(vol, to)...); err != nil {
+		return err
+	}
+	if _, err := tx.Exec(`UPDATE files SET path = ? || substr(path, length(?) + 1) WHERE `+subtree,
+		append([]any{to, from}, under(vol, from)...)...); err != nil {
+		return err
+	}
+	return tx.Commit()
 }
 
 func (x *Index) Scan(vols *vol.Set) error {
@@ -120,14 +155,20 @@ func (x *Index) scan(vols *vol.Set) (int, error) {
 			return n, err
 		}
 		b := &batch{db: c, vol: v.Name, seen: true}
+		var unreadable []string
 		err := walk(v, ".", func(r row) error {
 			if !r.dir {
 				n++
 			}
 			return b.add(r)
-		})
+		}, func(p string) { unreadable = append(unreadable, p) })
 		if err == nil {
 			err = b.flush()
+		}
+		for _, p := range unreadable {
+			if err == nil {
+				_, err = c.ExecContext(ctx, `INSERT OR IGNORE INTO temp.seen (path) SELECT path FROM files WHERE `+subtree, under(v.Name, p)...)
+			}
 		}
 		if err == nil {
 			_, err = c.ExecContext(ctx, `DELETE FROM files WHERE vol = ? AND path NOT IN (SELECT path FROM temp.seen)`, v.Name)
@@ -144,12 +185,11 @@ func (x *Index) scan(vols *vol.Set) (int, error) {
 func (x *Index) sync(v *vol.Volume, rel string) error {
 	fi, err := v.Root.Lstat(rel)
 	if err != nil || (!fi.IsDir() && !fi.Mode().IsRegular()) {
-		_, err := x.db.Exec(`DELETE FROM files WHERE vol = ? AND (path = ? OR (path > ? AND path < ?))`,
-			v.Name, rel, rel+"/", rel+"0")
+		_, err := x.db.Exec(`DELETE FROM files WHERE `+subtree, under(v.Name, rel)...)
 		return err
 	}
 	b := &batch{db: x.db, vol: v.Name}
-	if err := walk(v, rel, b.add); err != nil {
+	if err := walk(v, rel, b.add, nil); err != nil {
 		return err
 	}
 	return b.flush()
@@ -161,12 +201,18 @@ type row struct {
 	size, mtime int64
 }
 
-func walk(v *vol.Volume, rel string, fn func(row) error) error {
+func walk(v *vol.Volume, rel string, fn func(row) error, unreadable func(string)) error {
 	return fs.WalkDir(v.Root.FS(), rel, func(p string, d fs.DirEntry, err error) error {
 		switch {
 		case err != nil && p == rel:
 			return err
-		case err != nil || p == ".":
+		case err != nil:
+			slog.Warn("index skipped unreadable path", "vol", v.Name, "path", p, "err", err)
+			if unreadable != nil {
+				unreadable(p)
+			}
+			return nil
+		case p == ".":
 			return nil
 		case path.Dir(p) == "." && vol.Reserved(p):
 			if d.IsDir() {
