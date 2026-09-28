@@ -48,14 +48,17 @@ function bigFile(mb: number) {
 
 async function shareDocs(page: Page, mode: 'read' | 'upload' | 'drop', password = '') {
   await row(page, 'docs').locator('button.more').click()
+  const loaded = page.waitForResponse((r) => r.request().method() === 'GET' && new URL(r.url()).pathname === '/api/shares')
   await page.getByRole('menuitem', { name: t.share, exact: true }).click()
+  await loaded
   await page.getByRole('radio', { name: t.modes[mode], exact: true }).check()
   if (password) await page.getByLabel(t.passwordOptional).fill(password)
-  const before = await page.locator('.details .shares li a').count()
-  await page.getByRole('button', { name: t.newShare, exact: true }).click()
   const links = page.locator('.details .shares li a')
-  await expect(links).toHaveCount(before + 1)
-  const url = await links.first().getAttribute('href')
+  const hrefs = () => links.evaluateAll((as) => as.map((a) => a.getAttribute('href')!))
+  const before = await hrefs()
+  await page.getByRole('button', { name: t.newShare, exact: true }).click()
+  await expect(links).toHaveCount(before.length + 1)
+  const url = (await hrefs()).find((h) => !before.includes(h))
   await page.locator('.details-close').click()
   return url!
 }
