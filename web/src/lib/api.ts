@@ -62,7 +62,7 @@ export const api = {
   mkdir: (vol: string, path: string) => req<void>('POST', '/api/mkdir', { vol, path }),
   mv: (src: Loc, dst: Loc) => req<{ job: string } | undefined>('POST', '/api/mv', { src, dst }),
   cp: (src: Loc, dst: Loc) => req<{ job: string }>('POST', '/api/cp', { src, dst }),
-  rm: (vol: string, paths: string[]) => req<void>('POST', '/api/rm', { vol, paths }),
+  rm: (vol: string, paths: string[]) => req<{ failed: { path: string; error: string }[] } | undefined>('POST', '/api/rm', { vol, paths }),
   async waitJob(id: string, onprogress?: (s: JobStatus) => void) {
     for (;;) {
       const s = await req<JobStatus>('GET', `/api/jobs/${id}`)

@@ -190,8 +190,20 @@ func TestTrash(t *testing.T) {
 	if n := len(decode[struct{ Items []any }](t, f.do("GET", "/api/trash?vol=v", nil)).Items); n != 0 {
 		t.Fatalf("trash has %d items after empty", n)
 	}
-	if w := f.do("POST", "/api/rm", body(`{"vol":"v","paths":["/"]}`)); w.Code != 400 {
-		t.Fatalf("rm root %d", w.Code)
+	f.write(t, "a.txt", "a")
+	f.write(t, "c.txt", "c")
+	w := f.do("POST", "/api/rm", body(`{"vol":"v","paths":["a.txt","/","missing","c.txt"]}`))
+	got := decode[struct {
+		Failed []struct{ Path, Error string }
+	}](t, w)
+	if w.Code != 200 || len(got.Failed) != 2 || got.Failed[0] != (struct{ Path, Error string }{"/", "bad path"}) ||
+		got.Failed[1] != (struct{ Path, Error string }{"missing", "not found"}) {
+		t.Fatalf("partial rm %d %s", w.Code, w.Body)
+	}
+	for _, n := range []string{"a.txt", "c.txt"} {
+		if _, err := os.Stat(filepath.Join(f.Dir, n)); !os.IsNotExist(err) {
+			t.Fatalf("%s not trashed", n)
+		}
 	}
 }
 

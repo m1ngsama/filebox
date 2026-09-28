@@ -26,21 +26,25 @@ func Fail(w http.ResponseWriter, status int, msg string) {
 }
 
 func Error(w http.ResponseWriter, err error) {
+	status, msg := Status(err)
+	Fail(w, status, msg)
+}
+
+func Status(err error) (int, string) {
 	switch {
 	case errors.Is(err, fs.ErrNotExist) || errors.Is(err, db.ErrNotFound):
-		Fail(w, 404, "not found")
+		return 404, "not found"
 	case errors.Is(err, fs.ErrExist) || errors.Is(err, db.ErrConflict):
-		Fail(w, 409, "already exists")
+		return 409, "already exists"
 	case errors.Is(err, vol.ErrBadPath):
-		Fail(w, 400, "bad path")
+		return 400, "bad path"
 	case errors.Is(err, fs.ErrPermission):
-		Fail(w, 403, "forbidden")
+		return 403, "forbidden"
 	case NoSpace(err):
-		Fail(w, 507, "insufficient storage")
-	default:
-		slog.Error("request failed", "err", err)
-		Fail(w, 500, "internal error")
+		return 507, "insufficient storage"
 	}
+	slog.Error("request failed", "err", err)
+	return 500, "internal error"
 }
 
 func NoSpace(err error) bool {

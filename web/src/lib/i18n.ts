@@ -53,6 +53,7 @@ export const t = {
   confirmDeleteTitle: '删除',
   confirmDelete: (what: string) => `${what}会移到回收站，之后可以从回收站恢复。`,
   items: (n: number) => `这 ${n} 项`,
+  removeFailed: (names: string[]) => `${names.join('、')} 没能删除，其余已移到回收站。`,
   moveCopyTitle: (what: string) => `把${what}移动或复制到`,
   chooseFolder: '选择目标文件夹',
   noSubfolders: '没有子文件夹',

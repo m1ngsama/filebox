@@ -1,6 +1,6 @@
 import { test, expect, type Page } from '@playwright/test'
 import { createHash } from 'node:crypto'
-import { closeSync, createReadStream, existsSync, openSync, readFileSync, statSync, writeFileSync, writeSync } from 'node:fs'
+import { closeSync, createReadStream, existsSync, openSync, readFileSync, rmSync, statSync, writeFileSync, writeSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { DIR } from './playwright.config'
@@ -154,6 +154,19 @@ test('delete and restore from trash', async ({ page }) => {
   await page.getByRole('link', { name: t.trash, exact: true }).click()
   await page.getByRole('button', { name: t.restore, exact: true }).click()
   await expect.poll(() => existsSync(join(VOL, 'tmp.txt'))).toBe(true)
+})
+
+test('partial delete names the items that failed', async ({ page }) => {
+  writeFileSync(join(VOL, 'gone-a.txt'), 'a')
+  writeFileSync(join(VOL, 'gone-b.txt'), 'b')
+  await login(page)
+  await row(page, 'gone-a.txt').locator('input[type=checkbox]').check()
+  await row(page, 'gone-b.txt').locator('input[type=checkbox]').check()
+  await page.locator('.list-head').getByRole('button', { name: t.remove, exact: true }).click()
+  rmSync(join(VOL, 'gone-b.txt'))
+  await page.locator('.dialog').getByRole('button', { name: t.remove, exact: true }).click()
+  await expect(page.locator('.dialog .error')).toHaveText(t.removeFailed(['gone-b.txt']))
+  expect(existsSync(join(VOL, 'gone-a.txt'))).toBe(false)
 })
 
 test('passkey registration and login', async ({ page, context }) => {

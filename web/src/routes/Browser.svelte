@@ -284,10 +284,15 @@
     message={t.confirmDelete(what(names))}
     action={t.remove}
     onconfirm={async () => {
-      await api.rm(vol, names.map(join))
+      const failed = new Set((await api.rm(vol, names.map(join)))?.failed.map((f) => f.path))
+      const left = names.filter((n) => failed.has(join(n)))
       selected.clear()
-      if (details && names.includes(details.name)) details = null
+      if (details && names.includes(details.name) && !left.includes(details.name)) details = null
       await refresh()
+      if (left.length) {
+        dialog = { kind: 'delete', names: left }
+        throw new Error(t.removeFailed(left))
+      }
     }}
     onclose={() => (dialog = null)}
   />

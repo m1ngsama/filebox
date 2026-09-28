@@ -276,15 +276,24 @@ func (a *API) rm(w http.ResponseWriter, r *http.Request) {
 		httpx.Fail(w, 400, "bad request")
 		return
 	}
+	type failure struct {
+		Path  string `json:"path"`
+		Error string `json:"error"`
+	}
+	var failed []failure
 	for _, p := range in.Paths {
 		v, rel, err := a.Vols.Resolve(in.Vol, p)
 		if err == nil {
 			err = Trash(v, rel, time.Now())
 		}
 		if err != nil {
-			httpx.Error(w, err)
-			return
+			_, msg := httpx.Status(err)
+			failed = append(failed, failure{p, msg})
 		}
+	}
+	if failed != nil {
+		httpx.JSON(w, 200, map[string]any{"failed": failed})
+		return
 	}
 	w.WriteHeader(204)
 }
