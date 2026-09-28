@@ -53,10 +53,18 @@ func (j *Jobs) Get(id string) (JobStatus, bool) {
 	return JobStatus{ID: id, Total: x.total.Load(), Done: x.done.Load(), State: x.state, Code: x.code}, true
 }
 
-func (j *Jobs) Start(src, dst *vol.Volume, srel, drel string, move bool) string {
+func newID() string {
 	b := make([]byte, 8)
 	rand.Read(b)
-	id := hex.EncodeToString(b)
+	return hex.EncodeToString(b)
+}
+
+func Transfer(src, dst *vol.Volume, srel, drel string, move bool) error {
+	return run(src, dst, srel, drel, newID(), move, &job{})
+}
+
+func (j *Jobs) Start(src, dst *vol.Volume, srel, drel string, move bool) string {
+	id := newID()
 	x := &job{state: "running"}
 	j.mu.Lock()
 	for k, old := range j.m {

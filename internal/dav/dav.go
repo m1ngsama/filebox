@@ -13,6 +13,7 @@ import (
 
 	"golang.org/x/net/webdav"
 
+	"github.com/m1ngsama/filebox/internal/api"
 	"github.com/m1ngsama/filebox/internal/auth"
 	"github.com/m1ngsama/filebox/internal/serve"
 	"github.com/m1ngsama/filebox/internal/vol"
@@ -129,8 +130,11 @@ func (f *FS) Rename(ctx context.Context, oldName, newName string) error {
 	if err != nil {
 		return err
 	}
-	if v1 == nil || v2 == nil || r1 == "." || r2 == "." || v1 != v2 {
+	if v1 == nil || v2 == nil || r1 == "." || r2 == "." {
 		return os.ErrPermission
+	}
+	if v1 != v2 {
+		return api.Transfer(v1, v2, r1, r2, true)
 	}
 	return v1.Root.Rename(r1, r2)
 }

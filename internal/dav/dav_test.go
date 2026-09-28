@@ -17,13 +17,14 @@ import (
 type env struct {
 	srv    *httptest.Server
 	dir    string
+	dir2   string
 	rw, ro string
 }
 
 func setup(t *testing.T) *env {
 	t.Helper()
-	dir := t.TempDir()
-	vols, err := vol.Parse([]string{"v=" + dir, "w=" + t.TempDir()})
+	dir, dir2 := t.TempDir(), t.TempDir()
+	vols, err := vol.Parse([]string{"v=" + dir, "w=" + dir2})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -40,7 +41,7 @@ func setup(t *testing.T) *env {
 	mux.Handle("/dav/", h)
 	srv := httptest.NewServer(mux)
 	t.Cleanup(srv.Close)
-	return &env{srv: srv, dir: dir, rw: rw, ro: ro}
+	return &env{srv: srv, dir: dir, dir2: dir2, rw: rw, ro: ro}
 }
 
 func (e *env) req(t *testing.T, tok, method, p string, body string, hdr ...string) (*http.Response, string) {
@@ -200,5 +201,54 @@ func TestDavReadOnlyMethods(t *testing.T) {
 	}
 	if _, err := os.Stat(filepath.Join(e.dir, "a.txt")); err != nil {
 		t.Fatal("read-only token changed the volume")
+	}
+}
+
+func TestDavMoveAcrossVolumes(t *testing.T) {
+	e := setup(t)
+	e.req(t, e.rw, "PUT", "/dav/v/x.txt", "x")
+	os.MkdirAll(filepath.Join(e.dir, "d/sub"), 0o755)
+	os.WriteFile(filepath.Join(e.dir, "d/sub/y.txt"), []byte("y"), 0o644)
+	move := func(from, to string, hdr ...string) int {
+		res, _ := e.req(t, e.rw, "MOVE", from, "", append([]string{"Destination", e.srv.URL + to}, hdr...)...)
+		return res.StatusCode
+	}
+	if c := move("/dav/v/x.txt", "/dav/w/x.txt"); c != 201 {
+		t.Fatalf("file MOVE %d", c)
+	}
+	if c := move("/dav/v/d", "/dav/w/d"); c != 201 {
+		t.Fatalf("dir MOVE %d", c)
+	}
+	if b, _ := os.ReadFile(filepath.Join(e.dir2, "x.txt")); string(b) != "x" {
+		t.Fatalf("moved file %q", b)
+	}
+	if b, _ := os.ReadFile(filepath.Join(e.dir2, "d/sub/y.txt")); string(b) != "y" {
+		t.Fatalf("moved dir file %q", b)
+	}
+	for _, p := range []string{"x.txt", "d"} {
+		if _, err := os.Stat(filepath.Join(e.dir, p)); !os.IsNotExist(err) {
+			t.Fatalf("source %s survived", p)
+		}
+	}
+	e.req(t, e.rw, "PUT", "/dav/v/x.txt", "new")
+	if c := move("/dav/v/x.txt", "/dav/w/x.txt", "Overwrite", "F"); c != 412 {
+		t.Fatalf("MOVE onto existing without overwrite %d", c)
+	}
+	if c := move("/dav/v/x.txt", "/dav/w/x.txt", "Overwrite", "T"); c != 204 {
+		t.Fatalf("MOVE with overwrite %d", c)
+	}
+	if b, _ := os.ReadFile(filepath.Join(e.dir2, "x.txt")); string(b) != "new" {
+		t.Fatalf("overwritten file %q", b)
+	}
+	os.MkdirAll(filepath.Join(e.dir, "l"), 0o755)
+	os.Symlink("/etc/passwd", filepath.Join(e.dir, "l/link"))
+	if c := move("/dav/v/l", "/dav/w/l"); c < 400 {
+		t.Fatalf("MOVE of a tree with a symlink %d", c)
+	}
+	if _, err := os.Lstat(filepath.Join(e.dir, "l/link")); err != nil {
+		t.Fatal("source with symlink damaged")
+	}
+	if _, err := os.Stat(filepath.Join(e.dir2, "l")); !os.IsNotExist(err) {
+		t.Fatal("partial copy left behind")
 	}
 }
