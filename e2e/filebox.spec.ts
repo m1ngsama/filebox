@@ -407,3 +407,13 @@ test('an uploaded file shows first in recent and leads back to its folder', asyn
   await page.getByRole('menuitem', { name: t.openFolder }).click()
   await expect(page).toHaveURL(/\/files\/v\/docs\/\?details=fresh\.txt$/)
 })
+
+test.describe('with an English browser', () => {
+  test.use({ locale: 'en-US' })
+
+  test('dates follow the browser locale', async ({ page }) => {
+    await login(page)
+    await page.goto('/settings')
+    await expect(page.getByRole('list', { name: t.sessions }).getByText(new RegExp(`^${t.lastUsed('(now|\\d+ seconds? ago)')}$`))).toBeVisible()
+  })
+})

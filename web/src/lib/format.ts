@@ -9,7 +9,8 @@ export function size(n: number): string {
 }
 
 export type Sort = 'name' | 'size' | 'mtime'
-const collator = new Intl.Collator('zh-CN', { numeric: true })
+const locale = navigator.language
+const collator = new Intl.Collator(locale, { numeric: true })
 
 export function arrange<T extends { name: string; dir: boolean; size: number; mtime: number }>(list: T[], filter: string, sort: Sort, desc: boolean) {
   const f = filter.toLowerCase()
@@ -20,10 +21,10 @@ export function arrange<T extends { name: string; dir: boolean; size: number; mt
     .sort((a, b) => (a.dir !== b.dir ? (a.dir ? -1 : 1) : d * cmp(a, b) || collator.compare(a.name, b.name)))
 }
 
-export const date = (ms: number) =>
-  new Date(ms).toLocaleString('zh-CN', { dateStyle: 'short', timeStyle: 'short' })
+const dtf = new Intl.DateTimeFormat(locale, { dateStyle: 'short', timeStyle: 'short' })
+export const date = (ms: number) => dtf.format(ms)
 
-const rtf = new Intl.RelativeTimeFormat('zh-CN', { numeric: 'auto' })
+const rtf = new Intl.RelativeTimeFormat(locale, { numeric: 'auto' })
 const steps: [Intl.RelativeTimeFormatUnit, number][] = [['second', 60], ['minute', 60], ['hour', 24], ['day', 30], ['month', 12], ['year', Infinity]]
 
 export function ago(ms: number) {
