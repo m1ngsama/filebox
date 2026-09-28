@@ -1,12 +1,52 @@
-import { test, expect, type Page } from '@playwright/test'
+import { test as base, expect, type Page } from '@playwright/test'
+import { execFileSync, spawn } from 'node:child_process'
 import { createHash } from 'node:crypto'
-import { closeSync, createReadStream, existsSync, mkdirSync, openSync, readFileSync, rmSync, statSync, writeFileSync, writeSync } from 'node:fs'
+import { closeSync, cpSync, createReadStream, existsSync, mkdirSync, mkdtempSync, openSync, readFileSync, rmSync, statSync, writeFileSync, writeSync } from 'node:fs'
+import { createServer, type AddressInfo } from 'node:net'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { DIR } from './playwright.config'
 import { t } from '../web/src/lib/i18n'
 
-const VOL = join(DIR, 'vol')
+const BIN = join(import.meta.dirname, '../bin/filebox')
+
+function freePort() {
+  return new Promise<number>((resolve) => {
+    const s = createServer().listen(0, '127.0.0.1', () => {
+      const { port } = s.address() as AddressInfo
+      s.close(() => resolve(port))
+    })
+  })
+}
+
+const test = base.extend<{ server: { url: string; vol: string } }, { template: string }>({
+  template: [
+    async ({}, use) => {
+      const dir = mkdtempSync(join(tmpdir(), 'filebox-e2e-'))
+      execFileSync(BIN, ['passwd', '-data', dir], { input: 'pw-pw-pw-pw\n', stdio: ['pipe', 'ignore', 'ignore'] })
+      await use(dir)
+      rmSync(dir, { recursive: true, force: true })
+    },
+    { scope: 'worker' },
+  ],
+  server: async ({ template }, use) => {
+    const dir = mkdtempSync(join(tmpdir(), 'filebox-e2e-'))
+    const vol = join(dir, 'vol')
+    mkdirSync(join(vol, 'docs'), { recursive: true })
+    writeFileSync(join(vol, 'docs/readme.txt'), 'hello\n')
+    cpSync(template, join(dir, 'data'), { recursive: true })
+    const port = await freePort()
+    const proc = spawn(BIN, ['serve', '-data', join(dir, 'data'), '-listen', `127.0.0.1:${port}`, '-origin', `http://localhost:${port}`, '-vol', `v=${vol}`], { stdio: 'ignore' })
+    const exited = new Promise((r) => proc.once('exit', r))
+    const url = `http://127.0.0.1:${port}`
+    await expect.poll(() => fetch(url).then((r) => r.ok, () => false)).toBe(true)
+    await use({ url, vol })
+    proc.kill('SIGKILL')
+    await exited
+    rmSync(dir, { recursive: true, force: true })
+  },
+  baseURL: async ({ server }, use) => use(server.url),
+})
+
 const fileInput = (p: Page) => p.locator('input[type=file]:not([webkitdirectory])')
 const row = (p: Page, name: string) => p.locator('.row', { hasText: name })
 const unlabeled = (p: Page) => p.evaluate(() => [...document.querySelectorAll('input:not([type=file]):not([type=checkbox])')].filter((i) => !(i as HTMLInputElement).labels?.length).length)
@@ -54,11 +94,9 @@ async function shareDocs(page: Page, mode: 'read' | 'upload' | 'drop', password 
   await page.getByRole('radio', { name: t.modes[mode], exact: true }).check()
   if (password) await page.getByLabel(t.passwordOptional).fill(password)
   const links = page.locator('.details .shares li a')
-  const hrefs = () => links.evaluateAll((as) => as.map((a) => a.getAttribute('href')!))
-  const before = await hrefs()
   await page.getByRole('button', { name: t.newShare, exact: true }).click()
-  await expect(links).toHaveCount(before.length + 1)
-  const url = (await hrefs()).find((h) => !before.includes(h))
+  await expect(links).toHaveCount(1)
+  const url = await links.getAttribute('href')
   await page.locator('.details-close').click()
   return url!
 }
@@ -84,9 +122,9 @@ test('browse and preview', async ({ page }) => {
   await expect(page).toHaveURL(/\/files\/v\/$/)
 })
 
-test('rows select and open from the keyboard', async ({ page }) => {
-  mkdirSync(join(VOL, 'many'), { recursive: true })
-  for (let i = 0; i < 60; i++) writeFileSync(join(VOL, 'many', `k-${String(i).padStart(2, '0')}.txt`), `k${i}`)
+test('rows select and open from the keyboard', async ({ page, server }) => {
+  mkdirSync(join(server.vol, 'many'), { recursive: true })
+  for (let i = 0; i < 60; i++) writeFileSync(join(server.vol, 'many', `k-${String(i).padStart(2, '0')}.txt`), `k${i}`)
   await login(page)
   await row(page, 'many').locator('button.name').click()
   const first = row(page, 'k-00.txt')
@@ -110,7 +148,7 @@ test('rows select and open from the keyboard', async ({ page }) => {
   await expect(page.locator('.viewer pre')).toHaveText('k0')
 })
 
-test('resumable upload survives a dropped connection and a page reload', async ({ page }) => {
+test('resumable upload survives a dropped connection and a page reload', async ({ page, server }) => {
   const src = bigFile(200)
   const total = statSync(src).size
   await login(page)
@@ -145,14 +183,14 @@ test('resumable upload survives a dropped connection and a page reload', async (
   await fileInput(page).setInputFiles(src)
   await expect(page.locator('.uploads li.done')).toHaveCount(1, { timeout: 120_000 })
   expect(offsets[0]).toBeGreaterThan(0)
-  expect(await sha(join(VOL, 'filebox-e2e-200.bin'))).toBe(await sha(src))
+  expect(await sha(join(server.vol, 'filebox-e2e-200.bin'))).toBe(await sha(src))
 })
 
 test('closing details opened from my shares clears the query', async ({ page }) => {
   await login(page)
   await shareDocs(page, 'read')
   await page.getByRole('link', { name: t.myShares, exact: true }).click()
-  await page.locator('.rows li a', { hasText: 'v:/docs' }).first().click()
+  await page.locator('.rows li a', { hasText: 'v:/docs' }).click()
   await expect(page).toHaveURL(/\/files\/v\/\?details=docs$/)
   await expect(page.locator('.details h2')).toHaveText('docs')
   await page.locator('.details-close').click()
@@ -165,7 +203,7 @@ test('closing details opened from my shares clears the query', async ({ page }) 
   await expect(page.locator('.details')).toHaveCount(0)
 })
 
-test('an upload that loses the session returns to login and resumes after it', async ({ page, context }) => {
+test('an upload that loses the session returns to login and resumes after it', async ({ page, context, server }) => {
   const src = bigFile(160)
   await login(page)
   let expired = false
@@ -188,7 +226,7 @@ test('an upload that loses the session returns to login and resumes after it', a
   await fileInput(page).setInputFiles(src)
   await expect(page.locator('.uploads li.done')).toHaveCount(1, { timeout: 120_000 })
   expect(offsets[0]).toBeGreaterThan(0)
-  expect(await sha(join(VOL, 'filebox-e2e-160.bin'))).toBe(await sha(src))
+  expect(await sha(join(server.vol, 'filebox-e2e-160.bin'))).toBe(await sha(src))
 })
 
 test('password share opens anonymously', async ({ page, browser }) => {
@@ -231,7 +269,7 @@ test('malformed share token never reaches the API', async ({ page }) => {
   expect(paths.filter((p) => p.startsWith('/api/'))).toEqual([])
 })
 
-test('drop share accepts uploads and hides contents', async ({ page, browser }) => {
+test('drop share accepts uploads and hides contents', async ({ page, browser, server }) => {
   await login(page)
   const url = await shareDocs(page, 'drop')
   const anon = await browser.newPage()
@@ -240,12 +278,12 @@ test('drop share accepts uploads and hides contents', async ({ page, browser }) 
   await expect(anon.getByText('readme.txt')).toHaveCount(0)
   await fileInput(anon).setInputFiles({ name: 'hello.txt', mimeType: 'text/plain', buffer: Buffer.from('dropped') })
   await expect(anon.locator('.uploads li.done')).toHaveCount(1)
-  expect(readFileSync(join(VOL, 'docs/hello.txt'), 'utf8')).toBe('dropped')
+  expect(readFileSync(join(server.vol, 'docs/hello.txt'), 'utf8')).toBe('dropped')
   await anon.close()
 })
 
-test('delete and restore from trash', async ({ page }) => {
-  writeFileSync(join(VOL, 'tmp.txt'), 'x')
+test('delete and restore from trash', async ({ page, server }) => {
+  writeFileSync(join(server.vol, 'tmp.txt'), 'x')
   await login(page)
   await row(page, 'tmp.txt').locator('input[type=checkbox]').check()
   await page.locator('.list-head').getByRole('button', { name: t.remove, exact: true }).click()
@@ -253,32 +291,32 @@ test('delete and restore from trash', async ({ page }) => {
   await expect(row(page, 'tmp.txt')).toHaveCount(0)
   await page.getByRole('link', { name: t.trash, exact: true }).click()
   await page.getByRole('button', { name: t.restore, exact: true }).click()
-  await expect.poll(() => existsSync(join(VOL, 'tmp.txt'))).toBe(true)
+  await expect.poll(() => existsSync(join(server.vol, 'tmp.txt'))).toBe(true)
 })
 
-test('partial delete names the items that failed', async ({ page }) => {
-  writeFileSync(join(VOL, 'gone-a.txt'), 'a')
-  writeFileSync(join(VOL, 'gone-b.txt'), 'b')
+test('partial delete names the items that failed', async ({ page, server }) => {
+  writeFileSync(join(server.vol, 'gone-a.txt'), 'a')
+  writeFileSync(join(server.vol, 'gone-b.txt'), 'b')
   await login(page)
   await row(page, 'gone-a.txt').locator('input[type=checkbox]').check()
   await row(page, 'gone-b.txt').locator('input[type=checkbox]').check()
   await page.locator('.list-head').getByRole('button', { name: t.remove, exact: true }).click()
-  rmSync(join(VOL, 'gone-b.txt'))
+  rmSync(join(server.vol, 'gone-b.txt'))
   await page.locator('.dialog').getByRole('button', { name: t.remove, exact: true }).click()
   await expect(page.locator('.dialog .error')).toHaveText(t.removeFailed(['gone-b.txt']))
-  expect(existsSync(join(VOL, 'gone-a.txt'))).toBe(false)
+  expect(existsSync(join(server.vol, 'gone-a.txt'))).toBe(false)
 })
 
-test('passkey registration and login', async ({ page, context }) => {
+test('passkey registration and login', async ({ page, context, server }) => {
   const cdp = await context.newCDPSession(page)
   await cdp.send('WebAuthn.enable')
   const { authenticatorId } = await cdp.send('WebAuthn.addVirtualAuthenticator', {
     options: { protocol: 'ctap2', transport: 'internal', hasResidentKey: true, hasUserVerification: true, isUserVerified: true, automaticPresenceSimulation: true },
   })
   const presence = (enabled: boolean) => cdp.send('WebAuthn.setAutomaticPresenceSimulation', { authenticatorId, enabled })
-  const name = `e2e / ${Date.now()}`
+  const name = 'e2e / key'
   const row = page.locator('.rows li', { hasText: name })
-  await page.goto('http://localhost:5298/')
+  await page.goto(server.url.replace('127.0.0.1', 'localhost'))
   await page.getByPlaceholder(t.username).fill('admin')
   await page.getByPlaceholder(t.password).fill('pw-pw-pw-pw')
   await page.getByRole('button', { name: t.login, exact: true }).click()
