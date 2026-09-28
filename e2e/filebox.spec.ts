@@ -354,3 +354,18 @@ test('signing out another device sends it back to login', async ({ page, browser
   await expect(other.getByLabel(t.username)).toBeVisible()
   await other.close()
 })
+
+test('an uploaded file shows first in recent and leads back to its folder', async ({ page }) => {
+  await login(page)
+  await row(page, 'docs').locator('button.name').click()
+  await fileInput(page).setInputFiles({ name: 'fresh.txt', mimeType: 'text/plain', buffer: Buffer.from('fresh') })
+  await expect(page.locator('.uploads li.done')).toHaveCount(1)
+  await page.getByRole('link', { name: t.recent, exact: true }).click()
+  const rows = page.locator('.row')
+  await expect(rows).toHaveCount(2)
+  await expect(rows.first()).toContainText('fresh.txt')
+  await expect(rows.first()).toContainText('v:/docs')
+  await rows.first().locator('button.more').click()
+  await page.getByRole('menuitem', { name: t.openFolder }).click()
+  await expect(page).toHaveURL(/\/files\/v\/docs\/\?details=fresh\.txt$/)
+})

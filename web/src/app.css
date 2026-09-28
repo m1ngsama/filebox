@@ -120,6 +120,7 @@ button.ghost { border-color: transparent; background: none; }
 .ficon.dir { color: var(--accent); fill: color-mix(in srgb, var(--accent) 22%, transparent); }
 .row .name { justify-self: start; max-width: 100%; border: 0; background: none; padding: 4px 6px; min-width: 0; overflow: hidden; text-overflow: ellipsis; display: block; text-align: left; }
 .row .name:hover { background: none; text-decoration: underline; }
+.row .sub { max-width: 100%; padding: 0 6px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .num { color: var(--muted); font-size: 13px; text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; padding-right: 6px; }
 .more { color: var(--muted); }
 .cards { position: absolute; top: 0; left: 0; right: 0; display: grid; gap: 12px; padding: 6px 12px; height: 212px; }

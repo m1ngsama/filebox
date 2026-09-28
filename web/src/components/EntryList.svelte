@@ -28,6 +28,8 @@
     onopen,
     batch,
     empty,
+    id = (e) => e.name,
+    sub,
   }: {
     entries: Entry[]
     grid: boolean
@@ -40,6 +42,8 @@
     onopen: (e: Entry) => void
     batch?: Snippet
     empty: string
+    id?: (e: Entry) => string
+    sub?: (e: Entry) => string
   } = $props()
 
   const broken = new SvelteSet<string>()
@@ -67,7 +71,7 @@
     const opts = {
       count: rows,
       estimateSize: () => (grid ? 212 : 48),
-      getItemKey: grid ? (i: number) => i : (i: number) => list[i]?.name ?? i,
+      getItemKey: grid ? (i: number) => i : (i: number) => (list[i] ? id(list[i]) : i),
     }
     untrack(() => {
       $v.setOptions(opts)
@@ -133,7 +137,7 @@
     else for (const e of entries) selected.add(e.name)
   }
 
-  const src = (e: Entry) => (e.dir || broken.has(e.name) ? null : thumb(e))
+  const src = (e: Entry) => (e.dir || broken.has(id(e)) ? null : thumb(e))
 </script>
 
 {#snippet items(e: Entry | null)}
@@ -198,7 +202,7 @@
           {#each $v.getVirtualItems().filter((r) => r.index < rows) as r (r.key)}
             {#if grid}
               <div class="cards" role="row" aria-rowindex={r.index + 1} style:transform={`translateY(${r.start}px)`} style:grid-template-columns={`repeat(${cols}, minmax(0, 1fr))`}>
-                {#each entries.slice(r.index * cols, r.index * cols + cols) as e, j (e.name)}
+                {#each entries.slice(r.index * cols, r.index * cols + cols) as e, j (id(e))}
                   {@const s = src(e)}
                   {@const i = r.index * cols + j}
                   <div
@@ -215,7 +219,7 @@
                   >
                     {@render check(e, 'card-check')}
                     <button class="card-open" onclick={() => onopen(e)} title={e.name}>
-                      {#if s}<img src={s} alt="" onerror={() => broken.add(e.name)} />{:else}<FileIcon name={e.name} dir={e.dir} size={56} />{/if}
+                      {#if s}<img src={s} alt="" onerror={() => broken.add(id(e))} />{:else}<FileIcon name={e.name} dir={e.dir} size={56} />{/if}
                     </button>
                     <div class="card-foot">
                       <span class="card-name" title={e.name}>{e.name}</span>
@@ -243,9 +247,12 @@
               >
                 <span class="cell" role="gridcell">{@render check(e, '')}</span>
                 <span class="thumb" role="gridcell">
-                  {#if s}<img src={s} alt="" onerror={() => broken.add(e.name)} />{:else}<FileIcon name={e.name} dir={e.dir} />{/if}
+                  {#if s}<img src={s} alt="" onerror={() => broken.add(id(e))} />{:else}<FileIcon name={e.name} dir={e.dir} />{/if}
                 </span>
-                <span class="cell name-cell" role="gridcell"><button class="name" onclick={() => onopen(e)} title={e.name}>{e.name}</button></span>
+                <span class="cell name-cell" role="gridcell">
+                  <button class="name" onclick={() => onopen(e)} title={e.name}>{e.name}</button>
+                  {#if sub}<span class="hint sub" title={sub(e)}>{sub(e)}</span>{/if}
+                </span>
                 <span class="cell" role="gridcell">{@render more(e)}</span>
                 <span class="num size" role="gridcell">{e.dir ? '' : size(e.size)}</span>
                 <span class="num mtime" role="gridcell" title={date(e.mtime)}>{ago(e.mtime)}</span>

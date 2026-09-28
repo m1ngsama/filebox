@@ -7,6 +7,7 @@
   import Shares from './routes/Shares.svelte'
   import Settings from './routes/Settings.svelte'
   import Trash from './routes/Trash.svelte'
+  import Recent from './routes/Recent.svelte'
   import SharePage from './routes/SharePage.svelte'
   import UploadPanel from './components/UploadPanel.svelte'
   import Nav from './components/Nav.svelte'
@@ -17,7 +18,7 @@
   let error = $state('')
   const parts = $derived(route.path.split('/').filter(Boolean).map(decodeURIComponent))
   const isShare = $derived(parts[0] === 's' && !!parts[1])
-  const titles: Record<string, string> = { shares: t.myShares, trash: t.trash, settings: t.settings }
+  const titles: Record<string, string> = { recent: t.recent, shares: t.myShares, trash: t.trash, settings: t.settings }
 
   session.lost = () => {
     me = null
@@ -77,17 +78,21 @@
           <NavToggle />
           <h1>{titles[parts[0]] ?? t.brand}</h1>
         </header>
-        <div class="page">
-          {#if !me.vols.length}
-            <p class="error">{t.noVolumes}</p>
-          {:else if parts[0] === 'shares'}
-            <Shares />
-          {:else if parts[0] === 'settings'}
-            <Settings vols={me.vols} />
-          {:else if parts[0] === 'trash'}
-            <Trash vol={parts[1] ?? me.vols[0]} vols={me.vols} />
-          {/if}
-        </div>
+        {#if me.vols.length && parts[0] === 'recent'}
+          <Recent />
+        {:else}
+          <div class="page">
+            {#if !me.vols.length}
+              <p class="error">{t.noVolumes}</p>
+            {:else if parts[0] === 'shares'}
+              <Shares />
+            {:else if parts[0] === 'settings'}
+              <Settings vols={me.vols} />
+            {:else if parts[0] === 'trash'}
+              <Trash vol={parts[1] ?? me.vols[0]} vols={me.vols} />
+            {/if}
+          </div>
+        {/if}
       {/if}
     </main>
   </div>

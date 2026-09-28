@@ -12,6 +12,7 @@ export class HttpError extends Error {
 
 export type Entry = { name: string; dir: boolean; size: number; mtime: number }
 export type Me = { name: string; vols: string[] }
+export type RecentFile = Entry & Loc
 export type Loc = { vol: string; path: string }
 export type Share = { id: number; token: string; vol: string; path: string; mode: 'read' | 'upload' | 'drop'; has_password: boolean; expires: number; created: number; hits: number }
 export type Token = { id: number; label: string; readonly: boolean; created: number; last_used: number }
@@ -62,6 +63,7 @@ export const api = {
   login: (name: string, password: string) => req<void>('POST', '/api/login', { name, password }),
   logout: () => req<void>('POST', '/api/logout'),
   ls: (vol: string, path: string) => req<{ entries: Entry[] }>('GET', `/api/ls?${q({ vol, path })}`),
+  recent: () => req<{ entries: Omit<RecentFile, 'dir'>[]; scanning: boolean }>('GET', '/api/recent'),
   mkdir: (vol: string, path: string) => req<void>('POST', '/api/mkdir', { vol, path }),
   mv: (src: Loc, dst: Loc) => req<{ job: string } | undefined>('POST', '/api/mv', { src, dst }),
   cp: (src: Loc, dst: Loc) => req<{ job: string }>('POST', '/api/cp', { src, dst }),

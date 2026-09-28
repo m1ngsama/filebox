@@ -1,4 +1,5 @@
 <script lang="ts">
+  import Clock from '@lucide/svelte/icons/clock'
   import HardDrive from '@lucide/svelte/icons/hard-drive'
   import Share2 from '@lucide/svelte/icons/share-2'
   import Trash from '@lucide/svelte/icons/trash'
@@ -25,6 +26,11 @@
 <nav class="nav" class:open={shell.nav} aria-label={t.navigation} inert={drawer.current && !shell.nav}>
   <div class="brand">{t.brand}</div>
   <ul>
+    {#if vols.length}
+      <li>
+        <a href="/recent" onclick={go} aria-current={parts[0] === 'recent' ? 'page' : undefined}><Clock size={18} /><span>{t.recent}</span></a>
+      </li>
+    {/if}
     {#each vols as v}
       <li>
         <a href={`/files/${encodeURIComponent(v)}/`} onclick={go} aria-current={parts[0] === 'files' && cur === v ? 'page' : undefined}>
