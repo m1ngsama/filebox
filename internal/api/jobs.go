@@ -132,7 +132,7 @@ func run(src, dst *vol.Volume, srel, drel, id string, move bool, x *job) error {
 	if err := copyTree(src, dst, srel, tmp, move, x); err != nil {
 		return err
 	}
-	if err := place(dst, tmp, drel); err != nil {
+	if err := place(dst, tmp, drel, x); err != nil {
 		return err
 	}
 	if move {
@@ -143,7 +143,7 @@ func run(src, dst *vol.Volume, srel, drel, id string, move bool, x *job) error {
 
 var link, rename = (*os.Root).Link, (*os.Root).Rename
 
-func place(v *vol.Volume, from, to string) error {
+func place(v *vol.Volume, from, to string, x *job) error {
 	r := v.Root
 	err := link(r, from, to)
 	if err == nil || errors.Is(err, fs.ErrExist) {
@@ -157,12 +157,12 @@ func place(v *vol.Volume, from, to string) error {
 	}
 	fi, err := r.Lstat(from)
 	if err != nil || !fi.IsDir() {
-		return copyTree(v, v, from, to, false, &job{})
+		return copyTree(v, v, from, to, false, x)
 	}
 	if err := r.Mkdir(to, 0o755); err != nil {
 		return err
 	}
-	if err := copyTree(v, v, from, to, false, &job{}); err != nil {
+	if err := copyTree(v, v, from, to, false, x); err != nil {
 		r.RemoveAll(to)
 		return err
 	}
