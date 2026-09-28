@@ -49,7 +49,7 @@
   const broken = new SvelteSet<string>()
   let scroller = $state<HTMLDivElement>()
   let width = $state(0)
-  let ctx = $state<Entry | null>(null)
+  let ctx = $state.raw<Entry | null>(null)
   let anchor = -1
   let cur = $state(0)
   let want = -1

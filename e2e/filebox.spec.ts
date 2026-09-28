@@ -160,6 +160,21 @@ test('the theme choice applies before the app loads', async ({ page }) => {
   expect(blocked.filter((m) => m.includes('Content Security Policy'))).toEqual([])
 })
 
+test('names sort naturally with folders first and the filter narrows them', async ({ page, server }) => {
+  mkdirSync(join(server.vol, 'mix/zdir'), { recursive: true })
+  for (const n of ['a10.txt', 'a2.txt', 'B1.txt']) writeFileSync(join(server.vol, 'mix', n), n)
+  await login(page)
+  await row(page, 'mix').locator('button.name').click()
+  const names = page.locator('.row button.name')
+  await expect(names).toHaveText(['zdir', 'a2.txt', 'a10.txt', 'B1.txt'])
+  await page.locator('button.sort.name').click()
+  await expect(names).toHaveText(['zdir', 'B1.txt', 'a10.txt', 'a2.txt'])
+  await page.getByLabel(t.filter).fill('A1')
+  await expect(names).toHaveText(['a10.txt'])
+  await page.getByLabel(t.filter).fill('')
+  await expect(names).toHaveCount(4)
+})
+
 test('rows select and open from the keyboard', async ({ page, server }) => {
   mkdirSync(join(server.vol, 'many'), { recursive: true })
   for (let i = 0; i < 60; i++) writeFileSync(join(server.vol, 'many', `k-${String(i).padStart(2, '0')}.txt`), `k${i}`)

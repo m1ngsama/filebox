@@ -9,13 +9,13 @@
   import { thumbable, arrange, type Sort } from '../lib/format'
   import { t } from '../lib/i18n'
 
-  let files = $state<RecentFile[]>([])
+  let files = $state.raw<RecentFile[]>([])
   let scanning = $state(false)
   let loaded = $state(false)
   let error = $state('')
   let sort = $state<Sort>('mtime')
   let desc = $state(true)
-  let preview = $state<Entry | null>(null)
+  let preview = $state.raw<Entry | null>(null)
 
   const shown = $derived(arrange(files, '', sort, desc))
   const loc = (e: Entry) => e as RecentFile

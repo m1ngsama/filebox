@@ -30,17 +30,18 @@
 
   type Dialog = { kind: 'mkdir' } | { kind: 'rename'; e: Entry } | { kind: 'delete' | 'move'; names: string[] }
 
-  let entries = $state<Entry[]>([])
+  let entries = $state.raw<Entry[]>([])
   let error = $state('')
   let at = $state('')
   let filter = $state('')
+  let query = $state('')
   let sort = $state<Sort>('name')
   let desc = $state(false)
   let grid = $state(load('grid') === '1')
   let dragging = $state(false)
   let depth = 0
-  let preview = $state<Entry | null>(null)
-  let details = $state<Entry | null>(null)
+  let preview = $state.raw<Entry | null>(null)
+  let details = $state.raw<Entry | null>(null)
   let dialog = $state<Dialog | null>(null)
   const selected = new SvelteSet<string>()
   let files = $state<HTMLInputElement>()
@@ -49,7 +50,7 @@
   const here = $derived(`${vol}/${path}`)
   const join = (n: string) => (path ? `${path}/${n}` : n)
   const crumbs = $derived(path ? path.split('/') : [])
-  const shown = $derived(arrange(at === here ? entries : [], filter, sort, desc))
+  const shown = $derived(arrange(at === here ? entries : [], query, sort, desc))
   const selectedFiles = $derived(entries.filter((e) => !e.dir && selected.has(e.name)).map((e) => e.name))
   const thumb = (e: Entry) => (!e.dir && thumbable(e.name) ? thumbURL(vol, join(e.name)) : null)
 
@@ -83,7 +84,14 @@
   }
 
   $effect(() => {
-    filter
+    const f = filter
+    if (!f) return void (query = '')
+    const id = setTimeout(() => (query = f), 120)
+    return () => clearTimeout(id)
+  })
+
+  $effect(() => {
+    query
     vol
     path
     selected.clear()
@@ -233,7 +241,7 @@
         {onaction}
         onopen={open}
         {batch}
-        empty={at !== here || error ? '' : filter ? t.noMatch : t.empty}
+        empty={at !== here || error ? '' : query ? t.noMatch : t.empty}
       />
     {/key}
 

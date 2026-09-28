@@ -12,13 +12,33 @@ export type Sort = 'name' | 'size' | 'mtime'
 const locale = navigator.language
 const collator = new Intl.Collator(locale, { numeric: true })
 
-export function arrange<T extends { name: string; dir: boolean; size: number; mtime: number }>(list: T[], filter: string, sort: Sort, desc: boolean) {
+type Row = { name: string; dir: boolean; size: number; mtime: number }
+const keys = new WeakMap<Row[], { rank: Int32Array; lower: string[] }>()
+
+function keysOf(list: Row[]) {
+  let k = keys.get(list)
+  if (!k) {
+    const rank = new Int32Array(list.length)
+    list
+      .map((_, i) => i)
+      .sort((a, b) => collator.compare(list[a].name, list[b].name))
+      .forEach((i, r) => (rank[i] = r))
+    k = { rank, lower: list.map((e) => e.name.toLowerCase()) }
+    keys.set(list, k)
+  }
+  return k
+}
+
+export function arrange<T extends Row>(list: T[], filter: string, sort: Sort, desc: boolean) {
+  const { rank, lower } = keysOf(list)
   const f = filter.toLowerCase()
   const d = desc ? -1 : 1
-  const cmp = (a: T, b: T) => (sort === 'size' ? a.size - b.size : sort === 'mtime' ? a.mtime - b.mtime : collator.compare(a.name, b.name))
-  return list
-    .filter((e) => e.name.toLowerCase().includes(f))
-    .sort((a, b) => (a.dir !== b.dir ? (a.dir ? -1 : 1) : d * cmp(a, b) || collator.compare(a.name, b.name)))
+  const key = sort === 'size' ? (i: number) => list[i].size : sort === 'mtime' ? (i: number) => list[i].mtime : (i: number) => rank[i]
+  const idx: number[] = []
+  for (let i = 0; i < list.length; i++) if (lower[i].includes(f)) idx.push(i)
+  return idx
+    .sort((a, b) => (list[a].dir !== list[b].dir ? (list[a].dir ? -1 : 1) : d * (key(a) - key(b)) || rank[a] - rank[b]))
+    .map((i) => list[i])
 }
 
 const dtf = new Intl.DateTimeFormat(locale, { dateStyle: 'short', timeStyle: 'short' })
