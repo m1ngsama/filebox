@@ -6,6 +6,7 @@
   import { api, shareLink, type Share } from '../lib/api'
   import { date } from '../lib/format'
   import { t } from '../lib/i18n'
+  import { toast } from '../lib/toast.svelte'
 
   let { vol, path, dir }: { vol: string; path: string; dir: boolean } = $props()
 
@@ -48,8 +49,10 @@
   function create(e: SubmitEvent) {
     e.preventDefault()
     act(async () => {
-      await api.newShare({ vol, path, mode, password, expires_in: expires })
+      const { token } = await api.newShare({ vol, path, mode, password, expires_in: expires })
       password = ''
+      const copied = await navigator.clipboard.writeText(shareLink(token)).then(() => true, () => false)
+      toast(copied ? t.shareCreatedCopied : t.shareCreated)
     })
   }
 </script>
@@ -106,6 +109,7 @@
     action={t.remove}
     onconfirm={async () => {
       await api.delShare(id)
+      toast(t.shareDeleted)
       await load()
     }}
     onclose={() => (removing = null)}

@@ -7,6 +7,7 @@
   import { link } from '../lib/router.svelte'
   import { date } from '../lib/format'
   import { t } from '../lib/i18n'
+  import { toast } from '../lib/toast.svelte'
 
   let shares = $state<Share[] | null>(null)
   let error = $state('')
@@ -65,6 +66,7 @@
     action={t.remove}
     onconfirm={async () => {
       await api.delShare(id)
+      toast(t.shareDeleted)
       await load()
     }}
     onclose={() => (removing = null)}

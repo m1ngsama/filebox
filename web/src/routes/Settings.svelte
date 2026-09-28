@@ -9,6 +9,7 @@
   import { addPasskey, deviceName, passkeyError, validPasskeyName } from '../lib/passkey'
   import { date, ago, device } from '../lib/format'
   import { t } from '../lib/i18n'
+  import { toast } from '../lib/toast.svelte'
   import { theme, setTheme, type Theme } from '../lib/theme'
 
   let { vols }: { vols: string[] } = $props()
@@ -158,10 +159,10 @@
   {#if created}
     <div class="token-new" role="status">
       <p>{t.tokenOnce}</p>
-      <div class="code-line"><code>{created}</code><CopyButton text={created} label={t.copy} /></div>
+      <div class="code-line"><code>{created}</code><CopyButton text={created} label={t.copy} done={t.copied} /></div>
       <dl>
         <dt>{t.webdavURL}</dt>
-        <dd class="code-line"><code>{dav}</code><CopyButton text={dav} label={t.copy} /></dd>
+        <dd class="code-line"><code>{dav}</code><CopyButton text={dav} label={t.copy} done={t.copied} /></dd>
         <dd class="hint">{t.webdavLogin}</dd>
         <dt>{t.curlUpload}</dt>
         <dd><code>curl -T file.txt -u :{created} {dav}{vol}/</code></dd>
@@ -204,6 +205,7 @@
     action={t.revoke}
     onconfirm={async () => {
       await api.delToken(k.id)
+      toast(t.revoked(k.label))
       await load()
     }}
     onclose={() => (revoking = null)}
@@ -220,7 +222,10 @@
       if (s === 'others') await api.revokeOtherSessions()
       else await api.delSession(s.id)
       if (s !== 'others' && s.current) session.lost()
-      else await loadSessions()
+      else {
+        toast(t.signedOut)
+        await loadSessions()
+      }
     }}
     onclose={() => (signingOut = null)}
   />
@@ -240,6 +245,7 @@
       } catch (e) {
         throw new Error(passkeyError(e))
       }
+      toast(t.passkeyAdded)
       await loadPasskeys()
     }}
     onclose={() => (adding = false)}
@@ -256,6 +262,7 @@
     valid={validPasskeyName}
     onsave={async (name) => {
       await api.renamePasskey(k.id, name)
+      toast(t.saved)
       await loadPasskeys()
     }}
     onclose={() => (renaming = null)}
@@ -270,6 +277,7 @@
     action={t.remove}
     onconfirm={async () => {
       await api.delPasskey(k.id)
+      toast(t.passkeyDeleted)
       await loadPasskeys()
     }}
     onclose={() => (removing = null)}

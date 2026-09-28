@@ -8,6 +8,7 @@
   import UploadPanel from './components/UploadPanel.svelte'
   import Nav from './components/Nav.svelte'
   import NavToggle from './components/NavToggle.svelte'
+  import Toasts from './components/Toasts.svelte'
 
   let me = $state<Me | null>(null)
   let needLogin = $state(false)
@@ -94,3 +95,4 @@
   </div>
   <UploadPanel />
 {/if}
+<Toasts />

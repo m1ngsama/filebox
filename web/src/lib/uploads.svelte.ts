@@ -1,6 +1,7 @@
 import type * as tus from 'tus-js-client'
 import { t } from './i18n'
 import { errorText, session } from './api'
+import { toast } from './toast.svelte'
 
 export type Item = {
   id: number
@@ -83,6 +84,7 @@ async function run({ item, file, endpoint, meta }: Job) {
 async function pump() {
   if (running) return
   running = true
+  let ok = 0
   while (pending.length) {
     const j = pending.shift()!
     if (j.item.ctl.signal.aborted) continue
@@ -91,6 +93,7 @@ async function pump() {
       await run(j)
       j.item.sent = j.item.total
       j.item.state = 'done'
+      ok++
       j.done()
     } catch (e) {
       j.item.state = 'error'
@@ -98,6 +101,7 @@ async function pump() {
     }
   }
   running = false
+  if (ok) toast(t.uploaded(ok))
 }
 
 export function cancel(item: Item) {
