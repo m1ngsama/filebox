@@ -175,6 +175,28 @@ test('names sort naturally with folders first and the filter narrows them', asyn
   await expect(names).toHaveCount(4)
 })
 
+test('theme colours do not need light-dark() support', async ({ page }) => {
+  await login(page)
+  const css = await page.evaluate(() => Promise.all([...document.styleSheets].map((s) => fetch(s.href!).then((r) => r.text()))))
+  expect(css.join('')).not.toContain('light-dark(')
+  const light = 'rgb(255, 255, 255)'
+  const dark = 'rgb(21, 24, 29)'
+  for (const [scheme, theme, want] of [
+    ['light', null, light],
+    ['dark', null, dark],
+    ['light', 'dark', dark],
+    ['dark', 'light', light],
+  ] as const) {
+    await page.emulateMedia({ colorScheme: scheme })
+    const bg = await page.evaluate((v) => {
+      if (v) document.documentElement.dataset.theme = v
+      else delete document.documentElement.dataset.theme
+      return getComputedStyle(document.body).backgroundColor
+    }, theme)
+    expect(bg, `${scheme} system, ${theme ?? 'no'} override`).toBe(want)
+  }
+})
+
 test('rows select and open from the keyboard', async ({ page, server }) => {
   mkdirSync(join(server.vol, 'many'), { recursive: true })
   for (let i = 0; i < 60; i++) writeFileSync(join(server.vol, 'many', `k-${String(i).padStart(2, '0')}.txt`), `k${i}`)
