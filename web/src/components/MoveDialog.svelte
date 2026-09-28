@@ -4,7 +4,7 @@
   import ChevronRight from '@lucide/svelte/icons/chevron-right'
   import { untrack } from 'svelte'
   import Modal from './Modal.svelte'
-  import { api, type JobStatus } from '../lib/api'
+  import { api, type JobStatus, type Move } from '../lib/api'
   import { t } from '../lib/i18n'
 
   let {
@@ -14,7 +14,7 @@
     names,
     ondone,
     onclose,
-  }: { vols: string[]; vol: string; dir: string; names: string[]; ondone: () => void; onclose: () => void } = $props()
+  }: { vols: string[]; vol: string; dir: string; names: string[]; ondone: (done: Move[], copy: boolean) => void; onclose: () => void } = $props()
 
   let at = $state(untrack(() => ({ vol, path: dir })))
   let folders = $state<string[]>([])
@@ -47,20 +47,22 @@
   async function run(copy: boolean) {
     busy = true
     error = ''
+    const done: Move[] = []
     try {
       for (const [i, n] of names.entries()) {
         const show = (s?: JobStatus) => (status = t.progress(i + 1, names.length, n, s?.total ? `${Math.floor((s.done / s.total) * 100)}%` : ''))
         show()
         const from = { vol, path: join(dir, n) }
         const to = { vol: at.vol, path: join(at.path, n) }
-        const r = copy ? await api.cp(from, to) : await api.mv(from, to)
-        if (r?.job) await api.waitJob(r.job, show)
+        if (copy) await api.waitJob((await api.cp(from, to)).job, show)
+        else await api.move(from, to, show)
+        done.push({ from, to })
       }
-      ondone()
+      ondone(done, copy)
       onclose()
     } catch (e) {
       error = (e as Error).message
-      ondone()
+      ondone(done, copy)
     }
     busy = false
     status = ''

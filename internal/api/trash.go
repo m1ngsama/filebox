@@ -25,28 +25,29 @@ type TrashItem struct {
 	Deleted int64  `json:"deleted"`
 }
 
-func Trash(v *vol.Volume, rel string, now time.Time) error {
+func Trash(v *vol.Volume, rel string, now time.Time) (string, error) {
 	if rel == "." {
-		return vol.ErrBadPath
+		return "", vol.ErrBadPath
 	}
 	if _, err := v.Root.Lstat(rel); err != nil {
-		return err
+		return "", err
 	}
 	b := make([]byte, 4)
 	rand.Read(b)
-	dir := path.Join(vol.TrashDir, fmt.Sprintf("%d-%s", now.UnixMilli(), hex.EncodeToString(b)))
+	id := fmt.Sprintf("%d-%s", now.UnixMilli(), hex.EncodeToString(b))
+	dir := path.Join(vol.TrashDir, id)
 	if err := v.Root.MkdirAll(dir, 0o700); err != nil {
-		return err
+		return "", err
 	}
 	if err := v.Root.WriteFile(path.Join(dir, originFile), []byte(rel), 0o600); err != nil {
 		v.Root.RemoveAll(dir)
-		return err
+		return "", err
 	}
 	if err := v.Root.Rename(rel, path.Join(dir, path.Base(rel))); err != nil {
 		v.Root.RemoveAll(dir)
-		return err
+		return "", err
 	}
-	return nil
+	return id, nil
 }
 
 func trashItem(v *vol.Volume, id string) (TrashItem, error) {

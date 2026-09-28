@@ -288,24 +288,26 @@ func (a *API) rm(w http.ResponseWriter, r *http.Request) {
 		Path  string `json:"path"`
 		Error string `json:"error"`
 	}
-	var failed []failure
+	type trashed struct {
+		Path string `json:"path"`
+		ID   string `json:"id"`
+	}
+	failed, done := []failure{}, []trashed{}
 	for _, p := range in.Paths {
 		v, rel, err := a.Vols.Resolve(in.Vol, p)
+		id := ""
 		if err == nil {
-			err = Trash(v, rel, time.Now())
+			id, err = Trash(v, rel, time.Now())
 		}
 		if err != nil {
 			_, msg := httpx.Status(err)
 			failed = append(failed, failure{p, msg})
 			continue
 		}
+		done = append(done, trashed{p, id})
 		a.Index.Touch(v, rel)
 	}
-	if failed != nil {
-		httpx.JSON(w, 200, map[string]any{"failed": failed})
-		return
-	}
-	w.WriteHeader(204)
+	httpx.JSON(w, 200, map[string]any{"trashed": done, "failed": failed})
 }
 
 func (a *API) recent(w http.ResponseWriter, r *http.Request) {

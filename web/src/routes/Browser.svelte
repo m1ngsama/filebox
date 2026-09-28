@@ -17,7 +17,8 @@
   import LayoutGrid from '@lucide/svelte/icons/layout-grid'
   import List from '@lucide/svelte/icons/list'
   import ChevronRight from '@lucide/svelte/icons/chevron-right'
-  import { api, filesURL, rawURL, thumbURL, type Entry } from '../lib/api'
+  import { api, filesURL, rawURL, thumbURL, type Entry, type Move } from '../lib/api'
+  import { toast, fail } from '../lib/toast.svelte'
   import { navigate, link, route } from '../lib/router.svelte'
   import { enqueue } from '../lib/uploads.svelte'
   import { thumbable, arrange, type Sort } from '../lib/format'
@@ -149,6 +150,29 @@
   }
 
   const what = (names: string[]) => (names.length === 1 ? `“${names[0]}”` : t.items(names.length))
+  const undo = (run: () => Promise<unknown>) => ({
+    label: t.undo,
+    run: () =>
+      run().then(
+        () => toast(t.undone),
+        (e) => fail(e),
+      ).finally(refresh),
+  })
+
+  async function reverse(moves: Move[]) {
+    if (moves.some((m) => m.from.vol !== m.to.vol)) toast(t.undoing, { kind: 'info' })
+    for (const m of [...moves].reverse()) await api.move(m.to, m.from)
+  }
+
+  function moved(done: Move[], copy: boolean) {
+    selected.clear()
+    closeDetails()
+    refresh()
+    if (!done.length) return
+    const w = what(done.map((m) => m.from.path.split('/').pop()!))
+    if (copy) toast(t.copiedTo(w))
+    else toast(t.movedTo(w, `${done[0].to.vol}:/${done[0].to.path.split('/').slice(0, -1).join('/')}`), { action: undo(() => reverse(done)) })
+  }
 
   function keydown(e: KeyboardEvent) {
     if (document.querySelector('[role=dialog], [role=menu]')) return
@@ -285,7 +309,9 @@
         value={e.name}
         stem={!e.dir}
         onsave={async (n) => {
-          await api.mv({ vol, path: join(e.name) }, { vol, path: join(n) })
+          const m = { from: { vol, path: join(e.name) }, to: { vol, path: join(n) } }
+          await api.mv(m.from, m.to)
+          toast(t.renamed(n), { action: undo(() => reverse([m])) })
           selected.clear()
           if (details?.name === e.name) closeDetails()
           await refresh()
@@ -299,8 +325,14 @@
         message={t.confirmDelete(what(names))}
         action={t.remove}
         onconfirm={async () => {
-          const failed = new Set((await api.rm(vol, names.map(join)))?.failed.map((f) => f.path))
+          const v = vol
+          const r = await api.rm(v, names.map(join))
+          const failed = new Set(r.failed.map((f) => f.path))
           const left = names.filter((n) => failed.has(join(n)))
+          if (r.trashed.length)
+            toast(t.trashed(what(names.filter((n) => !failed.has(join(n))))), {
+              action: undo(() => Promise.all(r.trashed.map((x) => api.restore(v, x.id)))),
+            })
           selected.clear()
           if (details && names.includes(details.name) && !left.includes(details.name)) closeDetails()
           await refresh()
@@ -317,11 +349,7 @@
         {vol}
         dir={path}
         names={dialog.names}
-        ondone={() => {
-          selected.clear()
-          closeDetails()
-          refresh()
-        }}
+        ondone={moved}
         onclose={() => (dialog = null)}
       />
     {/if}

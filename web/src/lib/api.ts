@@ -14,6 +14,7 @@ export type Entry = { name: string; dir: boolean; size: number; mtime: number }
 export type Me = { name: string; vols: string[] }
 export type RecentFile = Entry & Loc
 export type Loc = { vol: string; path: string }
+export type Move = { from: Loc; to: Loc }
 export type Share = { id: number; token: string; vol: string; path: string; mode: 'read' | 'upload' | 'drop'; has_password: boolean; expires: number; created: number; hits: number }
 export type Token = { id: number; label: string; readonly: boolean; created: number; last_used: number }
 export type Session = { id: number; user_agent: string; ip: string; created: number; last_used: number; current: boolean }
@@ -67,7 +68,12 @@ export const api = {
   mkdir: (vol: string, path: string) => req<void>('POST', '/api/mkdir', { vol, path }),
   mv: (src: Loc, dst: Loc) => req<{ job: string } | undefined>('POST', '/api/mv', { src, dst }),
   cp: (src: Loc, dst: Loc) => req<{ job: string }>('POST', '/api/cp', { src, dst }),
-  rm: (vol: string, paths: string[]) => req<{ failed: { path: string; error: string }[] } | undefined>('POST', '/api/rm', { vol, paths }),
+  rm: (vol: string, paths: string[]) =>
+    req<{ trashed: { path: string; id: string }[]; failed: { path: string; error: string }[] }>('POST', '/api/rm', { vol, paths }),
+  async move(from: Loc, to: Loc, onprogress?: (s: JobStatus) => void) {
+    const r = await api.mv(from, to)
+    if (r?.job) await api.waitJob(r.job, onprogress)
+  },
   async waitJob(id: string, onprogress?: (s: JobStatus) => void) {
     for (;;) {
       const s = await req<JobStatus>('GET', `/api/jobs/${id}`)

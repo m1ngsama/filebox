@@ -160,7 +160,12 @@ func TestCrossVolumeMoveAndCopy(t *testing.T) {
 func TestTrash(t *testing.T) {
 	f := newTestApp(t)
 	f.write(t, "d/keep.txt", "k")
-	if w := f.do("POST", "/api/rm", body(`{"vol":"v","paths":["d/keep.txt"]}`)); w.Code != 204 {
+	w := f.do("POST", "/api/rm", body(`{"vol":"v","paths":["d/keep.txt"]}`))
+	rm := decode[struct {
+		Trashed []struct{ Path, ID string }
+		Failed  []any
+	}](t, w)
+	if w.Code != 200 || len(rm.Trashed) != 1 || rm.Trashed[0].Path != "d/keep.txt" || rm.Trashed[0].ID == "" || len(rm.Failed) != 0 {
 		t.Fatalf("rm %d %s", w.Code, w.Body)
 	}
 	if _, err := os.Stat(filepath.Join(f.Dir, "d/keep.txt")); !os.IsNotExist(err) {
@@ -169,7 +174,7 @@ func TestTrash(t *testing.T) {
 	items := decode[struct {
 		Items []struct{ ID, Name, Path string }
 	}](t, f.do("GET", "/api/trash?vol=v", nil)).Items
-	if len(items) != 1 || items[0].Path != "d/keep.txt" || items[0].Name != "keep.txt" {
+	if len(items) != 1 || items[0].Path != "d/keep.txt" || items[0].Name != "keep.txt" || items[0].ID != rm.Trashed[0].ID {
 		t.Fatalf("items %+v", items)
 	}
 	f.write(t, "d/keep.txt", "new")
@@ -192,7 +197,7 @@ func TestTrash(t *testing.T) {
 	}
 	f.write(t, "a.txt", "a")
 	f.write(t, "c.txt", "c")
-	w := f.do("POST", "/api/rm", body(`{"vol":"v","paths":["a.txt","/","missing","c.txt"]}`))
+	w = f.do("POST", "/api/rm", body(`{"vol":"v","paths":["a.txt","/","missing","c.txt"]}`))
 	got := decode[struct {
 		Failed []struct{ Path, Error string }
 	}](t, w)
