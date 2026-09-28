@@ -197,6 +197,24 @@ test('theme colours do not need light-dark() support', async ({ page }) => {
   }
 })
 
+test('a missing chunk reloads the page once, then offers a retry', async ({ page }) => {
+  await login(page)
+  let aborted = 0
+  await page.route(/\/assets\/Settings-.*\.js$/, (r) => (aborted++ ? r.continue() : r.abort()))
+  const loads: string[] = []
+  page.on('load', () => loads.push(page.url()))
+  await page.goto('/settings')
+  await expect(page.getByRole('heading', { name: t.appearance })).toBeVisible()
+  expect(aborted).toBe(2)
+  expect(loads).toHaveLength(2)
+  await page.unroute(/Settings/)
+  await page.route(/\/assets\/Settings-.*\.js$/, (r) => r.abort())
+  await page.goto('/recent')
+  await page.getByRole('link', { name: t.settings }).click()
+  await expect(page.getByText(t.loadFailed)).toBeVisible()
+  await expect(page.getByRole('button', { name: t.retry })).toBeVisible()
+})
+
 test('rows select and open from the keyboard', async ({ page, server }) => {
   mkdirSync(join(server.vol, 'many'), { recursive: true })
   for (let i = 0; i < 60; i++) writeFileSync(join(server.vol, 'many', `k-${String(i).padStart(2, '0')}.txt`), `k${i}`)
