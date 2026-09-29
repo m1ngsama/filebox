@@ -1,12 +1,15 @@
 package httpx
 
 import (
+	"crypto/sha256"
+	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"io"
 	"io/fs"
 	"log/slog"
 	"net/http"
+	"strings"
 	"syscall"
 
 	"github.com/m1ngsama/filebox/internal/db"
@@ -19,6 +22,27 @@ func JSON(w http.ResponseWriter, status int, v any) {
 	w.Header().Set("Cache-Control", "no-store")
 	w.WriteHeader(status)
 	json.NewEncoder(w).Encode(v)
+}
+
+func Tagged(w http.ResponseWriter, r *http.Request, v any) {
+	b, err := json.Marshal(v)
+	if err != nil {
+		Error(w, err)
+		return
+	}
+	sum := sha256.Sum256(b)
+	tag := `"` + base64.RawURLEncoding.EncodeToString(sum[:18]) + `"`
+	h := w.Header()
+	h.Set("ETag", tag)
+	h.Set("Cache-Control", "private, no-cache")
+	for c := range strings.SplitSeq(r.Header.Get("If-None-Match"), ",") {
+		if c = strings.TrimPrefix(strings.TrimSpace(c), "W/"); c == tag || c == "*" {
+			w.WriteHeader(http.StatusNotModified)
+			return
+		}
+	}
+	h.Set("Content-Type", "application/json")
+	w.Write(b)
 }
 
 func Fail(w http.ResponseWriter, status int, msg string) {

@@ -184,7 +184,7 @@ func (a *API) ls(w http.ResponseWriter, r *http.Request) {
 		httpx.Error(w, err)
 		return
 	}
-	httpx.JSON(w, 200, map[string]any{"entries": es})
+	httpx.Tagged(w, r, map[string]any{"entries": es})
 }
 
 func (a *API) stat(w http.ResponseWriter, r *http.Request) {

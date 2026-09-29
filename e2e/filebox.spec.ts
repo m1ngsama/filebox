@@ -757,6 +757,23 @@ test('the nav shows volume usage and details add up a folder from the index', as
   await expect(page.locator('.details dd.size')).toHaveText(t.folderSize('6 B', 1))
 })
 
+test('revisiting a folder revalidates its listing instead of downloading it again', async ({ page }) => {
+  await login(page)
+  const seen: [number, string | undefined][] = []
+  page.on('response', async (r) => {
+    if (r.url().includes('/api/ls?') && r.url().includes('docs')) seen.push([r.status(), (await r.request().allHeaders())['if-none-match']])
+  })
+  await row(page, 'docs').locator('button.name').click()
+  await expect(row(page, 'readme.txt')).toHaveCount(1)
+  await page.goBack()
+  await expect(row(page, 'docs')).toHaveCount(1)
+  await page.goForward()
+  await expect(row(page, 'readme.txt')).toHaveCount(1)
+  await expect.poll(() => seen.length).toBe(2)
+  expect(seen[0][1]).toBeUndefined()
+  expect(seen[1][1]).toMatch(/^"/)
+})
+
 test('searching everything finds a file in another folder and opens it there, selected', async ({ page }) => {
   await login(page)
   await page.getByRole('radio', { name: t.scopeAll }).click()

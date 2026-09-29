@@ -431,3 +431,32 @@ func TestClearStaging(t *testing.T) {
 		t.Fatalf("stale staging kept: %v", err)
 	}
 }
+
+func TestListETag(t *testing.T) {
+	f := newTestApp(t)
+	f.write(t, "d/a.txt", "a")
+	w := f.do("GET", "/api/ls?vol=v&path=d", nil)
+	tag := w.Header().Get("ETag")
+	if w.Code != 200 || len(tag) < 20 || tag[0] != '"' || w.Header().Get("Cache-Control") != "private, no-cache" {
+		t.Fatalf("first ls %d %q %q", w.Code, tag, w.Header().Get("Cache-Control"))
+	}
+	for _, inm := range []string{tag, "W/" + tag, `"x", ` + tag, "*"} {
+		if w := f.do("GET", "/api/ls?vol=v&path=d", nil, "If-None-Match", inm); w.Code != 304 || w.Body.Len() != 0 || w.Header().Get("ETag") != tag {
+			t.Fatalf("If-None-Match %s: %d %q", inm, w.Code, w.Body)
+		}
+	}
+	if w := f.do("GET", "/api/ls?vol=v&path=d", nil, "If-None-Match", `"stale"`); w.Code != 200 {
+		t.Fatalf("stale tag %d", w.Code)
+	}
+	f.write(t, "d/a.txt", "ab")
+	w = f.do("GET", "/api/ls?vol=v&path=d", nil, "If-None-Match", tag)
+	if w.Code != 200 || w.Header().Get("ETag") == tag {
+		t.Fatalf("after a size change %d %q", w.Code, w.Header().Get("ETag"))
+	}
+	if w := f.do("GET", "/api/ls?vol=v&path=d", nil, "If-None-Match", w.Header().Get("ETag")); w.Code != 304 {
+		t.Fatalf("new tag %d", w.Code)
+	}
+	if w := f.do("GET", "/api/ls?vol=w&path=d", nil, "If-None-Match", tag); w.Code != 404 {
+		t.Fatalf("other volume %d", w.Code)
+	}
+}
