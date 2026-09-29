@@ -29,6 +29,7 @@ const (
 	maxSeen       = 1 << 16
 	queueSize     = 4096
 	flushInterval = 2 * time.Second
+	retryDelay    = 200 * time.Millisecond
 	pruneBatch    = 10_000
 )
 
@@ -151,12 +152,16 @@ func (w *writer) write(batch []item) {
 	if n := w.dropped.Swap(0); n > 0 {
 		slog.Warn("activity log queue full, events dropped", "count", n)
 	}
-	var err error
-	if len(batch) > 0 {
-		err = w.insert(batch)
-	}
-	if err != nil {
-		slog.Error("activity log", "events", len(batch), "err", err)
+	if len(batch) > 0 && w.insert(batch) != nil {
+		time.Sleep(retryDelay)
+		if err := w.insert(batch); err != nil {
+			slog.Warn("activity log batch failed, writing rows one by one", "events", len(batch), "err", err)
+			for _, it := range batch {
+				if err := w.insert([]item{it}); err != nil {
+					slog.Error("activity log", "kind", it.ev.Kind, "err", err)
+				}
+			}
+		}
 	}
 	for _, it := range batch {
 		if it.done != nil {

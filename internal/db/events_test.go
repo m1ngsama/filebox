@@ -115,6 +115,22 @@ func TestEventQueueNeverBlocks(t *testing.T) {
 	}
 }
 
+func TestBadRowDoesNotSinkTheBatch(t *testing.T) {
+	d := open(t)
+	uid, _ := d.SetPassword("admin", "h")
+	if _, err := d.Exec(`CREATE TRIGGER reject BEFORE INSERT ON events WHEN new.name = 'bad' BEGIN SELECT raise(ABORT, 'bad row'); END`); err != nil {
+		t.Fatal(err)
+	}
+	for _, n := range []string{"a", "bad", "b"} {
+		d.Log(Event{At: 1, UserID: uid, Kind: EventTokenCreate, Name: n})
+	}
+	d.Flush()
+	es, _ := d.Events(EventFilter{UserID: uid, Limit: 10})
+	if len(es) != 2 {
+		t.Fatalf("kept %+v", es)
+	}
+}
+
 func TestFlushAfterCloseReturns(t *testing.T) {
 	d := open(t)
 	d.Close()
