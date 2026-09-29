@@ -33,23 +33,21 @@
   }}
   onfocusout={(e) => hold('focus', !!region?.contains(e.relatedTarget as Node))}
 >
-  <div role="status" aria-live="polite">
-    {#each toasts.filter((x) => x.kind !== 'error') as x (x.id)}{@render item(x)}{/each}
-  </div>
-  <div role="alert">
-    {#each toasts.filter((x) => x.kind === 'error') as x (x.id)}{@render item(x)}{/each}
-  </div>
+  {#each toasts as x (x.id)}{@render item(x)}{/each}
 </section>
+<div class="sr-only" role="status">{#each toasts.filter((x) => x.kind !== 'error') as x (x.id)}<p>{x.text}</p>{/each}</div>
+<div class="sr-only" role="alert">{#each toasts.filter((x) => x.kind === 'error') as x (x.id)}<p>{x.text}</p>{/each}</div>
 
 {#snippet item(x: (typeof toasts)[number])}
   {@const Icon = icons[x.kind]}
   <div class={`toast ${x.kind}`} data-id={x.id}>
     <Icon size={18} aria-hidden="true" />
-    <span class="toast-text">{x.text}</span>
+    <span class="toast-text" id={`toast-${x.id}`} aria-hidden="true">{x.text}</span>
     {#if x.action}
       {@const a = x.action}
       <button
         class="toast-action"
+        aria-describedby={`toast-${x.id}`}
         onclick={() => {
           close(x)
           a.run()

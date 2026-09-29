@@ -268,7 +268,6 @@ button.ghost { border-color: transparent; background: none; }
   position: fixed; left: 50%; bottom: calc(16px + env(safe-area-inset-bottom)); translate: -50% 0; z-index: 70;
   display: flex; flex-direction: column; gap: var(--space-2); width: min(440px, calc(100vw - 32px)); pointer-events: none;
 }
-.toasts > div { display: flex; flex-direction: column; gap: var(--space-2); }
 .toast {
   display: flex; align-items: center; gap: var(--space-2); padding: 6px 6px 6px 14px; pointer-events: auto;
   background: var(--toast-bg); color: var(--toast-fg); border-radius: var(--radius-lg); box-shadow: var(--shadow); animation: rise 0.18s ease-out;
