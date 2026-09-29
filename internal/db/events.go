@@ -47,14 +47,14 @@ type visitorKey struct {
 func (v *visitorKey) at(day int64) []byte {
 	v.mu.Lock()
 	defer v.mu.Unlock()
-	if v.key == nil || v.day != day {
+	if v.key == nil || day > v.day {
 		v.day, v.key = day, make([]byte, 32)
 		rand.Read(v.key)
 	}
 	return v.key
 }
 
-func (d *DB) Visitor(ip string) string { return d.visitor(ip, time.Now().Unix()/86400) }
+func (d *DB) Visitor(ip string, now int64) string { return d.visitor(ip, now/86400) }
 
 func (d *DB) visitor(ip string, day int64) string {
 	a, err := netip.ParseAddr(ip)
@@ -218,7 +218,7 @@ func (d *DB) View(shareID int64, visitor string, now int64) {
 	w := d.events
 	key := strconv.FormatInt(shareID, 10) + ":" + visitor
 	w.mu.Lock()
-	if day := now / 86400; day != w.day {
+	if day := now / 86400; day > w.day {
 		w.day, w.seen = day, map[string]struct{}{}
 	}
 	_, dup := w.seen[key]

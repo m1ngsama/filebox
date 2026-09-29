@@ -117,7 +117,8 @@ func (a *Auth) LoginWith(ip, ua string, verify func() (userID int64, ok bool)) (
 		return "", err
 	}
 	uid, ok := verify()
-	ev := db.Event{At: a.Now().Unix(), UserID: uid, Kind: db.EventLogin, Visitor: a.DB.Visitor(ip)}
+	now := a.Now().Unix()
+	ev := db.Event{At: now, UserID: uid, Kind: db.EventLogin, Visitor: a.DB.Visitor(ip, now)}
 	if !ok {
 		a.lim.fail(ip, a.Now())
 		ev.Kind = db.EventLoginFailed

@@ -16,6 +16,9 @@ func TestVisitorHash(t *testing.T) {
 	if d.visitor("203.0.113.7", 2) == a {
 		t.Fatal("visitor key did not rotate with the day")
 	}
+	if day2 := d.visitor("203.0.113.7", 2); d.visitor("203.0.113.7", 1) != day2 || d.visitor("203.0.113.7", 2) != day2 {
+		t.Fatal("a late request for the previous day rotated the key back")
+	}
 	if d.visitor("2001:db8:1:2::1", 2) != d.visitor("2001:db8:1:2:ffff::9", 2) || d.visitor("2001:db8:1:2::1", 2) == d.visitor("2001:db8:1:3::1", 2) {
 		t.Fatal("IPv6 visitors are not keyed by their /64")
 	}
@@ -140,5 +143,10 @@ func TestViewDedupeIsBounded(t *testing.T) {
 	d.View(1, "x", 2*86400)
 	if len(d.events.seen) != 1 {
 		t.Fatal("seen set not reset on a new day")
+	}
+	d.View(1, "y", 86400)
+	d.View(1, "x", 2*86400+5)
+	if len(d.events.seen) != 2 {
+		t.Fatalf("a late request for the previous day reset the set: %d", len(d.events.seen))
 	}
 }

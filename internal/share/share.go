@@ -73,7 +73,7 @@ func label(sh db.Share) string {
 func (s *Service) log(r *http.Request, sh db.Share, kind, name string, size int64) {
 	e := db.Event{At: time.Now().Unix(), UserID: sh.UserID, ShareID: sh.ID, Kind: kind, Name: name, Target: label(sh), Size: size}
 	if r != nil {
-		e.Visitor = s.DB.Visitor(auth.ClientIP(r))
+		e.Visitor = s.DB.Visitor(auth.ClientIP(r), e.At)
 	}
 	s.DB.Log(e)
 }
@@ -332,7 +332,8 @@ func (s *Service) info(w http.ResponseWriter, r *http.Request) {
 		httpx.JSON(w, 200, map[string]any{"locked": true, "mode": o.sh.Mode})
 		return
 	}
-	s.DB.View(o.sh.ID, s.DB.Visitor(auth.ClientIP(r)), time.Now().Unix())
+	now := time.Now().Unix()
+	s.DB.View(o.sh.ID, s.DB.Visitor(auth.ClientIP(r), now), now)
 	out := map[string]any{"name": o.name(), "dir": o.dir, "mode": o.sh.Mode, "locked": false,
 		"note": o.sh.Note, "expires": o.sh.ExpiresAt, "max_upload": o.sh.MaxUpload}
 	if !o.dir {
