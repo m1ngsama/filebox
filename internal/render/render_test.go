@@ -159,3 +159,11 @@ func TestRenderWaitsForASlotAndGivesUpWithTheClient(t *testing.T) {
 		t.Fatalf("rendered past a full semaphore: %s", w.Body)
 	}
 }
+
+func TestHugeHighlightFallsBackToPlainText(t *testing.T) {
+	src := []byte(strings.Repeat("x := f(a, b) + 1 // c\n", Limit/22))
+	res := Render("a.go", src, nil)
+	if !res.plain || len(res.html) > maxOutput || !strings.HasPrefix(string(res.html), "<pre>") {
+		t.Fatalf("plain %v, %d bytes", res.plain, len(res.html))
+	}
+}

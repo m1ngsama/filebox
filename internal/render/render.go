@@ -69,11 +69,15 @@ type result struct {
 }
 
 var (
-	mu    sync.Mutex
-	cache = map[string]result{}
+	mu     sync.Mutex
+	cache  = map[string]result{}
+	cached int
 )
 
-const maxCached = 64
+const (
+	maxCache  = 32 << 20
+	maxOutput = 4 << 20
+)
 
 // raw is the URL prefix that serves files under the same root as rel; "" drops relative links.
 func Serve(w http.ResponseWriter, r *http.Request, root *os.Root, rel, raw string) {
@@ -121,10 +125,14 @@ func Serve(w http.ResponseWriter, r *http.Request, root *os.Root, rel, raw strin
 		res = Render(path.Base(rel), src, linker(path.Dir(rel), raw))
 		<-renders
 		mu.Lock()
-		if len(cache) >= maxCached {
+		if cached+len(res.html) > maxCache {
 			clear(cache)
+			cached = 0
 		}
-		cache[key] = res
+		if _, dup := cache[key]; !dup {
+			cache[key] = res
+			cached += len(res.html)
+		}
 		mu.Unlock()
 	}
 	h.Set("Content-Type", "text/html; charset=utf-8")
@@ -152,6 +160,11 @@ func Render(name string, src []byte, link func(string) string) result {
 		markdown(link).Convert(src, &buf)
 	default:
 		highlight(&buf, lexers.Match(name), string(src))
+	}
+	if buf.Len() > maxOutput {
+		plain = true
+		buf.Reset()
+		fmt.Fprintf(&buf, "<pre>%s</pre>", html.EscapeString(string(src)))
 	}
 	return result{policy.SanitizeBytes(buf.Bytes()), truncated, plain}
 }
