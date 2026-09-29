@@ -12,6 +12,7 @@ import (
 	"os"
 	"path"
 	"regexp"
+	"runtime"
 	"strings"
 	"sync"
 	"unicode/utf8"
@@ -32,7 +33,7 @@ import (
 	"github.com/m1ngsama/filebox/internal/httpx"
 )
 
-const Limit = 1 << 20
+const Limit = 16 << 20
 
 const version = "1"
 
@@ -61,7 +62,7 @@ func IsMarkdown(name string) bool {
 
 const maxDepth = 32
 
-var renders = make(chan struct{}, 2)
+var renders = make(chan struct{}, runtime.NumCPU())
 
 type result struct {
 	html      []byte
@@ -76,8 +77,8 @@ var (
 )
 
 const (
-	maxCache  = 32 << 20
-	maxOutput = 4 << 20
+	maxCache  = 256 << 20
+	maxOutput = 16 << 20
 )
 
 func Serve(w http.ResponseWriter, r *http.Request, root *os.Root, rel, rawPrefix string) {
@@ -112,14 +113,15 @@ func Serve(w http.ResponseWriter, r *http.Request, root *os.Root, rel, rawPrefix
 	res, ok := cache[key]
 	mu.Unlock()
 	if !ok {
-		src, err := io.ReadAll(io.LimitReader(f, Limit+1))
-		if err != nil {
-			httpx.Error(w, err)
-			return
-		}
 		select {
 		case renders <- struct{}{}:
 		case <-r.Context().Done():
+			return
+		}
+		src, err := io.ReadAll(io.LimitReader(f, Limit+1))
+		if err != nil {
+			<-renders
+			httpx.Error(w, err)
 			return
 		}
 		res = Render(path.Base(rel), src, linker(path.Dir(rel), rawPrefix))

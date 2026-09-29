@@ -19,7 +19,7 @@
   const k = $derived(kind(entry.name))
   const src = $derived(url(entry))
   const images = $derived(k === 'image' ? entries.filter((e) => !e.dir && kind(e.name) === 'image') : [])
-  const LIMIT = 1 << 20
+  const LIMIT = 16 << 20
   const stem = $derived(entry.name.slice(0, entry.name.lastIndexOf('.') + 1))
   const tracks = $derived(
     k === 'video' && siblings
