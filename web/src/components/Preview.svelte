@@ -77,20 +77,65 @@
     }
   }
 
+  let start: { x: number; y: number } | null = null
+  let off = $state({ x: 0, y: 0 })
+
+  function touchstart(e: TouchEvent) {
+    const one = e.touches.length === 1 && k !== 'text' && k !== 'pdf' && (visualViewport?.scale ?? 1) <= 1
+    start = one ? { x: e.touches[0].clientX, y: e.touches[0].clientY } : null
+    off = { x: 0, y: 0 }
+  }
+
+  function touchmove(e: TouchEvent) {
+    if (!start || e.touches.length !== 1) return touchcancel()
+    const dx = e.touches[0].clientX - start.x
+    const dy = e.touches[0].clientY - start.y
+    off = Math.abs(dx) > Math.abs(dy) ? { x: images.length > 1 ? dx : 0, y: 0 } : { x: 0, y: Math.max(0, dy) }
+  }
+
+  function touchend() {
+    const { x, y } = off
+    touchcancel()
+    if (x < -60) step(1)
+    else if (x > 60) step(-1)
+    else if (y > 100) onclose()
+  }
+
+  function touchcancel() {
+    start = null
+    off = { x: 0, y: 0 }
+  }
+
   const ready = () => (status = 'ready')
   const failed = () => (status = 'error')
 </script>
 
 <svelte:window onkeydown={key} />
 
-<div class="viewer" role="dialog" aria-modal="true" aria-label={entry.name} bind:this={root}>
+<div
+  class="viewer"
+  role="dialog"
+  aria-modal="true"
+  tabindex="-1"
+  aria-label={entry.name}
+  bind:this={root}
+  ontouchstart={touchstart}
+  ontouchmove={touchmove}
+  ontouchend={touchend}
+  ontouchcancel={touchcancel}
+>
   <header>
     <span class="title">{entry.name}</span>
     {#if images.length > 1}<span class="hint">{at + 1} / {images.length}</span>{/if}
     <a class="icon-btn" href={url(entry, true)} download aria-label={t.download}><Download size={20} /></a>
     <button class="icon-btn" onclick={onclose} aria-label={t.close} bind:this={closer}><X size={20} /></button>
   </header>
-  <div class="body" aria-busy={status === 'loading'}>
+  <div
+    class="body"
+    aria-busy={status === 'loading'}
+    style:translate={off.x || off.y ? `${off.x}px ${off.y}px` : null}
+    style:opacity={off.y ? Math.max(0.3, 1 - off.y / 400) : null}
+  >
     {#if status === 'loading'}<div class="spinner" role="status" aria-label={t.loading}></div>{/if}
     {#if status === 'error'}
       <div class="viewer-error" role="alert">

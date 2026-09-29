@@ -407,6 +407,10 @@ button.quiet:hover:not(:disabled) { color: var(--danger); background: color-mix(
   .bar.searching .search-close { display: inline-grid; }
   .fab { display: inline-flex; }
   .files .spacer { margin-bottom: 88px; }
+  .viewer header { padding-left: var(--space-4); }
+  .viewer header .icon-btn { width: 44px; height: 44px; }
+  .viewer .step { display: none; }
+  .viewer .body { touch-action: pinch-zoom; }
   .uploads { right: 8px; bottom: calc(8px + var(--bar-h, env(safe-area-inset-bottom))); width: calc(100vw - 16px); max-height: 40vh; }
   .toasts { bottom: calc(16px + var(--bar-h, env(safe-area-inset-bottom)) + var(--up-h, 0px) + var(--fab-h, 0px)); }
   :root:has(.fab) { --fab-h: 64px; }
