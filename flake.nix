@@ -24,7 +24,7 @@
             '';
             dontFixup = true;
             outputHashMode = "recursive";
-            outputHash = "sha256-dFtJJLnYWTyvw2Cfhr/b3P6kCyBPlc++vVPvCrROEOU=";
+            outputHash = "sha256-rIPDqfN1ySy1vMKQ1B/+x+oN9IiVmFnwv9T8buqInj0=";
           };
           web = pkgs.stdenvNoCC.mkDerivation {
             name = "filebox-web";
@@ -43,7 +43,7 @@
           pname = "filebox";
           version = self.shortRev or "dirty";
           src = self;
-          vendorHash = "sha256-0aapVhy4iiSkABxm5uMYV+rq1ib65YQSDwVNqnRhE48=";
+          vendorHash = "sha256-KzYSTnFs2k2xOjl0ezTftq1j7dpsFKhDVrGOM3zd5lU=";
           subPackages = [ "cmd/filebox" ];
           env.CGO_ENABLED = 0;
           ldflags = [ "-s" "-w" ];
