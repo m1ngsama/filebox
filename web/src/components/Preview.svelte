@@ -57,6 +57,7 @@
   onMount(() => {
     const vv = visualViewport
     const zoom = () => (zoomed = (vv?.scale ?? 1) > 1)
+    zoom()
     vv?.addEventListener('resize', zoom)
     const back = document.activeElement as HTMLElement | null
     closer?.focus()
