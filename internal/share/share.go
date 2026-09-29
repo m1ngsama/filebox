@@ -42,6 +42,7 @@ func (s *Service) Register(mux *http.ServeMux) {
 	mux.HandleFunc("GET /s/{token}/thumb/{path...}", s.thumb)
 	mux.HandleFunc("GET /s/{token}/zip", s.zip)
 	mux.HandleFunc("GET /s/{token}/render", s.render)
+	mux.HandleFunc("GET /s/{token}/meta", s.meta)
 	mux.HandleFunc("/s/{token}/upload/{rest...}", s.upload)
 }
 
@@ -336,6 +337,20 @@ func (s *Service) render(w http.ResponseWriter, r *http.Request) {
 		raw = "/s/" + url.PathEscape(o.sh.Token) + "/raw/"
 	}
 	render.Serve(w, r, root, rel, raw)
+}
+
+func (s *Service) meta(w http.ResponseWriter, r *http.Request) {
+	o, ok := s.open(w, r, "read", "upload")
+	if !ok {
+		return
+	}
+	root, rel, done, err := o.root(r.URL.Query().Get("p"))
+	if err != nil {
+		httpx.Error(w, err)
+		return
+	}
+	defer done()
+	s.Thumbs.ServeMeta(w, r, root, rel)
 }
 
 func (s *Service) thumb(w http.ResponseWriter, r *http.Request) {

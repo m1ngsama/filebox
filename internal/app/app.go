@@ -48,6 +48,7 @@ func (a *App) Handler() http.Handler {
 	mux.Handle("GET /raw/{vol}/{path...}", a.Auth.RequireAny(http.HandlerFunc(a.raw)))
 	mux.Handle("GET /thumb/{vol}/{path...}", a.Auth.RequireAny(http.HandlerFunc(a.thumb)))
 	mux.Handle("GET /api/render", a.Auth.RequireAny(http.HandlerFunc(a.render)))
+	mux.Handle("GET /api/meta", a.Auth.RequireAny(http.HandlerFunc(a.meta)))
 	(&api.API{Vols: a.Vols, DB: a.DB, Auth: a.Auth, Jobs: api.NewJobs(a.Index), Index: a.Index}).Register(mux)
 	a.Passkeys.Register(mux)
 	d := dav.Handler(a.Vols, a.Auth, a.Index)
@@ -107,6 +108,16 @@ func (a *App) render(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	render.Serve(w, r, v.Root, rel, "/raw/"+url.PathEscape(v.Name)+"/")
+}
+
+func (a *App) meta(w http.ResponseWriter, r *http.Request) {
+	q := r.URL.Query()
+	v, rel, err := a.Vols.Resolve(q.Get("vol"), q.Get("p"))
+	if err != nil {
+		httpx.Error(w, err)
+		return
+	}
+	a.Thumbs.ServeMeta(w, r, v.Root, rel)
 }
 
 func (a *App) thumb(w http.ResponseWriter, r *http.Request) {

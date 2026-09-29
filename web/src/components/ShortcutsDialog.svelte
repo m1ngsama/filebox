@@ -20,6 +20,8 @@
     [[['Space']], k.toggle],
     [[['Esc']], k.escape],
     [[['←'], ['→']], k.step],
+    [[['Z']], k.zoom],
+    [[['I']], k.info],
     [[[mod, 'Z']], k.undo],
     [[[apple ? '⌥' : 'Alt', k.drag]], k.dragCopy],
     [[['?']], k.help],

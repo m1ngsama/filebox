@@ -3,6 +3,7 @@ import { execFileSync, spawn } from 'node:child_process'
 import { createHash } from 'node:crypto'
 import { closeSync, cpSync, utimesSync, createReadStream, existsSync, mkdirSync, mkdtempSync, openSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync, writeSync } from 'node:fs'
 import { createServer, type AddressInfo } from 'node:net'
+import { crc32, deflateSync } from 'node:zlib'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { t } from '../web/src/lib/i18n'
@@ -86,6 +87,24 @@ function bigFile(mb: number) {
   return p
 }
 
+function png(w: number, h: number) {
+  const chunk = (type: string, data: Buffer) => {
+    const b = Buffer.alloc(12 + data.length)
+    b.writeUInt32BE(data.length, 0)
+    b.write(type, 4)
+    data.copy(b, 8)
+    b.writeUInt32BE(crc32(b.subarray(4, 8 + data.length)), 8 + data.length)
+    return b
+  }
+  const ihdr = Buffer.alloc(13)
+  ihdr.writeUInt32BE(w, 0)
+  ihdr.writeUInt32BE(h, 4)
+  ihdr[8] = 8
+  const rows = Buffer.alloc((w + 1) * h, 0x80)
+  for (let y = 0; y < h; y++) rows[y * (w + 1)] = 0
+  return Buffer.concat([Buffer.from('89504e470d0a1a0a', 'hex'), chunk('IHDR', ihdr), chunk('IDAT', deflateSync(rows)), chunk('IEND', Buffer.alloc(0))])
+}
+
 async function shareDocs(page: Page, mode: 'read' | 'upload' | 'drop', password = '') {
   await row(page, 'docs').locator('button.more').click()
   const loaded = page.waitForResponse((r) => r.request().method() === 'GET' && new URL(r.url()).pathname === '/api/shares')
@@ -151,6 +170,37 @@ test('markdown renders with tables and highlighted code, and code files are high
   const code = page.getByRole('dialog', { name: 'main.go' }).locator('.doc.code')
   await expect(code.locator('.kn', { hasText: 'package' })).toBeVisible()
   expect(await code.locator('.kn').evaluate((e) => getComputedStyle(e).color)).not.toBe(await code.evaluate((e) => getComputedStyle(e).color))
+})
+
+test('images open in a lightbox that zooms, steps, shows info and closes back to the row', async ({ page, server }) => {
+  for (const n of ['big1.png', 'big2.png']) writeFileSync(join(server.vol, 'docs', n), png(2400, 1600))
+  await login(page)
+  await row(page, 'docs').locator('button.name').click()
+  await row(page, 'big1.png').locator('button.name').click()
+  const box = page.getByRole('dialog', { name: 'big1.png' })
+  await expect(box).toContainText('1 / 2')
+  await expect(box.getByRole('button', { name: t.close })).toBeFocused()
+  await expect(box.locator('.pswp__img:not(.pswp__img--placeholder)').first()).toHaveJSProperty('complete', true)
+  await page.waitForTimeout(500)
+  await box.getByRole('button', { name: t.zoom }).click()
+  await expect(box).toHaveClass(/pswp--zoomed-in/)
+  await page.keyboard.press('z')
+  await expect(box).not.toHaveClass(/pswp--zoomed-in/)
+  await page.mouse.move(640, 400)
+  await page.mouse.wheel(0, -400)
+  await expect(box).toHaveClass(/pswp--zoomed-in/)
+  await page.keyboard.press('ArrowRight')
+  await expect(page.getByRole('dialog', { name: 'big2.png' })).toContainText('2 / 2')
+  await page.keyboard.press('i')
+  const info = page.getByRole('complementary', { name: t.info })
+  await expect(info).toContainText(t.size)
+  await expect(info.getByRole('status')).toHaveCount(0)
+  await page.keyboard.press('Escape')
+  await expect(info).toHaveCount(0)
+  await expect(page.getByRole('dialog', { name: 'big2.png' })).toBeVisible()
+  await page.keyboard.press('Escape')
+  await expect(page.getByRole('dialog')).toHaveCount(0)
+  await expect(row(page, 'big1.png').locator('button.name')).toBeFocused()
 })
 
 test('a slow folder shows skeleton rows and a broken image offers a download', async ({ page, server }) => {
@@ -1047,6 +1097,7 @@ test.describe('on a phone', () => {
     const f = await finger(page)
     await expect(page.getByRole('dialog', { name: 'p1.png' })).toContainText('1 / 3')
     await expect(page.getByRole('button', { name: t.next })).toBeHidden()
+    await page.waitForTimeout(500)
     await f.swipe(-200, 10)
     await expect(page.getByRole('dialog', { name: 'p2.png' })).toContainText('2 / 3')
     await f.swipe(200, -10)

@@ -2,8 +2,6 @@
   import { onMount } from 'svelte'
   import X from '@lucide/svelte/icons/x'
   import Download from '@lucide/svelte/icons/download'
-  import ChevronLeft from '@lucide/svelte/icons/chevron-left'
-  import ChevronRight from '@lucide/svelte/icons/chevron-right'
   import CircleAlert from '@lucide/svelte/icons/circle-alert'
   import type { Entry, Src } from '../lib/api'
   import { kind, look } from '../lib/format'
@@ -19,7 +17,6 @@
   const k = $derived(kind(entry.name))
   const src = $derived(url(entry))
   const images = $derived(k === 'image' ? entries.filter((e) => !e.dir && kind(e.name) === 'image') : [])
-  const at = $derived(images.findIndex((e) => e.name === entry.name))
   const LIMIT = 1 << 20
   const md = $derived(/\.(md|markdown)$/i.test(entry.name))
   const rich = $derived(k === 'text' && (md || look(entry.name) === 'code'))
@@ -73,14 +70,9 @@
     }
   })
 
-  function step(d: number) {
-    if (images.length > 1) entry = images[(at + d + images.length) % images.length]
-  }
-
   function key(e: KeyboardEvent) {
+    if (k === 'image') return
     if (e.key === 'Escape') onclose()
-    else if (e.key === 'ArrowLeft') step(-1)
-    else if (e.key === 'ArrowRight') step(1)
     else if (e.key === 'Tab' && root) {
       const f = [...root.querySelectorAll<HTMLElement>('a[href], button, video, audio, iframe, pre, article')].filter((x) => x.offsetParent)
       const i = f.indexOf(document.activeElement as HTMLElement)
@@ -104,15 +96,13 @@
     if (!start || e.touches.length !== 1) return touchcancel()
     const dx = e.touches[0].clientX - start.x
     const dy = e.touches[0].clientY - start.y
-    off = Math.abs(dx) > Math.abs(dy) ? { x: images.length > 1 ? dx : 0, y: 0 } : { x: 0, y: Math.max(0, dy) }
+    off = { x: 0, y: Math.abs(dx) > Math.abs(dy) ? 0 : Math.max(0, dy) }
   }
 
   function touchend() {
-    const { x, y } = off
+    const { y } = off
     touchcancel()
-    if (x < -60) step(1)
-    else if (x > 60) step(-1)
-    else if (y > 100) onclose()
+    if (y > 100) onclose()
   }
 
   function touchcancel() {
@@ -126,6 +116,13 @@
 
 <svelte:window onkeydown={key} />
 
+{#if k === 'image'}
+  {#await import('./Lightbox.svelte')}
+    <div class="viewer"><div class="spinner" role="status" aria-label={t.loading}></div></div>
+  {:then { default: Lightbox }}
+    <Lightbox bind:entry {images} {url} {onclose} />
+  {/await}
+{:else}
 <div
   class="viewer"
   role="dialog"
@@ -140,13 +137,11 @@
 >
   <header>
     <span class="title">{entry.name}</span>
-    {#if images.length > 1}<span class="hint">{at + 1} / {images.length}</span>{/if}
     <a class="icon-btn" href={url(entry, 'dl')} download aria-label={t.download}><Download size={20} /></a>
     <button class="icon-btn" onclick={onclose} aria-label={t.close} bind:this={closer}><X size={20} /></button>
   </header>
   <div
     class="body"
-    style:touch-action={k === 'image' && !zoomed ? 'pinch-zoom' : null}
     aria-busy={status === 'loading'}
     style:translate={off.x || off.y ? `${off.x}px ${off.y}px` : null}
     style:opacity={off.y ? Math.max(0.3, 1 - off.y / 400) : null}
@@ -158,8 +153,6 @@
         <p>{k === 'video' ? t.cantPlay : t.previewFailed}</p>
         <a class="button primary" href={url(entry, 'dl')} download><Download size={18} />{t.download}</a>
       </div>
-    {:else if k === 'image'}
-      <img src={src} alt={entry.name} class:dim={status === 'loading'} onload={ready} onerror={failed} />
     {:else if k === 'video'}
       <!-- svelte-ignore a11y_media_has_caption -->
       <video src={src} controls autoplay playsinline preload="metadata" onloadedmetadata={ready} onerror={failed}></video>
@@ -178,9 +171,6 @@
         <a class="button primary" href={url(entry, 'dl')} download><Download size={18} />{t.download}</a>
       </div>
     {/if}
-    {#if k === 'image' && images.length > 1}
-      <button class="icon-btn step prev" onclick={() => step(-1)} aria-label={t.prev}><ChevronLeft size={28} /></button>
-      <button class="icon-btn step next" onclick={() => step(1)} aria-label={t.next}><ChevronRight size={28} /></button>
-    {/if}
   </div>
 </div>
+{/if}
