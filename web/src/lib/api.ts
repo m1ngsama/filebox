@@ -28,9 +28,10 @@ export type ShareInfo = { locked: true; mode: Share['mode'] } | { locked: false;
 
 export const session = { lost: () => {} }
 
-async function req<T>(method: string, url: string, body?: unknown): Promise<T> {
+async function req<T>(method: string, url: string, body?: unknown, signal?: AbortSignal): Promise<T> {
   const r = await fetch(url, {
     method,
+    signal,
     headers: body === undefined ? {} : { 'Content-Type': 'application/json' },
     body: body === undefined ? undefined : JSON.stringify(body),
   })
@@ -76,7 +77,8 @@ export const api = {
   login: (name: string, password: string) => req<void>('POST', '/api/login', { name, password }),
   logout: () => req<void>('POST', '/api/logout'),
   ls: (vol: string, path: string) => req<{ entries: Entry[] }>('GET', `/api/ls?${q({ vol, path })}`),
-  search: (q: string) => req<{ entries: RecentFile[]; scanning: boolean }>('GET', `/api/search?${new URLSearchParams({ q })}`),
+  search: (q: string, signal: AbortSignal) =>
+    req<{ entries: RecentFile[]; scanning: boolean }>('GET', `/api/search?${new URLSearchParams({ q })}`, undefined, signal),
   vols: () => req<{ vols: Usage[] }>('GET', '/api/vols'),
   size: (vol: string, path: string) => req<{ size: number; files: number; dirs: number; scanning: boolean }>('GET', `/api/size?${q({ vol, path })}`),
   favorites: () => req<{ entries: Favorite[] }>('GET', '/api/favorites'),

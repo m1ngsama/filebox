@@ -125,18 +125,28 @@
       return
     }
     finding = true
-    let live = true
+    const stop = new AbortController()
     const id = setTimeout(
       () =>
-        api
-          .search(q)
-          .then((r) => live && ((hits = r.entries), (partial = r.scanning), (hitSort = null)), (e: Error) => live && fail(e))
-          .finally(() => live && (finding = false)),
+        api.search(q, stop.signal).then(
+          (r) => {
+            if (stop.signal.aborted) return
+            hits = r.entries
+            partial = r.scanning
+            hitSort = null
+            finding = false
+          },
+          (e: Error) => {
+            if (stop.signal.aborted) return
+            finding = false
+            fail(e)
+          },
+        ),
       200,
     )
     return () => {
-      live = false
       clearTimeout(id)
+      stop.abort()
     }
   })
 
