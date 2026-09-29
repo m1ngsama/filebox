@@ -375,16 +375,19 @@ test('theme colours do not need light-dark() support', async ({ page }) => {
 
 test('a missing chunk reloads the page once, then offers a retry', async ({ page }) => {
   await login(page)
+  await page.evaluate(() => navigator.serviceWorker.ready)
+  const ctx = page.context()
   let aborted = 0
-  await page.route(/\/assets\/Settings-.*\.js$/, (r) => (aborted++ ? r.continue() : r.abort()))
+  await ctx.route(/\/assets\/Settings-.*\.js$/, (r) => (aborted++ ? r.continue() : r.abort()))
   const loads: string[] = []
   page.on('load', () => loads.push(page.url()))
   await page.goto('/settings')
   await expect(page.getByRole('heading', { name: t.appearance })).toBeVisible()
   expect(aborted).toBe(2)
   expect(loads).toHaveLength(2)
-  await page.unroute(/Settings/)
-  await page.route(/\/assets\/Settings-.*\.js$/, (r) => r.abort())
+  await ctx.unroute(/Settings/)
+  await page.evaluate(() => caches.delete('shell'))
+  await ctx.route(/\/assets\/Settings-.*\.js$/, (r) => r.abort())
   await page.goto('/recent')
   await page.getByRole('link', { name: t.settings }).click()
   await expect(page.getByText(t.loadFailed)).toBeVisible()
