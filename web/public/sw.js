@@ -42,8 +42,12 @@ async function page(r) {
 }
 
 async function room() {
-  const { quota = 0, usage = 0 } = (await navigator.storage?.estimate?.()) ?? {}
-  return (quota - usage) / 2
+  try {
+    const { quota, usage = 0 } = await navigator.storage.estimate()
+    return quota ? (quota - usage) / 2 : Infinity
+  } catch {
+    return Infinity
+  }
 }
 
 async function receive(r) {

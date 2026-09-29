@@ -1583,6 +1583,17 @@ test('files shared from another app wait for an explicit confirm before uploadin
   expect(readFileSync(join(server.vol, 'docs/shared.txt'), 'utf8')).toBe('from the phone')
 })
 
+test('the share target still accepts files when storage estimates are unavailable', async ({ page }) => {
+  await page.goto('/')
+  const src = await (await page.request.get('/sw.js')).text()
+  const room = await page.evaluate(async (src) => {
+    const body = src.slice(src.indexOf('async function room'), src.indexOf('async function receive'))
+    const run = (storage: unknown) => new Function('navigator', `${body}; return room()`)({ storage })
+    return [await run(undefined), await run({ estimate: () => Promise.reject(new Error('no')) }), await run({ estimate: async () => ({}) }), await run({ estimate: async () => ({ quota: 100, usage: 20 }) })]
+  }, src)
+  expect(room).toEqual([Infinity, Infinity, Infinity, 40])
+})
+
 test('stale or oversized share-target stashes are discarded', async ({ page }) => {
   await withWorker(page)
   await page.evaluate(async () => {
