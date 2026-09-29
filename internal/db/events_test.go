@@ -7,16 +7,29 @@ import (
 
 func TestVisitorHash(t *testing.T) {
 	d := open(t)
-	a, b := d.Visitor("203.0.113.7"), d.Visitor("203.0.113.8")
-	if len(a) != 16 || a == b || a != d.Visitor("203.0.113.7") || strings.Contains(a, "203") {
+	a, b := d.visitor("203.0.113.7", 1), d.visitor("203.0.113.8", 1)
+	if len(a) != 16 || a == b || a != d.visitor("203.0.113.7", 1) || strings.Contains(a, "203") {
 		t.Fatalf("visitor hashes %q %q", a, b)
 	}
-	if d.Visitor("") != "" {
-		t.Fatal("empty IP hashed")
+	if d.visitor("203.0.113.7", 2) == a {
+		t.Fatal("visitor key did not rotate with the day")
 	}
-	other := open(t)
-	if other.Visitor("203.0.113.7") == a {
-		t.Fatal("visitor key is not per install")
+	if d.visitor("2001:db8:1:2::1", 2) != d.visitor("2001:db8:1:2:ffff::9", 2) || d.visitor("2001:db8:1:2::1", 2) == d.visitor("2001:db8:1:3::1", 2) {
+		t.Fatal("IPv6 visitors are not keyed by their /64")
+	}
+	if d.visitor("::ffff:203.0.113.7", 2) != d.visitor("203.0.113.7", 2) {
+		t.Fatal("mapped IPv4 differs from IPv4")
+	}
+	if d.visitor("", 2) != "" || d.visitor("not-an-ip", 2) != "" {
+		t.Fatal("invalid IP hashed")
+	}
+	if open(t).visitor("203.0.113.7", 1) == a {
+		t.Fatal("visitor key is shared between instances")
+	}
+	var n int
+	d.QueryRow(`SELECT count(*) FROM sqlite_master WHERE name = 'settings'`).Scan(&n)
+	if n != 0 {
+		t.Fatal("a visitor key is persisted")
 	}
 }
 

@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"net/url"
 	"strconv"
-	"sync"
 
 	_ "modernc.org/sqlite"
 )
@@ -121,13 +120,12 @@ var migrations = []string{
 	CREATE INDEX events_at ON events(at);
 	CREATE UNIQUE INDEX events_view ON events(share_id, visitor, at / 86400) WHERE kind = 'view';
 	CREATE UNIQUE INDEX events_download ON events(share_id, visitor, name, at / 3600) WHERE kind = 'download';
-	CREATE TABLE settings (key TEXT PRIMARY KEY, value BLOB NOT NULL) WITHOUT ROWID;
-	INSERT INTO settings (key, value) VALUES ('visitor_key', randomblob(32));`,
+`,
 }
 
 type DB struct {
 	*sql.DB
-	visitorKey func() ([]byte, error)
+	visitors visitorKey
 }
 
 type User struct {
@@ -167,10 +165,6 @@ func Open(path string) (*DB, error) {
 		return nil, err
 	}
 	d := &DB{DB: s}
-	d.visitorKey = sync.OnceValues(func() ([]byte, error) {
-		var k []byte
-		return k, d.QueryRow(`SELECT value FROM settings WHERE key = 'visitor_key'`).Scan(&k)
-	})
 	err = d.migrate()
 	if err == nil {
 		err = d.syncSearch()

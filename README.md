@@ -27,7 +27,7 @@ filebox serve -data /srv/data/filebox -listen :5280 -ffmpeg /usr/bin/ffmpeg -ori
 filebox token -data /srv/data/filebox new "laptop"         # app password for WebDAV and CLI
 ```
 
-Behind a reverse proxy, turn off request and response buffering (nginx: `proxy_request_buffering off; proxy_buffering off;`) and forward `X-Real-IP` and `X-Forwarded-Proto` from loopback.
+Behind a reverse proxy, turn off request and response buffering (nginx: `proxy_request_buffering off; proxy_buffering off;`) and forward `X-Real-IP` and `X-Forwarded-Proto` from loopback. filebox trusts `X-Real-IP`, then the last `X-Forwarded-For` entry, only when the direct peer is loopback, and uses the address for rate limits and the activity log. The proxy must set these headers itself (nginx: `proxy_set_header X-Real-IP $remote_addr;`) and must not pass a client-supplied value through. Caddy and Traefik pass them through by default.
 
 ## Passkeys
 

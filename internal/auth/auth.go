@@ -255,8 +255,11 @@ func fromLoopback(r *http.Request) bool {
 
 func ClientIP(r *http.Request) string {
 	if fromLoopback(r) {
-		if x := r.Header.Get("X-Real-IP"); x != "" {
+		if x := strings.TrimSpace(r.Header.Get("X-Real-IP")); x != "" {
 			return x
+		}
+		if xs := strings.Split(r.Header.Get("X-Forwarded-For"), ","); strings.TrimSpace(xs[len(xs)-1]) != "" {
+			return strings.TrimSpace(xs[len(xs)-1])
 		}
 	}
 	host, _, _ := net.SplitHostPort(r.RemoteAddr)

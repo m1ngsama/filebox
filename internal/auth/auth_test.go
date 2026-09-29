@@ -142,7 +142,13 @@ func TestClientIP(t *testing.T) {
 	if ClientIP(r) != "9.9.9.9" {
 		t.Fatal("loopback proxy header ignored")
 	}
+	r.Header.Del("X-Real-IP")
+	r.Header.Set("X-Forwarded-For", "6.6.6.6, 8.8.8.8")
+	if ClientIP(r) != "8.8.8.8" {
+		t.Fatal("the proxy-appended X-Forwarded-For entry was not used")
+	}
 	r.RemoteAddr = "192.168.31.5:5555"
+	r.Header.Set("X-Real-IP", "9.9.9.9")
 	if ClientIP(r) != "192.168.31.5" {
 		t.Fatal("spoofed header trusted from LAN")
 	}

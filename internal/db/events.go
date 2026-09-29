@@ -2,9 +2,13 @@ package db
 
 import (
 	"crypto/hmac"
+	"crypto/rand"
 	"crypto/sha256"
 	"encoding/hex"
+	"net/netip"
 	"strings"
+	"sync"
+	"time"
 )
 
 const (
@@ -27,13 +31,35 @@ type Event struct {
 	Share                   string
 }
 
-func (d *DB) Visitor(ip string) string {
-	k, err := d.visitorKey()
-	if err != nil || ip == "" {
+type visitorKey struct {
+	mu  sync.Mutex
+	day int64
+	key []byte
+}
+
+func (v *visitorKey) at(day int64) []byte {
+	v.mu.Lock()
+	defer v.mu.Unlock()
+	if v.key == nil || v.day != day {
+		v.day, v.key = day, make([]byte, 32)
+		rand.Read(v.key)
+	}
+	return v.key
+}
+
+func (d *DB) Visitor(ip string) string { return d.visitor(ip, time.Now().Unix()/86400) }
+
+func (d *DB) visitor(ip string, day int64) string {
+	a, err := netip.ParseAddr(ip)
+	if err != nil {
 		return ""
 	}
-	m := hmac.New(sha256.New, k)
-	m.Write([]byte(ip))
+	a = a.Unmap()
+	if a.Is6() {
+		a = netip.PrefixFrom(a, 64).Masked().Addr()
+	}
+	m := hmac.New(sha256.New, d.visitors.at(day))
+	m.Write(a.AsSlice())
 	return hex.EncodeToString(m.Sum(nil)[:8])
 }
 
