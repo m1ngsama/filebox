@@ -12,7 +12,8 @@
   import ArrowUp from '@lucide/svelte/icons/arrow-up'
   import ArrowDown from '@lucide/svelte/icons/arrow-down'
   import FileIcon from './FileIcon.svelte'
-  import type { Entry } from '../lib/api'
+  import { filesURL, type Entry, type Loc } from '../lib/api'
+  import { link } from '../lib/router.svelte'
   import { size, date, ago, look, fallback, flip, sorts, type Sort } from '../lib/format'
   import { t } from '../lib/i18n'
   import { narrow } from '../lib/shell.svelte'
@@ -35,7 +36,8 @@
     empty,
     loading = false,
     id = (e) => e.name,
-    sub,
+    loc,
+    reveal,
     dnd,
   }: {
     entries: Entry[]
@@ -52,7 +54,8 @@
     empty?: Snippet
     loading?: boolean
     id?: (e: Entry) => string
-    sub?: (e: Entry) => string
+    loc?: (e: Entry) => Loc
+    reveal?: string
     dnd?: { carry: (e: Entry) => Carried; target: (e: Entry) => Target }
   } = $props()
 
@@ -76,6 +79,7 @@
 
   const cols = $derived(grid ? Math.max(1, Math.floor((width - 16) / 172)) : 1)
   const rows = $derived(Math.ceil(entries.length / cols))
+  const rowOf = (i: number) => Math.floor(i / cols)
   const tab = $derived(Math.min(cur, entries.length - 1))
   const all = $derived(!!selected && entries.length > 0 && entries.every((e) => selected.has(id(e))))
 
@@ -189,10 +193,24 @@
       ev.preventDefault()
       const to = ev.key === 'Home' ? 0 : ev.key === 'End' ? entries.length - 1 : Math.min(entries.length - 1, Math.max(0, i + step!))
       cur = want = to
-      $v.scrollToIndex(Math.floor(to / cols))
+      $v.scrollToIndex(rowOf(to))
       focusWanted()
     }
   }
+
+  let revealed = ''
+  $effect(() => {
+    const key = reveal
+    if (!key || key === revealed) return
+    const i = entries.findIndex((e) => id(e) === key)
+    if (i < 0) return
+    revealed = key
+    untrack(() => {
+      cur = want = i
+      $v.scrollToIndex(rowOf(i), { align: 'center' })
+      tick().then(focusWanted)
+    })
+  })
 
   function selectAll() {
     if (!selected) return
@@ -220,6 +238,17 @@
       <DropdownMenu.Content class="menu" preventScroll={false} align="end" sideOffset={4}>{@render items(e)}</DropdownMenu.Content>
     </DropdownMenu.Portal>
   </DropdownMenu.Root>
+{/snippet}
+
+{#snippet trail(e: Entry)}
+  {#if loc}
+    {@const l = loc(e)}
+    {@const segs = l.path.split('/')}
+    {#each [l.vol, ...segs.slice(0, -1)] as s, i (i)}{#if i}<span class="slash">/</span>{/if}<a
+        href={`${filesURL(l.vol, segs.slice(0, i).join('/'))}?select=${encodeURIComponent(segs[i])}`}
+        onclick={link}>{s}</a
+      >{/each}
+  {/if}
 {/snippet}
 
 {#snippet check(e: Entry, cls: string)}
@@ -309,7 +338,8 @@
                 {/each}
               </div>
             {:else}
-              {@const e = entries[r.index]}
+              {@const n = r.index}
+              {@const e = entries[n]}
               {@const s = src(e)}
               <div
                 class="row"
@@ -322,14 +352,14 @@
                 role="row"
                 aria-rowindex={r.index + 1}
                 aria-selected={selected ? selected.has(id(e)) : undefined}
-                tabindex={r.index === tab ? 0 : -1}
-                data-i={r.index}
-                class:pressing={pressing === r.index}
-                onclick={(ev) => pick(ev, r.index)}
-                onkeydown={(ev) => key(ev, r.index)}
-                onfocus={() => (cur = r.index)}
+                tabindex={n === tab ? 0 : -1}
+                data-i={n}
+                class:pressing={pressing === n}
+                onclick={(ev) => pick(ev, n)}
+                onkeydown={(ev) => key(ev, n)}
+                onfocus={() => (cur = n)}
                 oncontextmenu={(ev) => menu(ev, e)}
-                onpointerdown={(ev) => press(ev, r.index)}
+                onpointerdown={(ev) => press(ev, n)}
                 onpointermove={drift}
                 onpointerup={release}
                 onpointercancel={release}
@@ -339,11 +369,11 @@
                   {#if s}<img src={s} alt="" draggable="false" loading="lazy" decoding="async" onerror={() => miss(e)} />{:else}<FileIcon name={e.name} dir={e.dir} />{/if}
                 </span>
                 <span class="cell name-cell" role="gridcell">
-                  <button class="name" onclick={() => tap(r.index)} title={e.name}>{e.name}</button>
+                  <button class="name" onclick={() => tap(n)} title={e.name}>{e.name}</button>
                   {#if narrow.current}
-                    <span class="hint sub">{e.dir ? '' : `${size(e.size)} · `}{ago(e.mtime)}{sub ? ` · ${sub(e)}` : ''}</span>
-                  {:else if sub}
-                    <span class="hint sub" title={sub(e)}>{sub(e)}</span>
+                    <span class="hint sub">{e.dir ? '' : `${size(e.size)} · `}{ago(e.mtime)}{#if loc}{' · '}{@render trail(e)}{/if}</span>
+                  {:else if loc}
+                    <span class="hint sub">{@render trail(e)}</span>
                   {/if}
                 </span>
                 <span class="cell" role="gridcell">{@render more(e)}</span>

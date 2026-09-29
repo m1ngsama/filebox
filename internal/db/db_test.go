@@ -321,3 +321,30 @@ func TestOpenOddPath(t *testing.T) {
 		t.Fatal(err)
 	}
 }
+
+func TestMigrateBackfillsSearch(t *testing.T) {
+	p := filepath.Join(t.TempDir(), "t.db")
+	s, err := sql.Open("sqlite", "file:"+p)
+	if err != nil {
+		t.Fatal(err)
+	}
+	qs := append([]string{}, migrations[:5]...)
+	qs = append(qs, `PRAGMA user_version = 5`,
+		`INSERT INTO files (vol, path, dir, size, mtime) VALUES ('v', 'Music', 1, 0, 1), ('v', 'Music/song.flac', 0, 9, 2)`)
+	for _, q := range qs {
+		if _, err := s.Exec(q); err != nil {
+			t.Fatal(err)
+		}
+	}
+	s.Close()
+	d, err := Open(p)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer d.Close()
+	var name string
+	var size int64
+	if err := d.QueryRow(`SELECT f.name, f.size FROM files_fts JOIN files f ON f.id = files_fts.rowid WHERE files_fts MATCH '"song"'`).Scan(&name, &size); err != nil || name != "song.flac" || size != 9 {
+		t.Fatalf("backfilled %q %d %v", name, size, err)
+	}
+}

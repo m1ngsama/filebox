@@ -10,6 +10,7 @@ import (
 	"strconv"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	"github.com/m1ngsama/filebox/internal/auth"
 	"github.com/m1ngsama/filebox/internal/db"
@@ -100,6 +101,7 @@ func (a *API) Register(mux *http.ServeMux) {
 	h("GET /api/stat", a.stat)
 	mux.Handle("GET /api/zip", a.Auth.RequireAny(http.HandlerFunc(a.zip)))
 	h("GET /api/recent", a.recent)
+	h("GET /api/search", a.search)
 	h("POST /api/mkdir", a.mkdir)
 	h("POST /api/mv", a.mv)
 	h("POST /api/cp", a.cp)
@@ -347,6 +349,32 @@ func (a *API) recent(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	httpx.JSON(w, 200, map[string]any{"entries": fs, "scanning": !a.Index.Ready()})
+}
+
+func (a *API) search(w http.ResponseWriter, r *http.Request) {
+	q := r.URL.Query()
+	in := index.Query{Text: strings.TrimSpace(q.Get("q")), Limit: 200}
+	if utf8.RuneCountInString(in.Text) < 2 {
+		httpx.Fail(w, 400, "query too short")
+		return
+	}
+	if n, err := strconv.Atoi(q.Get("limit")); err == nil && n > 0 {
+		in.Limit = min(n, in.Limit)
+	}
+	if name := q.Get("vol"); name != "" {
+		v, rel, err := a.Vols.Resolve(name, q.Get("under"))
+		if err != nil {
+			httpx.Error(w, err)
+			return
+		}
+		in.Vol, in.Under = v.Name, rel
+	}
+	hits, err := a.Index.Search(in)
+	if err != nil {
+		httpx.Error(w, err)
+		return
+	}
+	httpx.JSON(w, 200, map[string]any{"entries": hits, "scanning": !a.Index.Ready()})
 }
 
 func (a *API) job(w http.ResponseWriter, r *http.Request) {

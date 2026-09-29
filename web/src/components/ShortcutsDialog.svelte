@@ -9,6 +9,7 @@
   const k = t.keys
   const rows: [string[][], string][] = [
     [[['/']], k.filter],
+    [[['Enter']], k.first],
     [[['N']], t.newFolder],
     [[['U']], t.upload],
     [[['F2']], k.rename],

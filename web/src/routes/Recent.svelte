@@ -48,7 +48,7 @@
     if (!e) return
     const f = loc(e)
     if (id === 'open') preview = e
-    else if (id === 'folder') navigate(`${filesURL(f.vol, parent(f.path))}?details=${encodeURIComponent(f.name)}`)
+    else if (id === 'folder') navigate(`${filesURL(f.vol, parent(f.path))}?select=${encodeURIComponent(f.name)}`)
     else {
       const a = document.createElement('a')
       a.href = rawURL(f.vol, f.path, true)
@@ -77,7 +77,7 @@
     loading={!loaded && !error}
     empty={recentEmpty}
     id={(e) => `${loc(e).vol}:${loc(e).path}`}
-    sub={(e) => `${loc(e).vol}:/${parent(loc(e).path)}`}
+    loc={loc}
   />
 </section>
 

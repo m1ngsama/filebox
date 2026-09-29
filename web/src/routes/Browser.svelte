@@ -26,7 +26,7 @@
   import EllipsisVertical from '@lucide/svelte/icons/ellipsis-vertical'
   import ArrowUp from '@lucide/svelte/icons/arrow-up'
   import ArrowDown from '@lucide/svelte/icons/arrow-down'
-  import { api, filesURL, rawURL, thumbURL, zipURL, saveURL, type Entry, type Move } from '../lib/api'
+  import { api, filesURL, rawURL, thumbURL, zipURL, saveURL, type Entry, type Move, type RecentFile } from '../lib/api'
   import { toast, fail, runLatest } from '../lib/toast.svelte'
   import { navigate, link, route } from '../lib/router.svelte'
   import { enqueue, type Replaced } from '../lib/uploads.svelte'
@@ -47,6 +47,11 @@
   let error = $state('')
   let at = $state('')
   let filter = $state('')
+  let scope = $state<'here' | 'all'>('here')
+  let hits = $state.raw<RecentFile[] | null>(null)
+  let finding = $state(false)
+  let partial = $state(false)
+  let reveal = $state('')
   let query = $state('')
   let sort = $state<Sort>('name')
   let desc = $state(false)
@@ -94,6 +99,7 @@
     filter = ''
     searching = false
     details = null
+    reveal = ''
     const focus = new URLSearchParams(untrack(() => route.search)).get('details')
     refresh().then((ok) => {
       if (ok && focus) details = entries.find((e) => e.name === focus) ?? null
@@ -103,6 +109,64 @@
   function closeDetails() {
     details = null
     if (new URLSearchParams(route.search).has('details')) navigate(route.path, true)
+  }
+
+  $effect(() => {
+    const q = filter.trim()
+    if (scope !== 'all' || [...q].length < 2) {
+      hits = null
+      finding = false
+      return
+    }
+    finding = true
+    let live = true
+    const id = setTimeout(
+      () =>
+        api
+          .search(q)
+          .then((r) => live && ((hits = r.entries), (partial = r.scanning)), (e: Error) => live && fail(e))
+          .finally(() => live && (finding = false)),
+      200,
+    )
+    return () => {
+      live = false
+      clearTimeout(id)
+    }
+  })
+
+  $effect(() => {
+    const name = new URLSearchParams(route.search).get('select')
+    if (!name || at !== here) return
+    untrack(async () => {
+      filter = query = ''
+      searching = false
+      await tick()
+      if (entries.some((e) => e.name === name)) {
+        selected.clear()
+        selected.add(name)
+        reveal = name
+      }
+      navigate(route.path, true)
+    })
+  })
+
+  const hitLoc = (e: Entry) => e as RecentFile
+
+  function locate(e: Entry) {
+    const h = hitLoc(e)
+    navigate(`${filesURL(h.vol, parent(h.path))}?select=${encodeURIComponent(h.name)}`)
+  }
+
+  const hitActions: Action[] = [
+    { id: 'folder', label: t.openFolder, icon: FolderOpen },
+    { id: 'download', label: t.download, icon: Download },
+  ]
+
+  function onhit(id: string, e: Entry | null) {
+    if (!e) return
+    const h = hitLoc(e)
+    if (id === 'folder') locate(e)
+    else saveURL(h.dir ? zipURL(h.vol, [h.path], h.name) : rawURL(h.vol, h.path, true))
   }
 
   $effect(() => {
@@ -409,8 +473,33 @@
         </DropdownMenu.Portal>
       </DropdownMenu.Root>
       <span class="grow"></span>
-      <label for="filter" class="sr-only">{t.filter}</label>
-      <input id="filter" class="filter" type="search" bind:value={filter} bind:this={filterEl} placeholder={t.filter} />
+      <div class="find">
+        <label for="filter" class="sr-only">{t.filter}</label>
+        <input
+          id="filter"
+          class="filter"
+          type="search"
+          bind:value={filter}
+          bind:this={filterEl}
+          placeholder={scope === 'all' ? t.searchAll : t.filter}
+          onkeydown={(e) => {
+            if (e.key === 'Enter' && hits?.length) locate(hits[0])
+          }}
+        />
+        <div class="scope" role="radiogroup" aria-label={t.searchScope}>
+          {#each [['here', t.scopeHere], ['all', t.scopeAll]] as const as [k, label] (k)}
+            <button
+              type="button"
+              role="radio"
+              aria-checked={scope === k}
+              onclick={() => {
+                scope = k
+                filterEl?.focus()
+              }}>{label}</button
+            >
+          {/each}
+        </div>
+      </div>
       <button class="icon-btn search-open" aria-label={t.openFilter} onclick={search} bind:this={opener}><Search size={20} /></button>
       <button class="icon-btn search-close" aria-label={t.closeFilter} onclick={endSearch}><X size={20} /></button>
       <button class="icon-btn view" aria-label={grid ? t.listView : t.gridView} title={grid ? t.listView : t.gridView} onclick={() => (grid = !grid)}>
@@ -439,6 +528,25 @@
 
     {#if error && at === here}<p class="error banner">{error}</p>{/if}
 
+    {#if hits}
+      {#if partial}<p class="hint banner">{t.indexing}</p>{/if}
+      <EntryList
+        entries={hits}
+        grid={false}
+        thumb={(e) => (!e.dir && thumbable(e.name) ? thumbURL(hitLoc(e).vol, hitLoc(e).path) : null)}
+        raw={(e) => (rawThumb(e) ? rawURL(hitLoc(e).vol, hitLoc(e).path) : null)}
+        actions={(e) => (e ? hitActions : [])}
+        onaction={onhit}
+        onopen={locate}
+        loading={finding}
+        id={(e) => `${hitLoc(e).vol}:${hitLoc(e).path}`}
+        loc={hitLoc}
+      >
+        {#snippet empty()}
+          {#if !finding}<EmptyState icon={SearchX} title={t.noResults} hint={t.noResultsHint} />{/if}
+        {/snippet}
+      </EntryList>
+    {:else}
     {#key here}
       <EntryList
         entries={shown}
@@ -453,6 +561,7 @@
         onopen={open}
         {batch}
         {dnd}
+        {reveal}
         loading={at !== here}
       >
         {#snippet empty()}
@@ -468,6 +577,7 @@
         {/snippet}
       </EntryList>
     {/key}
+    {/if}
 
     {#if dragging}<div class="dropzone">{t.dropHere}</div>{/if}
     {#if !selected.size && !details}<button class="primary fab" aria-label={t.new} onclick={() => (sheet = 'new')}><Plus size={24} /></button>{/if}
