@@ -63,7 +63,7 @@
       <span class="row-title">{t.events[e.kind]?.(e.name) ?? e.kind}{e.kind === 'upload' ? ` · ${size(e.size)}` : ''}</span>
       <span class="tags">
         {#if e.share && !e.kind.startsWith('share_')}<span class="tag">{e.share}</span>{/if}
-        {#if e.visitor}<span class="hint">{t.visitor(e.visitor)}</span>{/if}
+        {#if e.visitor}<span class="hint">{e.kind.startsWith('login') ? t.source(e.visitor) : t.visitor(e.visitor)}</span>{/if}
         <span class="hint" title={date(e.at * 1000)}>{ago(e.at * 1000)}</span>
       </span>
     </div>

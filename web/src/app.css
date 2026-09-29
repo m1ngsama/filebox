@@ -51,8 +51,8 @@ body { margin: 0; background: var(--bg); color: var(--fg); }
 a { color: var(--accent); text-decoration: none; }
 h1, h2 { margin: 0; font-size: var(--text-lg); font-weight: 600; }
 :focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
-button, select, input { font: inherit; color: inherit; }
-input:not([type='checkbox'], [type='radio']), select {
+button, select, input, textarea { font: inherit; color: inherit; }
+input:not([type='checkbox'], [type='radio']), select, textarea {
   background: var(--bg); border: 1px solid var(--line); border-radius: var(--radius-md); padding: 6px 10px; min-width: 0;
 }
 input[type='checkbox'], input[type='radio'] { accent-color: var(--accent); width: 16px; height: 16px; margin: 0; }
@@ -281,7 +281,7 @@ kbd { display: inline-block; min-width: 24px; padding: 1px 6px; border: 1px soli
 .share-meta .hint { font-size: var(--text-xs); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .menu.qr { display: flex; flex-direction: column; align-items: center; gap: var(--space-2); padding: var(--space-3); min-width: 0; }
 .menu.qr svg { width: 200px; height: 200px; border-radius: var(--radius-sm); }
-textarea { font: inherit; resize: vertical; }
+textarea { resize: vertical; }
 
 .viewer { position: fixed; inset: 0; z-index: 60; display: flex; flex-direction: column; background: var(--viewer-bg); color: var(--viewer-fg); }
 .viewer header { display: flex; align-items: center; gap: var(--space-2); padding: calc(8px + env(safe-area-inset-top)) 12px 8px 20px; }
@@ -505,6 +505,7 @@ button.quiet:hover:not(:disabled) { color: var(--danger); background: color-mix(
   .sel-tools span { max-width: 100%; overflow: hidden; text-overflow: ellipsis; }
   .details { width: 100vw; }
   .rows .wide { display: none; }
+  .share-meta .share-summary { white-space: normal; }
   .public-bar { flex-wrap: nowrap; }
   .public-bar .brand { display: none; }
   .public-bar .button span, .public-bar button.primary span { display: none; }

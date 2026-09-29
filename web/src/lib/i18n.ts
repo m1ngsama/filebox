@@ -250,6 +250,7 @@ export const t = {
   noActivity: '还没有动态',
   loadMore: '加载更多',
   visitor: (v: string) => `访客 ${v.slice(0, 6)}`,
+  source: (v: string) => `来源 ${v.slice(0, 6)}`,
   events: {
     view: () => '打开了分享页面',
     download: (n: string) => `下载了“${n}”`,
