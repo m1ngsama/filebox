@@ -39,8 +39,8 @@
   }
 
   async function logout() {
-    caches?.delete('share-target')
     await api.logout()
+    globalThis.caches?.delete('share-target')
     me = null
     needLogin = true
   }

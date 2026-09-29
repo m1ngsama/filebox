@@ -4,7 +4,7 @@ import { createHash } from 'node:crypto'
 import { closeSync, cpSync, utimesSync, createReadStream, existsSync, mkdirSync, mkdtempSync, openSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync, writeSync } from 'node:fs'
 import { createServer, type AddressInfo } from 'node:net'
 import { crc32, deflateSync } from 'node:zlib'
-import { tmpdir } from 'node:os'
+import { networkInterfaces, tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { t } from '../web/src/lib/i18n'
 
@@ -1597,4 +1597,33 @@ test('stale or oversized share-target stashes are discarded', async ({ page }) =
   await expect(page.locator('.toast', { hasText: t.sharedTooLarge })).toHaveCount(1)
   await expect(page.locator('.dialog')).toHaveCount(0)
   expect(await page.evaluate(() => caches.has('share-target'))).toBe(false)
+})
+
+test('logout works on a plain-HTTP origin without Cache Storage', async ({ browser, template }) => {
+  const lan = Object.values(networkInterfaces()).flat().find((i) => i?.family === 'IPv4' && !i.internal)?.address
+  test.skip(!lan, 'no non-loopback IPv4 address')
+  const dir = mkdtempSync(join(tmpdir(), 'filebox-e2e-'))
+  mkdirSync(join(dir, 'vol'))
+  cpSync(template, join(dir, 'data'), { recursive: true })
+  const port = await freePort()
+  const url = `http://${lan}:${port}`
+  const proc = spawn(BIN, ['serve', '-data', join(dir, 'data'), '-listen', `${lan}:${port}`, '-vol', `v=${join(dir, 'vol')}`], { stdio: 'ignore' })
+  const exited = new Promise((r) => proc.once('exit', r))
+  try {
+    await expect.poll(() => fetch(url).then((r) => r.ok, () => false)).toBe(true)
+    const page = await browser.newPage({ baseURL: url })
+    const errors: string[] = []
+    page.on('pageerror', (e) => errors.push(e.message))
+    await login(page)
+    expect(await page.evaluate(() => [isSecureContext, 'caches' in globalThis])).toEqual([false, false])
+    await page.getByRole('button', { name: t.logout }).click()
+    await expect(page.getByLabel(t.username)).toBeVisible()
+    expect((await page.request.get('/api/me')).status()).toBe(401)
+    expect(errors).toEqual([])
+    await page.close()
+  } finally {
+    proc.kill('SIGKILL')
+    await exited
+    rmSync(dir, { recursive: true, force: true })
+  }
 })
