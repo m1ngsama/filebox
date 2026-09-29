@@ -24,7 +24,11 @@ func SRTToVTT(src []byte) []byte {
 	if bytes.HasPrefix(src, []byte("WEBVTT")) {
 		return src
 	}
-	return append([]byte("WEBVTT\n\n"), srtTime.ReplaceAll(src, []byte("$1.$2 --> $3.$4"))...)
+	return append([]byte("WEBVTT\n\n"), srtTime.ReplaceAllFunc(src, func(m []byte) []byte {
+		g := srtTime.FindSubmatch(m)
+		ms := func(b []byte) string { return string(b) + strings.Repeat("0", 3-len(b)) }
+		return fmt.Appendf(nil, "%s.%s --> %s.%s", g[1], ms(g[2]), g[3], ms(g[4]))
+	})...)
 }
 
 func VTT(w http.ResponseWriter, r *http.Request, root *os.Root, rel string) {
