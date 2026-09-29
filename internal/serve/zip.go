@@ -62,6 +62,7 @@ func Zip(w http.ResponseWriter, r *http.Request, root *os.Root, rels []string, t
 		return fw, nil
 	})
 	z := &zipper{zw: zw, root: root, ctx: r.Context(), seen: map[string]bool{}}
+	z.base, _ = root.Stat(".")
 	h := w.Header()
 	h.Set("Content-Type", "application/zip")
 	h.Set("Content-Disposition", mime.FormatMediaType("attachment", map[string]string{"filename": name}))
@@ -110,6 +111,7 @@ type zipper struct {
 	root *os.Root
 	ctx  context.Context
 	seen map[string]bool
+	base fs.FileInfo
 }
 
 func (z *zipper) unique(name string) string {
@@ -158,13 +160,18 @@ func (z *zipper) dir(rel, arc string, fi fs.FileInfo) error {
 		return err
 	}
 	names, err := f.Readdirnames(-1)
+	st, serr := f.Stat()
 	f.Close()
+	if err == nil {
+		err = serr
+	}
 	if err != nil {
 		return err
 	}
+	top := z.base != nil && os.SameFile(st, z.base)
 	slices.Sort(names)
 	for _, n := range names {
-		if rel == "." && vol.Reserved(n) {
+		if top && vol.Reserved(n) {
 			continue
 		}
 		if err := z.add(path.Join(rel, n), path.Join(arc, n), false); err != nil {

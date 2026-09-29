@@ -51,6 +51,22 @@ func TestZipRoute(t *testing.T) {
 			t.Errorf("%q = %d, want %d", p, w.Code, code)
 		}
 	}
+	os.MkdirAll(filepath.Join(f.Dir, ".trash/t1"), 0o755)
+	os.WriteFile(filepath.Join(f.Dir, ".trash/t1/gone.txt"), []byte("g"), 0o644)
+	os.Symlink(".", filepath.Join(f.Dir, "all"))
+	whole := mkShare(t, f, `{"vol":"v","path":"","mode":"read"}`)
+	for _, u := range []string{"/api/zip?vol=v&p=all", "/s/" + whole + "/zip?p=all", "/s/" + whole + "/zip"} {
+		w := f.do("GET", u, nil)
+		got := zipNames(t, w.Body.Bytes())
+		if w.Code != 200 || !slices.ContainsFunc(got, func(n string) bool { return strings.HasSuffix(n, "pub/a.txt") }) {
+			t.Fatalf("%s: %d %v", u, w.Code, got)
+		}
+		for _, n := range got {
+			if strings.Contains(n, ".trash") || strings.Contains(n, ".filebox") {
+				t.Fatalf("%s exposes %s", u, n)
+			}
+		}
+	}
 	if w := f.do("GET", "/api/zip?vol=nope&p=pub", nil); w.Code != 404 {
 		t.Fatalf("unknown volume %d", w.Code)
 	}
