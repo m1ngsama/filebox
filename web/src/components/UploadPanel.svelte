@@ -4,7 +4,7 @@
   import { t } from '../lib/i18n'
 
   let h = $state(0)
-  $effect(() => document.documentElement.style.setProperty('--up-h', `${uploads.length ? h + 8 : 0}px`))
+  $effect(() => document.documentElement.style.setProperty('--up-h', `${h}px`))
 </script>
 
 {#if uploads.length}

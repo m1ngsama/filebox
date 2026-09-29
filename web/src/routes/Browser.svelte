@@ -59,6 +59,7 @@
   let sheet = $state<'new' | 'more' | null>(null)
   let filterEl = $state<HTMLInputElement>()
   let opener = $state<HTMLButtonElement>()
+  let barH = $state(0)
   const selected = new SvelteSet<string>()
   let files = $state<HTMLInputElement>()
   let folder = $state<HTMLInputElement>()
@@ -117,6 +118,13 @@
   })
 
   $effect(() => save('grid', grid ? '1' : '0'))
+
+  $effect(() => {
+    const s = document.documentElement.style
+    if (selected.size && barH) s.setProperty('--bar-h', `${barH}px`)
+    else s.removeProperty('--bar-h')
+    return () => s.removeProperty('--bar-h')
+  })
 
   function open(e: Entry) {
     if (e.dir) navigate(filesURL(vol, join(e.name)))
@@ -421,7 +429,7 @@
 {/if}
 
 {#if selected.size}
-  <div class="sel-tools" role="toolbar" aria-label={t.selected(selected.size)}>
+  <div class="sel-tools" role="toolbar" aria-label={t.selected(selected.size)} bind:offsetHeight={barH}>
     <button disabled={!selectedFiles.length} onclick={() => download(selectedFiles)}><Download size={20} /><span>{t.download}</span></button>
     <button onclick={() => (dialog = { kind: 'move', names: [...selected] })}><FolderInput size={20} /><span>{t.moveOrCopy}</span></button>
     <button disabled={!one} onclick={() => pass('share')}><Share2 size={20} /><span>{t.share}</span></button>
