@@ -101,6 +101,12 @@ var migrations = []string{
 		INSERT INTO files_fts (files_fts, rowid, path) VALUES ('delete', old.id, old.path);
 		INSERT INTO files_fts (rowid, path) VALUES (new.id, new.path);
 	END;`,
+	`CREATE TABLE favorites (
+		vol TEXT NOT NULL,
+		path TEXT NOT NULL,
+		created INTEGER NOT NULL,
+		PRIMARY KEY (vol, path)
+	) WITHOUT ROWID;`,
 }
 
 type DB struct{ *sql.DB }

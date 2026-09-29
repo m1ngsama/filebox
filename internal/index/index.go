@@ -104,7 +104,7 @@ func (x *Index) rename(vol, from, to string) error {
 		return err
 	}
 	defer tx.Rollback()
-	for _, t := range []string{"files", "dav_props"} {
+	for _, t := range []string{"files", "dav_props", "favorites"} {
 		if _, err := tx.Exec(`DELETE FROM `+t+` WHERE `+subtree, under(vol, to)...); err != nil {
 			return err
 		}
@@ -226,9 +226,10 @@ func (x *Index) scan(vols *vol.Set) (int, error) {
 func (x *Index) sync(v *vol.Volume, rel string) error {
 	fi, err := v.Root.Lstat(rel)
 	if errors.Is(err, fs.ErrNotExist) {
-		_, err := x.db.Exec(`DELETE FROM dav_props WHERE `+subtree, under(v.Name, rel)...)
-		if err != nil {
-			return err
+		for _, t := range []string{"dav_props", "favorites"} {
+			if _, err := x.db.Exec(`DELETE FROM `+t+` WHERE `+subtree, under(v.Name, rel)...); err != nil {
+				return err
+			}
 		}
 	}
 	if err != nil || (!fi.IsDir() && !fi.Mode().IsRegular()) {

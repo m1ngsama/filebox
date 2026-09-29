@@ -1,15 +1,19 @@
 <script lang="ts">
   import { Tabs } from 'bits-ui'
   import X from '@lucide/svelte/icons/x'
+  import Star from '@lucide/svelte/icons/star'
   import FileIcon from './FileIcon.svelte'
   import SharePanel from './SharePanel.svelte'
   import type { Entry } from '../lib/api'
   import { size, date, fallback } from '../lib/format'
   import { t } from '../lib/i18n'
+  import { starred, star } from '../lib/favorites.svelte'
+  import { fail } from '../lib/toast.svelte'
 
   let { vol, path, entry, thumbs, onclose }: { vol: string; path: string; entry: Entry; thumbs: (string | null)[]; onclose: () => void } = $props()
   let tries = $state(0)
   const src = $derived(fallback(thumbs, tries))
+  const on = $derived(starred(vol, path))
 </script>
 
 <aside class="details" aria-label={t.details}>
@@ -18,7 +22,12 @@
       {#if src}<img {src} alt="" onerror={() => tries++} />{:else}<FileIcon name={entry.name} dir={entry.dir} size={64} />{/if}
     </div>
     <button class="icon-btn details-close" aria-label={t.close} onclick={onclose}><X size={20} /></button>
-    <h2 title={entry.name}>{entry.name}</h2>
+    <div class="details-title">
+      <h2 title={entry.name}>{entry.name}</h2>
+      <button class="icon-btn" class:on aria-pressed={on} aria-label={t.star} title={on ? t.unstar : t.star} onclick={() => star(vol, [path], !on).catch(fail)}>
+        <Star size={20} />
+      </button>
+    </div>
     <dl>
       {#if !entry.dir}<dt>{t.size}</dt><dd>{size(entry.size)}</dd>{/if}
       <dt>{t.mtime}</dt><dd>{date(entry.mtime)}</dd>

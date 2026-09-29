@@ -177,6 +177,7 @@ button.ghost { border-color: transparent; background: none; }
 .row { position: absolute; top: 0; left: 0; right: 0; height: 48px; padding: 0 var(--space-2); border-bottom: 1px solid var(--line); cursor: default; }
 .row:hover { background: var(--hover); }
 .row.sel, .card.sel { background: var(--sel); }
+.row.dim > :not(:nth-child(4)) { opacity: 0.55; }
 .row:focus-visible, .card:focus-visible { outline-offset: -2px; }
 .thumb { display: grid; place-items: center; width: 32px; height: 32px; }
 .thumb img { width: 32px; height: 32px; object-fit: cover; border-radius: var(--radius-sm); }
@@ -256,7 +257,10 @@ kbd { display: inline-block; min-width: 24px; padding: 1px 6px; border: 1px soli
 .details-thumb { display: grid; place-items: center; height: 180px; border-radius: var(--radius-lg); background: var(--nav); overflow: hidden; margin-bottom: 12px; }
 .details-thumb img { width: 100%; height: 100%; object-fit: contain; }
 .details-close { position: absolute; top: 20px; right: 20px; background: var(--panel); }
-.details h2 { overflow-wrap: anywhere; }
+.details h2 { overflow-wrap: anywhere; flex: 1; }
+.details-title { display: flex; align-items: flex-start; gap: var(--space-2); }
+.details-title .on { color: light-dark(#b7791f, #f5c451); }
+.details-title .on svg { fill: currentColor; }
 .details dl { display: grid; grid-template-columns: auto 1fr; gap: 2px 12px; margin: var(--space-2) 0 0; font-size: var(--text-sm); }
 .details dt { color: var(--muted); }
 .details dd { margin: 0; overflow-wrap: anywhere; }

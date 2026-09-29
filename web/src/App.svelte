@@ -15,7 +15,7 @@
   let error = $state('')
   const parts = $derived(route.path.split('/').filter(Boolean).map(decodeURIComponent))
   const isShare = $derived(parts[0] === 's' && !!parts[1])
-  const titles: Record<string, string> = { recent: t.recent, shares: t.myShares, trash: t.trash, settings: t.settings }
+  const titles: Record<string, string> = { recent: t.recent, favorites: t.favorites, shares: t.myShares, trash: t.trash, settings: t.settings }
 
   session.lost = () => {
     me = null
@@ -77,6 +77,8 @@
         </header>
         {#if me.vols.length && parts[0] === 'recent'}
           <Lazy load={() => import('./routes/Recent.svelte')} />
+        {:else if me.vols.length && parts[0] === 'favorites'}
+          <Lazy load={() => import('./routes/Favorites.svelte')} />
         {:else}
           <div class="page">
             {#if !me.vols.length}

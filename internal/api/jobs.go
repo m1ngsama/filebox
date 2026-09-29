@@ -154,6 +154,7 @@ func run(ix *index.Index, src, dst *vol.Volume, srel, drel, id string, move bool
 	}
 	ix.CopyProps(src, srel, dst, drel, true)
 	if move {
+		ix.CarryFavorites(src, srel, dst, drel)
 		return src.Root.RemoveAll(srel)
 	}
 	return nil

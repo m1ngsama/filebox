@@ -102,6 +102,8 @@ func (a *API) Register(mux *http.ServeMux) {
 	mux.Handle("GET /api/zip", a.Auth.RequireAny(http.HandlerFunc(a.zip)))
 	h("GET /api/recent", a.recent)
 	h("GET /api/search", a.search)
+	h("GET /api/favorites", a.favorites)
+	h("POST /api/favorites", a.star)
 	h("POST /api/mkdir", a.mkdir)
 	h("POST /api/mv", a.mv)
 	h("POST /api/cp", a.cp)
@@ -375,6 +377,69 @@ func (a *API) search(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	httpx.JSON(w, 200, map[string]any{"entries": hits, "scanning": !a.Index.Ready()})
+}
+
+type favorite struct {
+	Entry
+	Vol     string `json:"vol"`
+	Path    string `json:"path"`
+	Missing bool   `json:"missing"`
+}
+
+func (a *API) favorites(w http.ResponseWriter, r *http.Request) {
+	fs, err := a.Index.Favorites()
+	if err != nil {
+		httpx.Error(w, err)
+		return
+	}
+	out := []favorite{}
+	for _, f := range fs {
+		it := favorite{Entry: Entry{Name: path.Base(f.Path)}, Vol: f.Vol, Path: f.Path, Missing: true}
+		if v, ok := a.Vols.Get(f.Vol); ok {
+			if e, err := Stat(v.Root, f.Path); err == nil {
+				it.Entry, it.Missing = e, false
+			}
+		}
+		out = append(out, it)
+	}
+	httpx.JSON(w, 200, map[string]any{"entries": out})
+}
+
+func (a *API) star(w http.ResponseWriter, r *http.Request) {
+	var in struct {
+		Vol   string   `json:"vol"`
+		Paths []string `json:"paths"`
+		Star  bool     `json:"star"`
+	}
+	if err := httpx.Read(r, &in); err != nil {
+		httpx.Fail(w, 400, "bad request")
+		return
+	}
+	rels := make([]string, 0, len(in.Paths))
+	for _, p := range in.Paths {
+		rel, err := vol.Clean(p)
+		if err == nil && rel == "." {
+			err = vol.ErrBadPath
+		}
+		if err == nil && in.Star {
+			v, ok := a.Vols.Get(in.Vol)
+			if !ok {
+				err = fs.ErrNotExist
+			} else {
+				_, err = v.Root.Lstat(rel)
+			}
+		}
+		if err != nil {
+			httpx.Error(w, err)
+			return
+		}
+		rels = append(rels, rel)
+	}
+	if err := a.Index.Star(in.Vol, rels, in.Star); err != nil {
+		httpx.Error(w, err)
+		return
+	}
+	w.WriteHeader(204)
 }
 
 func (a *API) job(w http.ResponseWriter, r *http.Request) {

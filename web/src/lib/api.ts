@@ -14,6 +14,7 @@ export class HttpError extends Error {
 export type Entry = { name: string; dir: boolean; size: number; mtime: number }
 export type Me = { name: string; vols: string[] }
 export type RecentFile = Entry & Loc
+export type Favorite = RecentFile & { missing: boolean }
 export type Loc = { vol: string; path: string }
 export type Move = { from: Loc; to: Loc }
 export type Share = { id: number; token: string; vol: string; path: string; mode: 'read' | 'upload' | 'drop'; has_password: boolean; expires: number; created: number; hits: number }
@@ -75,6 +76,8 @@ export const api = {
   logout: () => req<void>('POST', '/api/logout'),
   ls: (vol: string, path: string) => req<{ entries: Entry[] }>('GET', `/api/ls?${q({ vol, path })}`),
   search: (q: string) => req<{ entries: RecentFile[]; scanning: boolean }>('GET', `/api/search?${new URLSearchParams({ q })}`),
+  favorites: () => req<{ entries: Favorite[] }>('GET', '/api/favorites'),
+  star: (vol: string, paths: string[], star: boolean) => req<void>('POST', '/api/favorites', { vol, paths, star }),
   recent: () => req<{ entries: Omit<RecentFile, 'dir'>[]; scanning: boolean }>('GET', '/api/recent'),
   mkdir: (vol: string, path: string) => req<void>('POST', '/api/mkdir', { vol, path }),
   mv: (src: Loc, dst: Loc) => req<{ job: string } | undefined>('POST', '/api/mv', { src, dst }),

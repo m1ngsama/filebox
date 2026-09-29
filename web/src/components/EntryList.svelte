@@ -39,6 +39,7 @@
     loc,
     group,
     reveal,
+    dim,
     dnd,
   }: {
     entries: Entry[]
@@ -58,6 +59,7 @@
     loc?: (e: Entry) => Loc
     group?: (e: Entry) => string
     reveal?: string
+    dim?: (e: Entry) => string | undefined
     dnd?: { carry: (e: Entry) => Carried; target: (e: Entry) => Target }
   } = $props()
 
@@ -366,6 +368,7 @@
               {@const s = src(e)}
               <div
                 class="row"
+                class:dim={!!dim?.(e)}
                 {draggable}
                 ondragstart={(ev) => lift(ev, e)}
                 ondragend={drop}
@@ -394,9 +397,9 @@
                 <span class="cell name-cell" role="gridcell">
                   <button class="name" onclick={() => tap(n)} title={e.name}>{e.name}</button>
                   {#if narrow.current}
-                    <span class="hint sub">{e.dir ? '' : `${size(e.size)} · `}{ago(e.mtime)}{#if loc}{' · '}{@render trail(e)}{/if}</span>
+                    <span class="hint sub">{e.dir ? '' : `${size(e.size)} · `}{ago(e.mtime)}{#if loc}{' · '}{@render trail(e)}{/if}{dim?.(e) ? ` · ${dim(e)}` : ''}</span>
                   {:else if loc}
-                    <span class="hint sub">{@render trail(e)}</span>
+                    <span class="hint sub">{@render trail(e)}{dim?.(e) ? ` · ${dim(e)}` : ''}</span>
                   {/if}
                 </span>
                 <span class="cell" role="gridcell">{@render more(e)}</span>

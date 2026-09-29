@@ -11,6 +11,8 @@
   import Pencil from '@lucide/svelte/icons/pencil'
   import FolderInput from '@lucide/svelte/icons/folder-input'
   import Share2 from '@lucide/svelte/icons/share-2'
+  import Star from '@lucide/svelte/icons/star'
+  import StarOff from '@lucide/svelte/icons/star-off'
   import Info from '@lucide/svelte/icons/info'
   import Trash from '@lucide/svelte/icons/trash'
   import X from '@lucide/svelte/icons/x'
@@ -30,6 +32,7 @@
   import { toast, fail, runLatest } from '../lib/toast.svelte'
   import { navigate, link, route } from '../lib/router.svelte'
   import { enqueue, type Replaced } from '../lib/uploads.svelte'
+  import { loadStars, starred, star } from '../lib/favorites.svelte'
   import { thumbable, rawThumb, arrange, parent, base, child, flip, sorts, type Sort } from '../lib/format'
   import { t } from '../lib/i18n'
   import { load, save } from '../lib/storage'
@@ -273,6 +276,8 @@
     rename: { id: 'rename', label: t.rename, icon: Pencil },
     move: { id: 'move', label: t.moveOrCopy, icon: FolderInput },
     share: { id: 'share', label: t.share, icon: Share2 },
+    star: { id: 'star', label: t.star, icon: Star },
+    unstar: { id: 'unstar', label: t.unstar, icon: StarOff },
     details: { id: 'details', label: t.details, icon: Info },
     remove: { id: 'remove', label: t.remove, icon: Trash, danger: true },
     mkdir: { id: 'mkdir', label: t.newFolder, icon: FolderPlus },
@@ -281,7 +286,7 @@
 
   const actions = (e: Entry | null): Action[] =>
     !e ? [act.mkdir, act.upload]
-    : [...(narrow.current ? [act.select] : []), act.open, act.download, act.rename, act.move, act.share, act.details, act.remove]
+    : [...(narrow.current ? [act.select] : []), act.open, act.download, act.rename, act.move, act.share, starred(vol, join(e.name)) ? act.unstar : act.star, act.details, act.remove]
 
   function onaction(id: string, e: Entry | null) {
     if (id === 'mkdir') dialog = { kind: 'mkdir' }
@@ -293,7 +298,16 @@
     else if (id === 'rename') dialog = { kind: 'rename', e }
     else if (id === 'move') dialog = { kind: 'move', names: [e.name] }
     else if (id === 'remove') dialog = { kind: 'delete', names: [e.name] }
+    else if (id === 'star' || id === 'unstar') toggleStar([e.name], id === 'star')
     else details = e
+  }
+
+  $effect(() => void loadStars())
+
+  const allStarred = $derived(selected.size > 0 && [...selected].every((n) => starred(vol, join(n))))
+
+  function toggleStar(names: string[], on: boolean) {
+    star(vol, names.map(join), on).then(() => selected.clear(), fail)
   }
 
   type Failed = { name: string; error: Error }
@@ -336,6 +350,7 @@
   }
 
   function moved(done: Move[], copy: boolean) {
+    if (!copy) loadStars(true)
     selected.clear()
     closeDetails()
     refresh()
@@ -420,6 +435,9 @@
     <Download size={16} />{t.download}
   </button>
   <button class="ghost" onclick={() => (dialog = { kind: 'move', names: [...selected] })}><FolderInput size={16} />{t.moveOrCopy}</button>
+  <button class="ghost" onclick={() => toggleStar([...selected], !allStarred)}>
+    {#if allStarred}<StarOff size={16} />{t.unstar}{:else}<Star size={16} />{t.star}{/if}
+  </button>
   <button class="ghost danger" onclick={() => (dialog = { kind: 'delete', names: [...selected] })}><Trash size={16} />{t.remove}</button>
   <button class="icon-btn" aria-label={t.clearSelection} onclick={() => selected.clear()}><X size={16} /></button>
 {/snippet}
@@ -616,14 +634,19 @@
     <button onclick={() => (dialog = { kind: 'move', names: [...selected] })}><FolderInput size={20} /><span>{t.moveOrCopy}</span></button>
     <button disabled={!one} onclick={() => pass('share')}><Share2 size={20} /><span>{t.share}</span></button>
     <button class="danger" onclick={() => (dialog = { kind: 'delete', names: [...selected] })}><Trash size={20} /><span>{t.remove}</span></button>
-    <button disabled={!one} onclick={() => (sheet = 'more')}><Ellipsis size={20} /><span>{t.more}</span></button>
+    <button onclick={() => (sheet = 'more')}><Ellipsis size={20} /><span>{t.more}</span></button>
   </div>
 {/if}
 
 {#if sheet}
   {#await import('../components/Sheet.svelte') then { default: Sheet }}
-    {@const items = sheet === 'new' ? creators : [act.rename, act.details].map((a) => ({ ...a, run: () => pass(a.id) }))}
-    <Sheet title={sheet === 'new' ? t.new : (one?.name ?? '')} onclose={() => (sheet = null)}>
+    {@const names = [...selected]}
+    {@const mark = allStarred ? act.unstar : act.star}
+    {@const items =
+      sheet === 'new'
+        ? creators
+        : [{ ...mark, run: () => toggleStar(names, mark === act.star) }, ...(one ? [act.rename, act.details].map((a) => ({ ...a, run: () => pass(a.id) })) : [])]}
+    <Sheet title={sheet === 'new' ? t.new : (one?.name ?? t.selected(selected.size))} onclose={() => (sheet = null)}>
       {#each items as c (c.label)}
         <button
           class="sheet-item"
@@ -665,6 +688,7 @@
           const m = { from: { vol, path: join(e.name) }, to: { vol, path: join(n) } }
           await api.mv(m.from, m.to)
           toast(t.renamed(n), { action: undo(() => reverse([m])) })
+          loadStars(true)
           selected.clear()
           if (details?.name === e.name) closeDetails()
           await refresh()
@@ -687,6 +711,7 @@
               action: undo(() => restore(v, r.trashed)),
             })
           selected.clear()
+          loadStars(true)
           if (details && names.includes(details.name) && !left.includes(details.name)) closeDetails()
           await refresh()
           if (left.length) {

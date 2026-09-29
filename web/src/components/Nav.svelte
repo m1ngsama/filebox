@@ -1,5 +1,6 @@
 <script lang="ts">
   import Clock from '@lucide/svelte/icons/clock'
+  import Star from '@lucide/svelte/icons/star'
   import HardDrive from '@lucide/svelte/icons/hard-drive'
   import Share2 from '@lucide/svelte/icons/share-2'
   import Trash from '@lucide/svelte/icons/trash'
@@ -27,6 +28,9 @@
     {#if vols.length}
       <li>
         <a href="/recent" onclick={go} aria-current={parts[0] === 'recent' ? 'page' : undefined}><Clock size={18} /><span>{t.recent}</span></a>
+      </li>
+      <li>
+        <a href="/favorites" onclick={go} aria-current={parts[0] === 'favorites' ? 'page' : undefined}><Star size={18} /><span>{t.favorites}</span></a>
       </li>
     {/if}
     {#each vols as v}
