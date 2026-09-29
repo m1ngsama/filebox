@@ -89,16 +89,16 @@ var migrations = []string{
 	DROP TABLE files;
 	ALTER TABLE files_new RENAME TO files;
 	CREATE INDEX files_mtime ON files(mtime DESC);
-	CREATE VIRTUAL TABLE files_fts USING fts5(path, content='files', content_rowid='id', tokenize='trigram');
+	CREATE VIRTUAL TABLE files_fts USING fts5(name, path, content='files', content_rowid='id', tokenize='trigram');
 	INSERT INTO files_fts (files_fts) VALUES ('rebuild');
 	CREATE TRIGGER files_fts_delete AFTER DELETE ON files BEGIN
-		INSERT INTO files_fts (files_fts, rowid, path) VALUES ('delete', old.id, old.path);
+		INSERT INTO files_fts (files_fts, rowid, name, path) VALUES ('delete', old.id, old.name, old.path);
 	END;
 	CREATE TRIGGER files_fts_update AFTER UPDATE OF path ON files BEGIN
-		INSERT INTO files_fts (files_fts, rowid, path) VALUES ('delete', old.id, old.path);
-		INSERT INTO files_fts (rowid, path) VALUES (new.id, new.path);
-	END;`,
-	`CREATE TABLE favorites (
+		INSERT INTO files_fts (files_fts, rowid, name, path) VALUES ('delete', old.id, old.name, old.path);
+		INSERT INTO files_fts (rowid, name, path) VALUES (new.id, new.name, new.path);
+	END;
+	CREATE TABLE favorites (
 		vol TEXT NOT NULL,
 		path TEXT NOT NULL,
 		created INTEGER NOT NULL,

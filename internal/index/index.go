@@ -370,7 +370,7 @@ func (b *batch) flush() error {
 			}
 		}
 	}
-	if _, err := tx.Exec(`INSERT INTO files_fts (rowid, path) SELECT id, path FROM files WHERE id > ?`, top); err != nil {
+	if _, err := tx.Exec(`INSERT INTO files_fts (rowid, name, path) SELECT id, name, path FROM files WHERE id > ?`, top); err != nil {
 		return err
 	}
 	b.rows = b.rows[:0]

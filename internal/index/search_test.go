@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"slices"
 	"sort"
+	"strings"
 	"testing"
 	"time"
 )
@@ -173,5 +174,51 @@ func TestSearchStopsOnCancel(t *testing.T) {
 	cancel()
 	if _, err := e.x.Search(ctx, Query{Text: "report", Limit: 10}); err == nil {
 		t.Fatal("cancelled search returned no error")
+	}
+}
+
+func TestSearchKeepsNameHitsAmongManyPathHits(t *testing.T) {
+	e := setup(t)
+	b := &batch{db: e.x.db, w: &e.x.w, vol: "v"}
+	b.add(row{path: "a", dir: true, mtime: 1})
+	b.add(row{path: "a/report-2024.pdf", mtime: 200_000})
+	b.add(row{path: "photos", dir: true, mtime: 2})
+	b.add(row{path: "photos/2024", dir: true, mtime: 2})
+	for i := range 100_000 {
+		b.add(row{path: fmt.Sprintf("photos/2024/img-%06d.jpg", i), mtime: int64(3 + i)})
+	}
+	if err := b.flush(); err != nil {
+		t.Fatal(err)
+	}
+	got := e.find(t, Query{Text: "2024"})
+	if len(got) != 200 || got[0] != "v:a/report-2024.pdf" {
+		t.Fatalf("got %d hits starting %v", len(got), got[:min(3, len(got))])
+	}
+	names := 0
+	for i, p := range got {
+		if strings.Contains(p[strings.LastIndex(p, "/")+1:], "2024") {
+			if names != i {
+				t.Fatalf("name hit %s ranked after a path-only hit", p)
+			}
+			names++
+		}
+	}
+	if names != 22 || !slices.Contains(got, "v:photos/2024") {
+		t.Fatalf("%d name hits in %v", names, got[:names])
+	}
+	if got := e.find(t, Query{Text: "img-09999"}); len(got) != 10 || got[0] != "v:photos/2024/img-099999.jpg" {
+		t.Fatalf("narrow name search %v", got)
+	}
+	if got := e.find(t, Query{Text: "img"}); len(got) != 200 || got[0] != "v:photos/2024/img-099999.jpg" || got[199] != "v:photos/2024/img-099800.jpg" {
+		t.Fatalf("broad name search got %d hits starting %v", len(got), got[:min(1, len(got))])
+	}
+	if got := e.find(t, Query{Text: "img", Vol: "v", Under: "a"}); len(got) != 0 {
+		t.Fatalf("broad name search ignored the scope: %v", got[:min(3, len(got))])
+	}
+	if got := e.find(t, Query{Text: "2024", Vol: "v", Under: "a"}); !slices.Equal(got, []string{"v:a/report-2024.pdf"}) {
+		t.Fatalf("scoped %v", got)
+	}
+	if got := e.find(t, Query{Text: "hotos/2024/"}); len(got) != 200 || got[0] != "v:photos/2024/img-099999.jpg" {
+		t.Fatalf("path-only search got %d hits starting %v", len(got), got[:min(1, len(got))])
 	}
 }
