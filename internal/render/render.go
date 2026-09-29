@@ -7,6 +7,7 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
+	"encoding/json"
 	"fmt"
 	"html"
 	"io"
@@ -186,35 +187,42 @@ func slot(ctx context.Context, f io.Reader, rel, rawPrefix string) (result, erro
 	}
 	wctx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
-	name, args := self, []string{workerArg, rel, rawPrefix}
+	name, args := self, []string{workerArg}
 	if nice != "" {
 		name, args = nice, append([]string{"-n", "10", self}, args...)
 	}
+	head, _ := json.Marshal(job{rel, rawPrefix})
 	cmd := exec.CommandContext(wctx, name, args...)
-	cmd.Stdin = bytes.NewReader(src)
+	cmd.Stdin = io.MultiReader(bytes.NewReader(head), strings.NewReader("\n"), bytes.NewReader(src))
 	cmd.WaitDelay = time.Second
 	out, err := cmd.Output()
 	if ctx.Err() != nil {
 		return result{}, ctx.Err()
 	}
-	head, body, ok := bytes.Cut(out, []byte("\n"))
+	flags, body, ok := bytes.Cut(out, []byte("\n"))
 	if err != nil || !ok {
 		return plain(src, "complex"), nil
 	}
-	t, reason, _ := strings.Cut(string(head), " ")
+	t, reason, _ := strings.Cut(string(flags), " ")
 	return result{body, t == "1", strings.TrimPrefix(reason, "-")}, nil
 }
 
 // RunWorker must run before anything else in main and in TestMain of packages that render.
 func RunWorker() {
-	if len(os.Args) != 4 || os.Args[1] != workerArg {
+	if len(os.Args) != 2 || os.Args[1] != workerArg {
 		return
 	}
-	src, err := io.ReadAll(io.LimitReader(os.Stdin, Limit+1))
+	in := bufio.NewReader(os.Stdin)
+	line, err := in.ReadBytes('\n')
+	var j job
+	if err != nil || json.Unmarshal(line, &j) != nil {
+		os.Exit(2)
+	}
+	src, err := io.ReadAll(io.LimitReader(in, Limit+1))
 	if err != nil {
 		os.Exit(1)
 	}
-	res := Render(path.Base(os.Args[2]), src, linker(path.Dir(os.Args[2]), os.Args[3]))
+	res := Render(path.Base(j.Rel), src, linker(path.Dir(j.Rel), j.RawPrefix))
 	t := "0"
 	if res.truncated {
 		t = "1"
@@ -227,6 +235,8 @@ func RunWorker() {
 	}
 	os.Exit(0)
 }
+
+type job struct{ Rel, RawPrefix string }
 
 func plain(src []byte, reason string) result {
 	truncated := len(src) > Limit
