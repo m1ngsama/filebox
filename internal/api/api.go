@@ -359,8 +359,15 @@ func (a *API) recent(w http.ResponseWriter, r *http.Request) {
 func (a *API) search(w http.ResponseWriter, r *http.Request) {
 	q := r.URL.Query()
 	in := index.Query{Text: strings.TrimSpace(q.Get("q")), Limit: 200}
-	if utf8.RuneCountInString(in.Text) < 2 {
+	switch {
+	case utf8.RuneCountInString(in.Text) < 2:
 		httpx.Fail(w, 400, "query too short")
+		return
+	case strings.ContainsRune(in.Text, 0):
+		httpx.Fail(w, 400, "bad query")
+		return
+	case q.Has("under") && q.Get("vol") == "":
+		httpx.Fail(w, 400, "under needs vol")
 		return
 	}
 	if n, err := strconv.Atoi(q.Get("limit")); err == nil && n > 0 {

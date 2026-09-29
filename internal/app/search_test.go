@@ -45,7 +45,7 @@ func TestSearchAPI(t *testing.T) {
 	if got := f.search(t, "q=plan.txt"); len(got) != 0 {
 		t.Fatalf("after rm %v", got)
 	}
-	for q, code := range map[string]int{"q=p": 400, "q=+p+": 400, "q=plan&vol=nope": 404, "q=plan&vol=v&under=.trash": 400, "q=plan&vol=v&under=../x": 200} {
+	for q, code := range map[string]int{"q=p": 400, "q=+p+": 400, "q=plan&vol=nope": 404, "q=plan&vol=v&under=.trash": 400, "q=plan&vol=v&under=../x": 200, "q=%00%00%00": 400, "q=ab%00cd": 400, "q=plan&under=notes": 400} {
 		if w := f.do("GET", "/api/search?"+q, nil); w.Code != code {
 			t.Errorf("%s: %d, want %d", q, w.Code, code)
 		}
