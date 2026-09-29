@@ -1051,3 +1051,48 @@ test('a read share downloads everything as a zip', async ({ page, browser }) => 
   expect(await unzipped(await dl)).toEqual(['docs/readme.txt=hello\n'])
   await anon.close()
 })
+
+test('dragging rows moves them onto a folder or a breadcrumb and undo brings them back', async ({ page, server }) => {
+  for (const n of ['a.txt', 'b.txt']) writeFileSync(join(server.vol, n), n)
+  mkdirSync(join(server.vol, 'box/inner'), { recursive: true })
+  const at = (p: string) => existsSync(join(server.vol, p))
+  await login(page)
+  await row(page, 'a.txt').locator('input[type=checkbox]').check()
+  await row(page, 'b.txt').locator('input[type=checkbox]').check()
+  await row(page, 'a.txt').locator('.num.size').dragTo(row(page, 'box').locator('.num.mtime'))
+  await expect(page.locator('.toast', { hasText: t.movedTo(t.what(['a.txt', 'b.txt']), 'v:/box') })).toBeVisible()
+  expect([at('box/a.txt'), at('box/b.txt'), at('a.txt')]).toEqual([true, true, false])
+  await expect(row(page, 'a.txt')).toHaveCount(0)
+  await page.locator('main').press('Control+z')
+  await expect(page.locator('.toast', { hasText: t.undone })).toBeVisible()
+  expect([at('a.txt'), at('b.txt'), at('box/a.txt')]).toEqual([true, true, false])
+
+  await row(page, 'docs').locator('button.name').click()
+  await row(page, 'readme.txt').locator('.num.size').dragTo(page.locator('.crumbs a', { hasText: 'v' }))
+  await expect(page.locator('.toast', { hasText: t.movedTo(t.what(['readme.txt']), 'v:/') })).toBeVisible()
+  expect(at('readme.txt')).toBe(true)
+
+  await page.goto('/files/v/')
+  await page.keyboard.down('Alt')
+  await row(page, 'b.txt').locator('.num.size').dragTo(row(page, 'box').locator('.num.mtime'))
+  await page.keyboard.up('Alt')
+  await expect(page.locator('.toast', { hasText: t.copiedTo(t.what(['b.txt'])) })).toBeVisible()
+  expect([at('b.txt'), at('box/b.txt')]).toEqual([true, true])
+
+  const centre = async (l: Locator) => {
+    const b = (await l.boundingBox())!
+    return [b.x + b.width / 2, b.y + b.height / 2] as const
+  }
+  await row(page, 'a.txt').locator('.num.size').hover()
+  await page.mouse.down()
+  const [bx, by] = await centre(row(page, 'box'))
+  await page.mouse.move(bx, by, { steps: 4 })
+  await page.mouse.move(bx + 10, by, { steps: 2 })
+  await expect(page).toHaveURL(/\/files\/v\/box\/$/)
+  const [ix, iy] = await centre(row(page, 'inner'))
+  await page.mouse.move(ix, iy, { steps: 4 })
+  await page.mouse.move(ix + 10, iy, { steps: 2 })
+  await expect(row(page, 'inner')).toHaveClass(/drop-over/)
+  await page.mouse.up()
+  await expect.poll(() => at('box/inner/a.txt')).toBe(true)
+})

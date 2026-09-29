@@ -4,7 +4,8 @@
 
   let { onclose }: { onclose: () => void } = $props()
   const platform = (navigator as Navigator & { userAgentData?: { platform: string } }).userAgentData?.platform ?? navigator.platform
-  const mod = /mac|ip/i.test(platform) ? '⌘' : 'Ctrl'
+  const apple = /mac|ip/i.test(platform)
+  const mod = apple ? '⌘' : 'Ctrl'
   const k = t.keys
   const rows: [string[][], string][] = [
     [[['/']], k.filter],
@@ -19,6 +20,7 @@
     [[['Esc']], k.escape],
     [[['←'], ['→']], k.step],
     [[[mod, 'Z']], k.undo],
+    [[[apple ? '⌥' : 'Alt', k.drag]], k.dragCopy],
     [[['?']], k.help],
   ]
 </script>

@@ -16,6 +16,9 @@
   import { size, date, ago, look, fallback, flip, sorts, type Sort } from '../lib/format'
   import { t } from '../lib/i18n'
   import { narrow } from '../lib/shell.svelte'
+  import { carry, drop, target, type Carried, type Target } from '../lib/dnd'
+
+  const inert: Target = { accepts: () => false, drop: () => {} }
 
   let {
     entries,
@@ -33,6 +36,7 @@
     loading = false,
     id = (e) => e.name,
     sub,
+    dnd,
   }: {
     entries: Entry[]
     grid: boolean
@@ -49,7 +53,12 @@
     loading?: boolean
     id?: (e: Entry) => string
     sub?: (e: Entry) => string
+    dnd?: { carry: (e: Entry) => Carried; target: (e: Entry) => Target }
   } = $props()
+
+  const draggable = $derived(!!dnd && !narrow.current)
+  const dropOn = (e: Entry) => (dnd && e.dir ? dnd.target(e) : inert)
+  const lift = (ev: DragEvent, e: Entry) => dnd && carry(ev, dnd.carry(e))
 
   const broken = new SvelteMap<string, number>()
   let scroller = $state<HTMLDivElement>()
@@ -269,6 +278,10 @@
                   {@const i = r.index * cols + j}
                   <div
                     class="card"
+                    {draggable}
+                    ondragstart={(ev) => lift(ev, e)}
+                    ondragend={drop}
+                    use:target={dropOn(e)}
                     class:sel={selected?.has(id(e))}
                     role="gridcell"
                     aria-selected={selected ? selected.has(id(e)) : undefined}
@@ -286,7 +299,7 @@
                   >
                     {@render check(e, 'card-check')}
                     <button class="card-open" data-look={e.dir ? 'dir' : look(e.name)} onclick={() => tap(i)} title={e.name}>
-                      {#if s}<img src={s} alt="" loading="lazy" decoding="async" onerror={() => miss(e)} />{:else}<FileIcon name={e.name} dir={e.dir} size={56} />{/if}
+                      {#if s}<img src={s} alt="" draggable="false" loading="lazy" decoding="async" onerror={() => miss(e)} />{:else}<FileIcon name={e.name} dir={e.dir} size={56} />{/if}
                     </button>
                     <div class="card-foot">
                       <span class="card-name" title={e.name}>{e.name}</span>
@@ -300,6 +313,10 @@
               {@const s = src(e)}
               <div
                 class="row"
+                {draggable}
+                ondragstart={(ev) => lift(ev, e)}
+                ondragend={drop}
+                use:target={dropOn(e)}
                 class:sel={selected?.has(id(e))}
                 style:transform={`translateY(${r.start}px)`}
                 role="row"
@@ -319,7 +336,7 @@
               >
                 <span class="cell check-cell" role="gridcell">{@render check(e, '')}</span>
                 <span class="thumb" role="gridcell">
-                  {#if s}<img src={s} alt="" loading="lazy" decoding="async" onerror={() => miss(e)} />{:else}<FileIcon name={e.name} dir={e.dir} />{/if}
+                  {#if s}<img src={s} alt="" draggable="false" loading="lazy" decoding="async" onerror={() => miss(e)} />{:else}<FileIcon name={e.name} dir={e.dir} />{/if}
                 </span>
                 <span class="cell name-cell" role="gridcell">
                   <button class="name" onclick={() => tap(r.index)} title={e.name}>{e.name}</button>

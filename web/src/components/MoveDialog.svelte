@@ -4,7 +4,7 @@
   import ChevronRight from '@lucide/svelte/icons/chevron-right'
   import { untrack } from 'svelte'
   import Modal from './Modal.svelte'
-  import { api, type JobStatus, type Move } from '../lib/api'
+  import { api, type Move } from '../lib/api'
   import { t } from '../lib/i18n'
 
   let {
@@ -47,23 +47,12 @@
   async function run(copy: boolean) {
     busy = true
     error = ''
-    const done: Move[] = []
-    try {
-      for (const [i, n] of names.entries()) {
-        const show = (s?: JobStatus) => (status = t.progress(i + 1, names.length, n, s?.total ? `${Math.floor((s.done / s.total) * 100)}%` : ''))
-        show()
-        const from = { vol, path: join(dir, n) }
-        const to = { vol: at.vol, path: join(at.path, n) }
-        if (copy) await api.waitJob((await api.cp(from, to)).job, show)
-        else await api.move(from, to, show)
-        done.push({ from, to })
-      }
-      ondone(done, copy)
-      onclose()
-    } catch (e) {
-      error = (e as Error).message
-      ondone(done, copy)
-    }
+    const r = await api.transfer(vol, dir, names, at, copy, (i, n, s) =>
+      (status = t.progress(i + 1, names.length, n, s?.total ? `${Math.floor((s.done / s.total) * 100)}%` : '')),
+    )
+    ondone(r.done, copy)
+    if (r.error) error = r.error.message
+    else onclose()
     busy = false
     status = ''
   }

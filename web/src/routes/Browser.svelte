@@ -37,6 +37,7 @@
   import EmptyState from '../components/EmptyState.svelte'
   import EntryList, { type Action } from '../components/EntryList.svelte'
   import type { Choice } from '../components/ConflictDialog.svelte'
+  import { target, inside, type Carried, type Target } from '../lib/dnd'
 
   let { vol, path, vols }: { vol: string; path: string; vols: string[] } = $props()
 
@@ -268,6 +269,23 @@
     else toast(t.movedTo(w, `${done[0].to.vol}:/${parent(done[0].to.path)}`), { action: undo(() => reverse(done)) })
   }
 
+  async function dropInto(to: { vol: string; path: string }, c: Carried, copy: boolean) {
+    const r = await api.transfer(c.vol, c.dir, c.names, to, copy)
+    moved(r.done, copy)
+    if (r.error) fail(r.error)
+  }
+
+  const into = (to: { vol: string; path: string }, spring?: () => void): Target => ({
+    accepts: (c) => !inside(c, to),
+    drop: (c, copy) => dropInto(to, c, copy),
+    spring,
+  })
+
+  const dnd = {
+    carry: (e: Entry) => ({ vol, dir: path, names: selected.has(e.name) ? [...selected] : [e.name] }),
+    target: (e: Entry) => into({ vol, path: join(e.name) }, () => open(e)),
+  }
+
   async function pass(id: string) {
     const e = one
     selected.clear()
@@ -360,10 +378,11 @@
       {/if}
       <h1 class="title">{crumbs.length ? crumbs[crumbs.length - 1] : vol}</h1>
       <nav class="crumbs" aria-label={t.breadcrumb}>
-        <a href={filesURL(vol, '')} onclick={link}>{vol}</a>
+        <a href={filesURL(vol, '')} onclick={link} use:target={into({ vol, path: '' })}>{vol}</a>
         {#each crumbs as c, i}
+          {@const to = crumbs.slice(0, i + 1).join('/')}
           <ChevronRight size={16} />
-          <a href={filesURL(vol, crumbs.slice(0, i + 1).join('/'))} onclick={link} aria-current={i === crumbs.length - 1 ? 'page' : undefined}>{c}</a>
+          <a href={filesURL(vol, to)} onclick={link} use:target={into({ vol, path: to })} aria-current={i === crumbs.length - 1 ? 'page' : undefined}>{c}</a>
         {/each}
       </nav>
       <DropdownMenu.Root>
@@ -421,6 +440,7 @@
         {onaction}
         onopen={open}
         {batch}
+        {dnd}
         loading={at !== here}
       >
         {#snippet empty()}

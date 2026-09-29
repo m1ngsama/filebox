@@ -83,6 +83,23 @@ export const api = {
     const r = await api.mv(from, to)
     if (r?.job) await api.waitJob(r.job, onprogress)
   },
+  async transfer(vol: string, dir: string, names: string[], to: Loc, copy: boolean, onstatus?: (i: number, name: string, s?: JobStatus) => void) {
+    const join = (d: string, n: string) => (d ? `${d}/${n}` : n)
+    const done: Move[] = []
+    try {
+      for (const [i, n] of names.entries()) {
+        const show = (s?: JobStatus) => onstatus?.(i, n, s)
+        show()
+        const m = { from: { vol, path: join(dir, n) }, to: { vol: to.vol, path: join(to.path, n) } }
+        if (copy) await api.waitJob((await api.cp(m.from, m.to)).job, show)
+        else await api.move(m.from, m.to, show)
+        done.push(m)
+      }
+      return { done }
+    } catch (e) {
+      return { done, error: e as Error }
+    }
+  },
   async waitJob(id: string, onprogress?: (s: JobStatus) => void) {
     for (;;) {
       const s = await req<JobStatus>('GET', `/api/jobs/${id}`)
