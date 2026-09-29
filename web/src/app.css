@@ -117,7 +117,7 @@ button.ghost { border-color: transparent; background: none; }
   position: fixed; right: var(--space-4); bottom: calc(var(--dock) + var(--space-4) + var(--up, 0px)); z-index: 30;
   width: var(--fab-size); height: var(--fab-size); padding: 0; border-radius: var(--radius-xl); box-shadow: var(--shadow);
 }
-.sheet {
+.bottom-sheet {
   position: fixed; left: 0; right: 0; bottom: 0; z-index: 41; display: flex; flex-direction: column; gap: 2px;
   max-height: 85dvh; overflow: auto; padding: var(--space-2) var(--space-2) calc(var(--space-2) + env(safe-area-inset-bottom));
   background: var(--panel); border-radius: var(--radius-xl) var(--radius-xl) 0 0; box-shadow: var(--shadow); outline: none; animation: rise 0.18s ease-out;
@@ -185,13 +185,13 @@ button.ghost { border-color: transparent; background: none; }
 .thumb img { width: 32px; height: 32px; object-fit: cover; border-radius: var(--radius-sm); }
 .ficon { color: var(--k, var(--muted)); }
 .ficon.dir { color: var(--accent); fill: color-mix(in srgb, var(--accent) 22%, transparent); }
-.image, [data-look='image'] { --k: light-dark(#0d8a6a, #4cc9a6); }
-.video, [data-look='video'] { --k: light-dark(#b0368a, #ee7cc8); }
-.audio, [data-look='audio'] { --k: light-dark(#8a4fd0, #b995f2); }
-.pdf, [data-look='pdf'] { --k: light-dark(#c42b2b, #ff7474); }
-.code, [data-look='code'] { --k: light-dark(#8a6400, #e0b44c); }
-.archive, [data-look='archive'] { --k: light-dark(#8a5a32, #d6a47a); }
-.sheet, [data-look='sheet'] { --k: light-dark(#23803c, #6fcf85); }
+.ficon.image, [data-look='image'] { --k: light-dark(#0d8a6a, #4cc9a6); }
+.ficon.video, [data-look='video'] { --k: light-dark(#b0368a, #ee7cc8); }
+.ficon.audio, [data-look='audio'] { --k: light-dark(#8a4fd0, #b995f2); }
+.ficon.pdf, [data-look='pdf'] { --k: light-dark(#c42b2b, #ff7474); }
+.ficon.code, [data-look='code'] { --k: light-dark(#8a6400, #e0b44c); }
+.ficon.archive, [data-look='archive'] { --k: light-dark(#8a5a32, #d6a47a); }
+.ficon.sheet, [data-look='sheet'] { --k: light-dark(#23803c, #6fcf85); }
 [data-look='dir'] { --k: var(--accent); }
 .row .name { justify-self: start; max-width: 100%; border: 0; background: none; padding: 4px 6px; min-width: 0; overflow: hidden; text-overflow: ellipsis; display: block; text-align: left; }
 .row .name:hover { background: none; text-decoration: underline; }
