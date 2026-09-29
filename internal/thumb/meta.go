@@ -75,7 +75,7 @@ func (s *Service) ServeMeta(w http.ResponseWriter, r *http.Request, root *os.Roo
 
 func (s *Service) probe(ctx context.Context, f *os.File, image bool) Meta {
 	entries := "stream=width,height"
-	args := []string{"-v", "error", "-protocol_whitelist", "file", "-select_streams", "v:0"}
+	args := []string{"-v", "error", "-protocol_whitelist", "file", "-select_streams", "V:0"}
 	if image {
 		entries += ":frame=width,height:frame_tags"
 		args = append(args, "-read_intervals", "%+#1")
