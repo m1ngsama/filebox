@@ -152,7 +152,7 @@ func TestSearchScope(t *testing.T) {
 }
 
 func BenchmarkSearch(b *testing.B) {
-	e := setup(&testing.T{})
+	e := setup(b)
 	bt := &batch{db: e.x.db, w: &e.x.w, vol: "v"}
 	words := []string{"holiday", "report", "invoice", "photo", "scan", "draft", "final", "backup", "music", "video"}
 	for i := range 100_000 {

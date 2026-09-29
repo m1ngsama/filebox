@@ -24,7 +24,7 @@ type env struct {
 	out  string
 }
 
-func setup(t *testing.T) *env {
+func setup(t testing.TB) *env {
 	t.Helper()
 	dir, out := t.TempDir(), t.TempDir()
 	vols, err := vol.Parse([]string{"v=" + dir})
@@ -152,7 +152,6 @@ func TestScanLargeTree(t *testing.T) {
 	}
 	start := time.Now()
 	e.scan(t)
-	t.Logf("first scan of %d files took %v", n, time.Since(start))
 	if d := time.Since(start); d > 30*time.Second {
 		t.Fatalf("scan took %v", d)
 	}
