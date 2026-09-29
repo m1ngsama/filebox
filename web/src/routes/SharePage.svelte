@@ -59,6 +59,14 @@
 
   $effect(() => save('shareGrid', grid ? '1' : '0'))
 
+  let barH = $state(0)
+  $effect(() => {
+    const s = document.documentElement.style
+    if (selected.size && barH) s.setProperty('--bar-h', `${barH}px`)
+    else s.removeProperty('--bar-h')
+    return () => s.removeProperty('--bar-h')
+  })
+
   async function load() {
     fatal = ''
     if (!validShareToken(token)) {
@@ -254,7 +262,7 @@
         <a class="button primary" href={shareRawURL(token, '', true)} download><Download size={18} />{t.download}</a>
       </div>
     {/if}
-    <p class="public-meta hint">{file.name} · {size(file.size)}</p>
+    {#if fileKind && (fileKind !== 'image' || imageSrc)}<p class="public-meta hint">{file.name} · {size(file.size)}</p>{/if}
   {:else if info && info.mode === 'drop'}
     <div class="dropbox">
       <Upload size={40} class="ficon" />
@@ -291,7 +299,7 @@
       {/key}
     </section>
     {#if selected.size}
-      <div class="sel-tools" role="group" aria-label={t.selected(selected.size)}>
+      <div class="sel-tools" role="group" aria-label={t.selected(selected.size)} bind:offsetHeight={barH}>
         <button onclick={() => download([...selected])}><Download size={20} /><span>{t.download}</span></button>
         <button onclick={() => selected.clear()}><X size={20} /><span>{t.clearSelection}</span></button>
       </div>

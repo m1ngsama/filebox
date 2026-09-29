@@ -124,6 +124,4 @@ export const shareSummary = (s: { mode: 'read' | 'upload' | 'drop'; expires: num
     !s.expires ? t.forever : s.expires * 1000 <= now ? t.expired : t.expiresIn(s.expires - now / 1000),
     t.visits(s.views),
     s.has_password && t.hasPassword,
-  ]
-    .filter(Boolean)
-    .join(' · ')
+  ].filter((x) => typeof x === 'string')

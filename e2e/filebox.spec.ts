@@ -1492,6 +1492,11 @@ test('a drop share shows upload progress and enforces its size limit', async ({ 
   await expect(panel.locator('li.error')).toContainText(t.errors[413])
   expect(existsSync(join(server.vol, 'docs/big.bin'))).toBe(false)
   await anon.close()
+  await page.goto('/shares')
+  await page.getByRole('button', { name: t.editShare }).click()
+  await expect(page.getByText(t.dropExposed)).toHaveCount(0)
+  await page.getByRole('radio', { name: t.modes.read, exact: true }).check()
+  await expect(page.getByText(t.dropExposed)).toBeVisible()
 })
 
 test('settings lists share activity newest first with filters', async ({ page, browser }) => {

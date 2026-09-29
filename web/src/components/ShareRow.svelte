@@ -18,7 +18,9 @@
 
 <div class="share-meta">
   {@render children()}
-  <span class="hint share-summary">{shareSummary(share)}</span>
+  <span class="hint share-summary">
+    {#each shareSummary(share) as part, i (i)}{#if i}{' · '}{/if}<span>{part}</span>{/each}
+  </span>
   {#if share.note}<span class="hint share-note" title={share.note}>{share.note}</span>{/if}
 </div>
 <ShareQR text={shareLink(share.token)} />

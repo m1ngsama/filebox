@@ -408,6 +408,7 @@ button.quiet:hover:not(:disabled) { color: var(--danger); background: color-mix(
 .shared-files { list-style: none; margin: 0; padding: 0; max-height: 120px; overflow: auto; font-size: var(--text-sm); }
 .shared-files li { display: flex; justify-content: space-between; gap: var(--space-3); }
 .shared-files li span:first-child { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.warn-note { color: var(--danger); font-size: var(--text-sm); }
 .activity-filters { display: flex; flex-wrap: wrap; gap: var(--space-2); }
 .code-line { display: flex; align-items: center; gap: var(--space-1); }
 
@@ -509,9 +510,13 @@ button.quiet:hover:not(:disabled) { color: var(--danger); background: color-mix(
   .details { width: 100vw; }
   .rows .wide { display: none; }
   .share-meta .share-summary { white-space: normal; }
+  .share-summary > span { white-space: nowrap; }
+  .shares li:has(.share-meta), .rows li:has(.share-meta) { flex-wrap: wrap; row-gap: 0; }
+  .shares li .share-meta, .rows li .share-meta { flex-basis: calc(100% - 48px); }
+  .shares li:has(.share-meta) > .icon-btn:first-of-type, .rows li:has(.share-meta) > button:first-of-type { margin-left: auto; }
   .public-bar { flex-wrap: nowrap; }
   .public-bar .brand { display: none; }
-  .public-bar .button span, .public-bar button.primary span { display: none; }
+  .public-bar .button span, .public-bar button.primary span { position: absolute; width: 1px; height: 1px; margin: -1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
   .public-bar .crumbs { min-width: 0; overflow: hidden; }
   .public-inline { padding: 0; }
   .viewer.inline { border-radius: 0; }
