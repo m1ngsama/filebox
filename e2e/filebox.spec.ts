@@ -229,7 +229,12 @@ test('videos pick up sibling subtitles and an unplayable one offers a download',
   await expect.poll(() => video.evaluate((v: HTMLVideoElement) => [...v.textTracks].map((t) => t.mode).includes('showing'))).toBe(true)
   await expect.poll(() => video.evaluate((v: HTMLVideoElement) => [...v.textTracks].flatMap((t) => [...(t.cues ?? [])].map((c) => (c as VTTCue).text)).join())).toMatch(/你好|hello/)
   await page.keyboard.press('Escape')
-  execFileSync('ffmpeg', ['-v', 'error', '-f', 'lavfi', '-i', 'sine=d=1', '-c:a', 'libopus', join(server.vol, 'docs/song.webm')])
+  try {
+    execFileSync('ffmpeg', ['-v', 'error', '-f', 'lavfi', '-i', 'sine=d=1', '-c:a', 'libopus', join(server.vol, 'docs/song.webm')])
+  } catch {
+    test.skip(true, 'needs ffmpeg with libopus')
+  }
+  test.skip(!(await page.evaluate(() => document.createElement('audio').canPlayType('audio/webm; codecs=opus'))), 'browser cannot play opus')
   await page.reload()
   await row(page, 'song.webm').locator('button.name').click()
   const song = page.getByRole('dialog', { name: 'song.webm' })
