@@ -951,6 +951,17 @@ test('uploads run three at a time under a header with totals and leave the list 
   expect(readFileSync(join(server.vol, 'p4.txt'), 'utf8')).toBe('p4')
 })
 
+test('undo after replacing one name twice brings back the original', async ({ page, server }) => {
+  writeFileSync(join(server.vol, 'x.txt'), 'old')
+  await login(page)
+  await fileInput(page).setInputFiles(['A', 'B'].map((c) => ({ name: 'x.txt', mimeType: 'text/plain', buffer: Buffer.from(c) })))
+  await page.getByRole('dialog', { name: t.conflictTitle }).getByRole('button', { name: t.replace }).click()
+  const done = page.locator('.toast', { hasText: t.uploadedReplaced(2, 2) })
+  await done.getByRole('button', { name: t.undo }).click()
+  await expect(page.locator('.toast', { hasText: t.undone })).toHaveCount(1)
+  expect(readFileSync(join(server.vol, 'x.txt'), 'utf8')).toBe('old')
+})
+
 test('a large batch renders a bounded number of rows', async ({ page }) => {
   await login(page)
   await page.route('**/upload/*', (route) => (route.request().method() === 'PATCH' ? undefined : route.continue()))

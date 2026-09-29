@@ -261,7 +261,7 @@
 
   async function unreplace(rs: Replaced[]) {
     const bad: Failed[] = []
-    for (const r of rs) {
+    for (const r of [...rs].reverse()) {
       const gone = await api.rm(r.vol, [r.path]).then(
         (x) => x.failed.map((f) => ({ name: base(r.path), error: new Error(f.error) })),
         (error: Error) => [{ name: base(r.path), error }],
