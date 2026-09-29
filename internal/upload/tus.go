@@ -122,12 +122,16 @@ var (
 	errFinalize = handler.NewError("ERR_FINALIZE", "cannot store the upload", http.StatusInternalServerError)
 	errInternal = handler.NewError("ERR_INTERNAL", "internal error", http.StatusInternalServerError)
 	errTooLarge = handler.NewError("ERR_TOO_LARGE", "file too large", http.StatusRequestEntityTooLarge)
+
+	ErrTooLarge = errTooLarge
+	ErrRevoked  = handler.NewError("ERR_REVOKED", "upload no longer allowed", http.StatusForbidden)
 )
 
 type Server struct {
 	Now      func() time.Time
 	Index    *index.Index
 	Received func(owner, rel string, size int64)
+	Allow    func(owner string, size int64) error
 
 	vols     []*volume
 	byKey    map[string]*volume
@@ -244,6 +248,11 @@ func (s *Server) Handler(prefix string, p Policy) http.Handler {
 		}
 		if r.Method == http.MethodHead || r.Method == http.MethodPatch {
 			size, trashed, err := s.settle(ctx, u, id)
+			var herr handler.Error
+			if errors.As(err, &herr) {
+				httpx.Fail(w, herr.HTTPResponse.StatusCode, herr.Message)
+				return
+			}
 			if err != nil {
 				httpx.Fail(w, 500, "internal error")
 				return
@@ -355,6 +364,13 @@ func (s *Server) settle(ctx context.Context, u *volume, id string) (int64, strin
 func (s *Server) finish(u *volume, info handler.FileInfo) (string, error) {
 	s.finalize.Lock()
 	defer s.finalize.Unlock()
+	if s.Allow != nil {
+		if err := s.Allow(info.MetaData[keyOwner], info.Size); err != nil {
+			u.v.Root.Remove(path.Join(vol.UploadsDir, info.ID))
+			u.v.Root.Remove(path.Join(vol.UploadsDir, info.ID+".info"))
+			return "", err
+		}
+	}
 	dir := info.MetaData[keyDir]
 	err := Target{Vol: u.v, Dir: dir, Base: info.MetaData[keyBase]}.confine(true)
 	name := info.MetaData[keyName]

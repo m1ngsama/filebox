@@ -46,6 +46,21 @@ func (s *Service) Register(mux *http.ServeMux) {
 	mux.HandleFunc("GET /s/{token}/meta", s.meta)
 	mux.HandleFunc("/s/{token}/upload/{rest...}", s.upload)
 	s.Uploads.Received = s.received
+	s.Uploads.Allow = s.allow
+}
+
+func (s *Service) allow(owner string, size int64) error {
+	if !strings.HasPrefix(owner, "share:") {
+		return nil
+	}
+	sh, ok := s.owner(owner)
+	switch {
+	case !ok || (sh.ExpiresAt != 0 && sh.ExpiresAt <= time.Now().Unix()) || (sh.Mode != "upload" && sh.Mode != "drop"):
+		return upload.ErrRevoked
+	case sh.MaxUpload > 0 && size > sh.MaxUpload:
+		return upload.ErrTooLarge
+	}
+	return nil
 }
 
 func label(sh db.Share) string {

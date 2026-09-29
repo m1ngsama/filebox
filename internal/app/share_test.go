@@ -544,3 +544,50 @@ func TestShareActivity(t *testing.T) {
 		t.Fatalf("views counter %s", b)
 	}
 }
+
+func TestShareUploadRecheckedAtFinish(t *testing.T) {
+	f := newTestApp(t)
+	f.write(t, "in/.keep", "")
+	tok := mkShare(t, f, `{"vol":"v","path":"in","mode":"drop"}`)
+	id := shareID(t, f, tok)
+	start := func(name string) string {
+		w := f.do("POST", "/s/"+tok+"/upload/", nil, "X-No-Auth", "1", "Tus-Resumable", "1.0.0", "Upload-Length", "20",
+			"Upload-Metadata", "filename "+b64(name))
+		if w.Code != 201 {
+			t.Fatalf("create %d", w.Code)
+		}
+		return w.Header().Get("Location")
+	}
+	send := func(loc string) int {
+		return f.do("PATCH", loc, strings.NewReader(strings.Repeat("x", 20)), "X-No-Auth", "1", "Tus-Resumable", "1.0.0",
+			"Upload-Offset", "0", "Content-Type", "application/offset+octet-stream").Code
+	}
+	big := start("big.bin")
+	f.do("PATCH", "/api/shares/"+id, body(`{"max_upload":5}`))
+	if c := send(big); c != 413 {
+		t.Fatalf("upload over the new limit finished with %d", c)
+	}
+	if _, err := os.Stat(filepath.Join(f.Dir, "in/big.bin")); err == nil {
+		t.Fatal("oversized upload was stored")
+	}
+	if ents, _ := os.ReadDir(filepath.Join(f.Dir, ".filebox/uploads")); len(ents) != 0 {
+		t.Fatalf("partial upload left behind: %v", ents)
+	}
+	f.do("PATCH", "/api/shares/"+id, body(`{"max_upload":0}`))
+	ok := start("ok.bin")
+	if c := send(ok); c != 204 {
+		t.Fatalf("upload under no limit %d", c)
+	}
+	allow := f.App.Uploads.Allow
+	if allow("share:"+id, 1) != nil || allow("user:1", 1<<40) != nil {
+		t.Fatal("allowed uploads refused")
+	}
+	f.do("PATCH", "/api/shares/"+id, body(`{"mode":"read"}`))
+	if allow("share:"+id, 1) == nil {
+		t.Fatal("finish allowed after the share became read-only")
+	}
+	f.do("DELETE", "/api/shares/"+id, nil)
+	if allow("share:"+id, 1) == nil {
+		t.Fatal("finish allowed after the share was deleted")
+	}
+}
