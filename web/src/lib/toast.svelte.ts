@@ -1,4 +1,4 @@
-export type Toast = { id: number; text: string; kind: 'success' | 'info' | 'error'; action?: { label: string; run: () => unknown } }
+export type Toast = { id: number; text: string; kind: 'success' | 'info' | 'error'; action?: { label: string; run: () => unknown; keys?: string } }
 
 export const toasts = $state<Toast[]>([])
 const timers = new Map<number, { left: number; start: number; id: number }>()
@@ -13,6 +13,17 @@ export function toast(text: string, o: { kind?: Toast['kind']; action?: Toast['a
   timers.set(id, { left: o.ms ?? (o.action || o.kind === 'error' ? 8000 : 4000), start: 0, id: 0 })
   if (!paused) arm(id)
   return id
+}
+
+export function runLatest(label: string) {
+  for (let i = toasts.length - 1; i >= 0; i--) {
+    const a = toasts[i].action
+    if (a?.label !== label) continue
+    dismiss(toasts[i].id)
+    a.run()
+    return true
+  }
+  return false
 }
 
 export const fail = (e: unknown) => toast((e as Error).message, { kind: 'error' })

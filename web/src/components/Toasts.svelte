@@ -48,6 +48,7 @@
       <button
         class="toast-action"
         aria-describedby={`toast-${x.id}`}
+        aria-keyshortcuts={a.keys}
         onclick={() => {
           close(x)
           a.run()

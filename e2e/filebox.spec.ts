@@ -490,6 +490,12 @@ test('undo from the keyboard keeps focus and lets later toasts expire', async ({
   expect(await page.evaluate(() => document.activeElement !== document.body)).toBe(true)
   await expect(page.locator('.toast', { hasText: t.undone })).toHaveCount(1)
   await expect(page.locator('.toast', { hasText: t.undone })).toHaveCount(0, { timeout: 7000 })
+  await row(page, 'kb.txt').locator('input[type=checkbox]').check()
+  await page.locator('.list-head').getByRole('button', { name: t.remove, exact: true }).click()
+  await page.locator('.dialog').getByRole('button', { name: t.remove, exact: true }).click()
+  await expect(row(page, 'kb.txt')).toHaveCount(0)
+  await page.keyboard.press('ControlOrMeta+z')
+  await expect(row(page, 'kb.txt')).toHaveCount(1)
 })
 
 test('an undo toast outlives newer plain toasts', async ({ page, server }) => {

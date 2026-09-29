@@ -19,7 +19,7 @@
   import ChevronRight from '@lucide/svelte/icons/chevron-right'
   import SearchX from '@lucide/svelte/icons/search-x'
   import { api, filesURL, rawURL, thumbURL, type Entry, type Move } from '../lib/api'
-  import { toast, fail } from '../lib/toast.svelte'
+  import { toast, fail, runLatest } from '../lib/toast.svelte'
   import { navigate, link, route } from '../lib/router.svelte'
   import { enqueue } from '../lib/uploads.svelte'
   import { thumbable, rawThumb, arrange, parent, base, type Sort } from '../lib/format'
@@ -156,6 +156,7 @@
 
   const undo = (run: () => Promise<Failed[]>) => ({
     label: t.undo,
+    keys: 'Control+Z Meta+Z',
     run: () =>
       run()
         .then((bad) => {
@@ -195,6 +196,7 @@
       if (details) closeDetails()
       else selected.clear()
     } else if (typing) return
+    else if ((e.metaKey || e.ctrlKey) && !e.shiftKey && e.key.toLowerCase() === 'z' && runLatest(t.undo)) e.preventDefault()
     else if ((e.key === 'Delete' || e.key === 'Backspace') && selected.size) dialog = { kind: 'delete', names: [...selected] }
     else if (e.key === 'Enter' && selected.size === 1 && !(e.target as Element).closest('button, a, [role=grid]')) {
       const hit = entries.find((x) => selected.has(x.name))
