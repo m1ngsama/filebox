@@ -120,21 +120,46 @@ func TestCutKeepsInvalidBytesAndWholeRunes(t *testing.T) {
 	}
 }
 
-func TestDeepMarkdownFallsBackToPlainText(t *testing.T) {
+func serve(t *testing.T, name, src string) (*httptest.ResponseRecorder, time.Duration) {
+	t.Helper()
+	dir := t.TempDir()
+	os.WriteFile(filepath.Join(dir, name), []byte(src), 0o644)
+	root, _ := os.OpenRoot(dir)
+	defer root.Close()
+	w := httptest.NewRecorder()
+	start := time.Now()
+	Serve(w, httptest.NewRequest("GET", "/", nil), root, name, "/raw/v/")
+	return w, time.Since(start)
+}
+
+func TestPathologicalMarkdownFallsBackToPlainText(t *testing.T) {
+	var table strings.Builder
+	table.WriteString(strings.Repeat("|a", 10000) + "\n" + strings.Repeat("|-", 10000) + "\n")
+	for range 10000 {
+		table.WriteString("|b\n")
+	}
 	for name, src := range map[string]string{
-		"quotes": strings.Repeat("> ", 300000) + "x",
-		"lists":  strings.Repeat("- ", 30000) + "x",
-		"links":  strings.Repeat("[a](", 50000) + "x",
+		"quotes":     strings.Repeat("> ", 300000) + "x",
+		"lists":      strings.Repeat("- ", 300000) + "x",
+		"links":      strings.Repeat("[a](", 50000) + "x",
+		"wide table": table.String(),
+		"emphasis":   strings.Repeat("*a_ ", 200000),
 	} {
-		start := time.Now()
-		res := Render("a.md", []byte(src), linker(".", "/raw/v/"))
-		if !res.plain || !strings.HasPrefix(string(res.html), "<pre>") || time.Since(start) > 2*time.Second {
-			t.Errorf("%s: plain %v in %v", name, res.plain, time.Since(start))
+		w, took := serve(t, "a.md", src)
+		t.Logf("%s: %d bytes, %v", name, len(src), took)
+		if w.Header().Get("X-Plain") != "complex" || !strings.HasPrefix(w.Body.String(), "<pre>") || took > 6*time.Second {
+			t.Errorf("%s: plain %q in %v", name, w.Header().Get("X-Plain"), took)
 		}
 	}
-	nested := "> a\n> > b\n\n- a\n  - b\n    - c\n\n[x](y (z))\n"
-	if res := Render("a.md", []byte(nested), linker(".", "/raw/v/")); res.plain {
-		t.Fatal("ordinary nesting fell back to plain text")
+}
+
+func TestOrdinaryMarkdownRenders(t *testing.T) {
+	doc := "# Title\n\n" + strings.Repeat("-", 40) + "\n\nA long heading line here\n" + strings.Repeat("-", 38) + "\n\n" +
+		strings.Repeat("*", 40) + "\n\n> a\n> > b\n\n- a\n  - b\n    - c\n\n" + strings.Repeat(" ", 140) + "```json\n{}\n```\n\n[x](y (z))\n"
+	w, _ := serve(t, "a.md", doc)
+	b := w.Body.String()
+	if w.Header().Get("X-Plain") != "" || !strings.Contains(b, "<hr>") || !strings.Contains(b, "<h2>A long heading") || !strings.Contains(b, "<blockquote>") {
+		t.Fatalf("plain %q:\n%s", w.Header().Get("X-Plain"), b)
 	}
 }
 
@@ -165,7 +190,7 @@ func TestHugeHighlightFallsBackToPlainText(t *testing.T) {
 	maxOutput = 64 << 10
 	src := []byte(strings.Repeat("x := f(a, b) + 1 // c\n", 8<<10))
 	res := Render("a.go", src, nil)
-	if !res.plain || !strings.HasPrefix(string(res.html), "<pre>") {
-		t.Fatalf("plain %v, %d bytes", res.plain, len(res.html))
+	if res.plain != "large" || !strings.HasPrefix(string(res.html), "<pre>") {
+		t.Fatalf("plain %q, %d bytes", res.plain, len(res.html))
 	}
 }

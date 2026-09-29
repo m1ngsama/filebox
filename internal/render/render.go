@@ -1,7 +1,9 @@
 package render
 
 import (
+	"bufio"
 	"bytes"
+	"cmp"
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
@@ -11,11 +13,13 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"os/exec"
 	"path"
 	"regexp"
 	"runtime"
 	"strings"
 	"sync"
+	"time"
 	"unicode/utf8"
 
 	"github.com/alecthomas/chroma/v2"
@@ -61,15 +65,21 @@ func IsMarkdown(name string) bool {
 	return false
 }
 
-const maxDepth = 32
-
 var renders = make(chan struct{}, runtime.NumCPU())
 
 type result struct {
 	html      []byte
 	truncated bool
-	plain     bool
+	plain     string
 }
+
+const workerArg = "render-worker"
+
+var (
+	timeout = 5 * time.Second
+	self, _ = os.Executable()
+	nice, _ = exec.LookPath("nice")
+)
 
 var (
 	mu     sync.Mutex
@@ -135,8 +145,8 @@ func Serve(w http.ResponseWriter, r *http.Request, root *os.Root, rel, rawPrefix
 	if res.truncated {
 		h.Set("X-Truncated", "1")
 	}
-	if res.plain {
-		h.Set("X-Plain", "1")
+	if res.plain != "" {
+		h.Set("X-Plain", res.plain)
 	}
 	w.Write(res.html)
 }
@@ -152,7 +162,56 @@ func slot(ctx context.Context, f io.Reader, rel, rawPrefix string) (result, erro
 	if err != nil {
 		return result{}, err
 	}
-	return Render(path.Base(rel), src, linker(path.Dir(rel), rawPrefix)), nil
+	wctx, cancel := context.WithTimeout(ctx, timeout)
+	defer cancel()
+	name, args := self, []string{workerArg, rel, rawPrefix}
+	if nice != "" {
+		name, args = nice, append([]string{"-n", "10", self}, args...)
+	}
+	cmd := exec.CommandContext(wctx, name, args...)
+	cmd.Stdin = bytes.NewReader(src)
+	cmd.WaitDelay = time.Second
+	out, err := cmd.Output()
+	if ctx.Err() != nil {
+		return result{}, ctx.Err()
+	}
+	head, body, ok := bytes.Cut(out, []byte("\n"))
+	if err != nil || !ok {
+		return plain(src, "complex"), nil
+	}
+	t, reason, _ := strings.Cut(string(head), " ")
+	return result{body, t == "1", strings.TrimPrefix(reason, "-")}, nil
+}
+
+// RunWorker must run before anything else in main and in TestMain of packages that render.
+func RunWorker() {
+	if len(os.Args) != 4 || os.Args[1] != workerArg {
+		return
+	}
+	src, err := io.ReadAll(io.LimitReader(os.Stdin, Limit+1))
+	if err != nil {
+		os.Exit(1)
+	}
+	res := Render(path.Base(os.Args[2]), src, linker(path.Dir(os.Args[2]), os.Args[3]))
+	t := "0"
+	if res.truncated {
+		t = "1"
+	}
+	w := bufio.NewWriter(os.Stdout)
+	fmt.Fprintf(w, "%s %s\n", t, cmp.Or(res.plain, "-"))
+	w.Write(res.html)
+	if w.Flush() != nil {
+		os.Exit(1)
+	}
+	os.Exit(0)
+}
+
+func plain(src []byte, reason string) result {
+	truncated := len(src) > Limit
+	if truncated {
+		src = cut(src, Limit)
+	}
+	return result{policy.SanitizeBytes(fmt.Appendf(nil, "<pre>%s</pre>", html.EscapeString(string(src)))), truncated, reason}
 }
 
 func Render(name string, src []byte, link func(string) string) result {
@@ -161,61 +220,17 @@ func Render(name string, src []byte, link func(string) string) result {
 		src = cut(src, Limit)
 	}
 	var buf bytes.Buffer
-	plain := false
-	switch {
-	case IsMarkdown(name) && tooDeep(src):
-		plain = true
-		fmt.Fprintf(&buf, "<pre>%s</pre>", html.EscapeString(string(src)))
-	case IsMarkdown(name):
+	if IsMarkdown(name) {
 		markdown(link).Convert(src, &buf)
-	default:
+	} else {
 		highlight(&buf, lexers.Match(name), string(src))
 	}
 	if buf.Len() > maxOutput {
-		plain = true
-		buf.Reset()
-		fmt.Fprintf(&buf, "<pre>%s</pre>", html.EscapeString(string(src)))
+		r := plain(src, "large")
+		r.truncated = truncated
+		return r
 	}
-	return result{policy.SanitizeBytes(buf.Bytes()), truncated, plain}
-}
-
-// goldmark is superlinear in block and bracket nesting and cannot be cancelled.
-func tooDeep(src []byte) bool {
-	parens := 0
-	for line := range bytes.Lines(src) {
-		level, indent := 0, 0
-	prefix:
-		for _, c := range line {
-			switch c {
-			case '>', '-', '*', '+', '.', ')':
-				level++
-			case ' ':
-				indent++
-			case '\t':
-				indent += 4
-			case '0', '1', '2', '3', '4', '5', '6', '7', '8', '9':
-			default:
-				break prefix
-			}
-		}
-		if level+indent/4 > maxDepth {
-			return true
-		}
-		if len(bytes.TrimSpace(line)) == 0 {
-			parens = 0
-		}
-		for _, c := range line {
-			switch c {
-			case '(', '[':
-				if parens++; parens > maxDepth {
-					return true
-				}
-			case ')', ']':
-				parens = max(0, parens-1)
-			}
-		}
-	}
-	return false
+	return result{policy.SanitizeBytes(buf.Bytes()), truncated, ""}
 }
 
 func cut(src []byte, n int) []byte {

@@ -22,6 +22,7 @@ import (
 	"github.com/m1ngsama/filebox/internal/db"
 	"github.com/m1ngsama/filebox/internal/index"
 	"github.com/m1ngsama/filebox/internal/passkey"
+	"github.com/m1ngsama/filebox/internal/render"
 	"github.com/m1ngsama/filebox/internal/thumb"
 	"github.com/m1ngsama/filebox/internal/upload"
 	"github.com/m1ngsama/filebox/internal/vol"
@@ -42,6 +43,7 @@ func (m *multi) String() string     { return strings.Join(*m, ",") }
 func (m *multi) Set(s string) error { *m = append(*m, s); return nil }
 
 func main() {
+	render.RunWorker()
 	if len(os.Args) < 2 {
 		fmt.Fprintln(os.Stderr, usage)
 		os.Exit(2)

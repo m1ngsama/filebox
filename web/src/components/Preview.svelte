@@ -36,7 +36,7 @@
   let text = $state<string | null>(null)
   let html = $state<string | null>(null)
   let partial = $state(false)
-  let plain = $state(false)
+  let plain = $state('')
   let status = $state<'loading' | 'ready' | 'error'>('loading')
   let root = $state<HTMLDivElement>()
   let closer = $state<HTMLButtonElement>()
@@ -57,7 +57,7 @@
         if (!res.ok) throw new Error(String(res.status))
         if (stale) return res.text()
         partial = r ? res.headers.has('X-Truncated') : Number(res.headers.get('Content-Range')?.split('/')[1] ?? 0) > LIMIT
-        plain = res.headers.has('X-Plain')
+        plain = res.headers.get('X-Plain') ?? ''
         return res.text()
       })
       .then(
@@ -215,7 +215,7 @@
       {#if html !== null}
         <article class="doc" class:code={!md} tabindex="-1">{@html html}</article>
       {:else if text !== null}<pre tabindex="-1">{text}</pre>{/if}
-      {#if plain}<p class="hint">{t.plainText}</p>{/if}
+      {#if plain}<p class="hint">{plain === 'large' ? t.tooLarge : t.tooComplex}</p>{/if}
       {#if partial}<p class="hint">{t.truncated}</p>{/if}
     {:else}
       <div class="viewer-error">
