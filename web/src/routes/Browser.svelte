@@ -500,7 +500,7 @@
           bind:this={filterEl}
           placeholder={scope === 'all' ? t.searchAll : t.filter}
           onkeydown={(e) => {
-            if (e.key === 'Enter' && hits?.length) locate(hits[0])
+            if (e.key === 'Enter' && !finding && ranked?.length) locate(ranked[0])
           }}
         />
         <div class="scope" role="radiogroup" aria-label={t.searchScope}>
