@@ -4,7 +4,8 @@
   import Download from '@lucide/svelte/icons/download'
   import CircleAlert from '@lucide/svelte/icons/circle-alert'
   import type { Entry, Src } from '../lib/api'
-  import { kind, look } from '../lib/format'
+  import { kind, look, thumbable } from '../lib/format'
+  import { load, save } from '../lib/storage'
   import '../lib/render.css'
   import { t } from '../lib/i18n'
 
@@ -18,6 +19,16 @@
   const src = $derived(url(entry))
   const images = $derived(k === 'image' ? entries.filter((e) => !e.dir && kind(e.name) === 'image') : [])
   const LIMIT = 1 << 20
+  const stem = $derived(entry.name.slice(0, entry.name.lastIndexOf('.') + 1))
+  const tracks = $derived(
+    k === 'video'
+      ? entries
+          .filter((e) => !e.dir && e.name.startsWith(stem) && /\.(srt|vtt)$/i.test(e.name))
+          .map((e) => ({ src: url(e) + '?vtt', lang: e.name.slice(stem.length, e.name.lastIndexOf('.')) }))
+      : [],
+  )
+  const spot = $derived('pos:' + src)
+  let last = 0
   const md = $derived(/\.(md|markdown)$/i.test(entry.name))
   const rich = $derived(k === 'text' && (md || look(entry.name) === 'code'))
   let text = $state<string | null>(null)
@@ -112,6 +123,19 @@
 
   const ready = () => (status = 'ready')
   const failed = () => (status = 'error')
+
+  function resume(e: Event) {
+    const m = e.currentTarget as HTMLVideoElement
+    if (k === 'video' && !m.videoWidth) return failed()
+    const at = Number(load(spot))
+    if (at > 5 && at < m.duration - 5) m.currentTime = at
+    ready()
+  }
+
+  function track(e: Event) {
+    const now = (e.currentTarget as HTMLMediaElement).currentTime
+    if (e.type !== 'timeupdate' || Math.abs(now - last) > 5) save(spot, String(Math.floor((last = now))))
+  }
 </script>
 
 <svelte:window onkeydown={key} />
@@ -155,9 +179,25 @@
       </div>
     {:else if k === 'video'}
       <!-- svelte-ignore a11y_media_has_caption -->
-      <video src={src} controls autoplay playsinline preload="metadata" onloadedmetadata={ready} onerror={failed}></video>
+      <video
+        {src}
+        poster={thumbable(entry.name) ? url(entry, 'thumb') : undefined}
+        controls
+        autoplay
+        playsinline
+        preload="metadata"
+        onloadedmetadata={resume}
+        ontimeupdate={track}
+        onpause={track}
+        onended={() => save(spot, '')}
+        onerror={failed}
+      >
+        {#each tracks as s, i (s.src)}
+          <track kind="subtitles" src={s.src} label={s.lang || t.subtitles} srclang={/^[a-z]{2,3}(-[a-z0-9]+)*$/i.test(s.lang) ? s.lang : undefined} default={i === 0} />
+        {/each}
+      </video>
     {:else if k === 'audio'}
-      <audio src={src} controls autoplay onerror={failed}></audio>
+      <audio {src} controls autoplay preload="metadata" onloadedmetadata={resume} ontimeupdate={track} onpause={track} onended={() => save(spot, '')} onerror={failed}></audio>
     {:else if k === 'pdf'}
       <iframe src={src} title={entry.name} onload={ready}></iframe>
     {:else if k === 'text'}

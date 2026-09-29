@@ -273,6 +273,10 @@ func (s *Service) raw(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	defer done()
+	if r.URL.Query().Has("vtt") {
+		serve.VTT(w, r, root, rel)
+		return
+	}
 	if _, err := root.Stat(rel); err == nil {
 		if rg := r.Header.Get("Range"); rg == "" || strings.HasPrefix(rg, "bytes=0-") {
 			s.DB.HitShare(o.sh.ID)

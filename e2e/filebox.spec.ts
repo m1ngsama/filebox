@@ -203,6 +203,34 @@ test('images open in a lightbox that zooms, steps, shows info and closes back to
   await expect(row(page, 'big1.png').locator('button.name')).toBeFocused()
 })
 
+test('videos pick up sibling subtitles and an unplayable one offers a download', async ({ page, server }) => {
+  const clip = join(server.vol, 'docs/clip.webm')
+  try {
+    execFileSync('ffmpeg', ['-v', 'error', '-f', 'lavfi', '-i', 'color=c=blue:s=64x48:d=1', '-c:v', 'libvpx', clip])
+  } catch {
+    test.skip(true, 'needs ffmpeg with libvpx')
+  }
+  writeFileSync(join(server.vol, 'docs/clip.zh.srt'), '1\r\n00:00:00,000 --> 00:00:01,000\r\n你好\r\n')
+  writeFileSync(join(server.vol, 'docs/clip.en.vtt'), 'WEBVTT\n\n00:00.000 --> 00:01.000\nhello\n')
+  writeFileSync(join(server.vol, 'docs/clipper.srt'), '')
+  writeFileSync(join(server.vol, 'docs/broken.mkv'), 'not a video')
+  await login(page)
+  await row(page, 'docs').locator('button.name').click()
+  await row(page, 'clip.webm').locator('button.name').click()
+  const video = page.getByRole('dialog', { name: 'clip.webm' }).locator('video')
+  await expect(video).toHaveAttribute('preload', 'metadata')
+  await expect(video.locator('track')).toHaveCount(2)
+  await expect(video.locator('track[label=zh]')).toHaveAttribute('src', /clip\.zh\.srt\?vtt$/)
+  await expect(video.locator('track[label=en]')).toHaveAttribute('srclang', 'en')
+  await expect.poll(() => video.evaluate((v: HTMLVideoElement) => [...v.textTracks].map((t) => t.mode).includes('showing'))).toBe(true)
+  await expect.poll(() => video.evaluate((v: HTMLVideoElement) => [...v.textTracks].flatMap((t) => [...(t.cues ?? [])].map((c) => (c as VTTCue).text)).join())).toMatch(/你好|hello/)
+  await page.keyboard.press('Escape')
+  await row(page, 'broken.mkv').locator('button.name').click()
+  const alert = page.getByRole('dialog', { name: 'broken.mkv' }).getByRole('alert')
+  await expect(alert).toContainText(t.cantPlay)
+  await expect(alert.getByRole('link', { name: t.download })).toHaveAttribute('href', /broken\.mkv\?dl$/)
+})
+
 test('a slow folder shows skeleton rows and a broken image offers a download', async ({ page, server }) => {
   writeFileSync(join(server.vol, 'docs/broken.jpg'), 'not an image')
   await login(page)

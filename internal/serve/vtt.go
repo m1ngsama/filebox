@@ -1,0 +1,63 @@
+package serve
+
+import (
+	"bytes"
+	"fmt"
+	"io"
+	"net/http"
+	"os"
+	"path"
+	"regexp"
+	"strings"
+
+	"github.com/m1ngsama/filebox/internal/httpx"
+)
+
+const maxSubtitle = 8 << 20
+
+var srtTime = regexp.MustCompile(`(?m)^(\s*\d+:\d{2}:\d{2}),(\d{1,3})\s*-->\s*(\d+:\d{2}:\d{2}),(\d{1,3})`)
+
+func SRTToVTT(src []byte) []byte {
+	src = bytes.TrimPrefix(src, []byte("\xef\xbb\xbf"))
+	src = bytes.ReplaceAll(src, []byte("\r\n"), []byte("\n"))
+	src = bytes.ReplaceAll(src, []byte("\r"), []byte("\n"))
+	if bytes.HasPrefix(src, []byte("WEBVTT")) {
+		return src
+	}
+	return append([]byte("WEBVTT\n\n"), srtTime.ReplaceAll(src, []byte("$1.$2 --> $3.$4"))...)
+}
+
+func VTT(w http.ResponseWriter, r *http.Request, root *os.Root, rel string) {
+	ext := strings.ToLower(path.Ext(rel))
+	if ext != ".srt" && ext != ".vtt" {
+		httpx.Fail(w, 400, "not a subtitle")
+		return
+	}
+	f, err := root.Open(rel)
+	if err != nil {
+		httpx.Error(w, err)
+		return
+	}
+	defer f.Close()
+	st, err := f.Stat()
+	if err != nil || st.IsDir() {
+		httpx.Fail(w, 400, "not a file")
+		return
+	}
+	etag := fmt.Sprintf(`"v%x-%x"`, st.Size(), st.ModTime().UnixNano())
+	h := w.Header()
+	h.Set("ETag", etag)
+	h.Set("Cache-Control", "private, no-cache")
+	h.Set("Content-Type", "text/vtt; charset=utf-8")
+	SafeHeaders(h, "text/vtt")
+	if r.Header.Get("If-None-Match") == etag {
+		w.WriteHeader(http.StatusNotModified)
+		return
+	}
+	b, err := io.ReadAll(io.LimitReader(f, maxSubtitle))
+	if err != nil {
+		httpx.Error(w, err)
+		return
+	}
+	w.Write(SRTToVTT(b))
+}

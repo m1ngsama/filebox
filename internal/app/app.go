@@ -97,6 +97,10 @@ func (a *App) raw(w http.ResponseWriter, r *http.Request) {
 		httpx.Error(w, err)
 		return
 	}
+	if r.URL.Query().Has("vtt") {
+		serve.VTT(w, r, v.Root, rel)
+		return
+	}
 	serve.File(w, r, v.Root, rel, r.URL.Query().Has("dl"))
 }
 

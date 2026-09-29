@@ -46,3 +46,19 @@ func TestMetaStaysInShare(t *testing.T) {
 		t.Fatalf("locked share meta %d", c)
 	}
 }
+
+func TestSubtitlesStayInShare(t *testing.T) {
+	f := newTestApp(t)
+	f.write(t, "pub/a.srt", "1\n00:00:01,000 --> 00:00:02,000\nshared\n")
+	f.write(t, "secret.srt", "1\n00:00:01,000 --> 00:00:02,000\nprivate\n")
+	if w := f.do("GET", "/raw/v/pub/a.srt?vtt", nil); w.Code != 200 || !strings.HasPrefix(w.Body.String(), "WEBVTT") || w.Header().Get("Content-Type") != "text/vtt; charset=utf-8" {
+		t.Fatalf("owner vtt %d %q", w.Code, w.Body)
+	}
+	tok := mkShare(t, f, `{"vol":"v","path":"pub","mode":"read"}`)
+	if c, b, _ := anon(f, "GET", "/s/"+tok+"/raw/a.srt?vtt", ""); c != 200 || !strings.Contains(b, "00:00:01.000 --> 00:00:02.000") {
+		t.Fatalf("share vtt %d %s", c, b)
+	}
+	if c, b, _ := anon(f, "GET", "/s/"+tok+"/raw/%2E%2E/secret.srt?vtt", ""); c == 200 || strings.Contains(b, "private") {
+		t.Fatalf("share vtt escaped: %d %s", c, b)
+	}
+}
