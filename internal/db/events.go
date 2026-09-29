@@ -76,9 +76,14 @@ type item struct {
 	done chan struct{}
 }
 
+var anonymous = map[string]bool{EventDownload: true, EventUpload: true, EventLoginFailed: true}
+
+const anonymousKinds = `('download', 'upload', 'login_failed')`
+
 type writer struct {
 	d       *DB
 	ch      chan item
+	audit   chan item
 	quit    chan struct{}
 	exited  chan struct{}
 	once    sync.Once
@@ -89,7 +94,7 @@ type writer struct {
 }
 
 func newWriter(d *DB) *writer {
-	w := &writer{d: d, ch: make(chan item, queueSize), quit: make(chan struct{}), exited: make(chan struct{}), seen: map[string]struct{}{}}
+	w := &writer{d: d, ch: make(chan item, queueSize), audit: make(chan item, 256), quit: make(chan struct{}), exited: make(chan struct{}), seen: map[string]struct{}{}}
 	go w.run()
 	return w
 }
@@ -111,15 +116,28 @@ func (w *writer) run() {
 	var batch []item
 	for {
 		select {
+		case it := <-w.audit:
+			batch = append(batch, it)
+			if len(batch) < 512 {
+				continue
+			}
 		case it := <-w.ch:
 			batch = append(batch, it)
 			if it.done == nil && len(batch) < 512 {
 				continue
 			}
+			for len(w.audit) > 0 {
+				batch = append(batch, <-w.audit)
+			}
 		case <-t.C:
 		case <-w.quit:
-			for len(w.ch) > 0 {
-				batch = append(batch, <-w.ch)
+			for len(w.ch) > 0 || len(w.audit) > 0 {
+				select {
+				case it := <-w.ch:
+					batch = append(batch, it)
+				case it := <-w.audit:
+					batch = append(batch, it)
+				}
 			}
 			w.write(batch)
 			return
@@ -184,7 +202,17 @@ func (w *writer) stop() {
 	})
 }
 
-func (d *DB) Log(e Event) { d.events.send(item{ev: e}) }
+func (d *DB) Log(e Event) {
+	if anonymous[e.Kind] {
+		d.events.send(item{ev: e})
+		return
+	}
+	select {
+	case d.events.audit <- item{ev: e}:
+	case <-d.events.exited:
+		slog.Error("activity log closed, audit event lost", "kind", e.Kind)
+	}
+}
 
 func (d *DB) View(shareID int64, visitor string, now int64) {
 	w := d.events
@@ -273,11 +301,11 @@ func (d *DB) PruneEvents(before int64, keep int) (int64, error) {
 		return total, err
 	}
 	var n int64
-	if err := d.QueryRow(`SELECT count(*) FROM events`).Scan(&n); err != nil {
+	if err := d.QueryRow(`SELECT count(*) FROM events WHERE kind IN ` + anonymousKinds).Scan(&n); err != nil {
 		return total, err
 	}
 	for over := n - int64(keep); over > 0; over -= pruneBatch {
-		m, err := affected(d.Exec(`DELETE FROM events WHERE id IN (SELECT id FROM events ORDER BY id LIMIT ?)`, min(over, pruneBatch)))
+		m, err := affected(d.Exec(`DELETE FROM events WHERE id IN (SELECT id FROM events WHERE kind IN `+anonymousKinds+` ORDER BY id LIMIT ?)`, min(over, pruneBatch)))
 		total += m
 		if err != nil {
 			return total, err

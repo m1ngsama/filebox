@@ -1,6 +1,7 @@
 package db
 
 import (
+	"slices"
 	"strconv"
 	"strings"
 	"testing"
@@ -76,16 +77,23 @@ func TestEventsBatchedAndPruned(t *testing.T) {
 	if page, _ := d.Events(EventFilter{UserID: uid, Before: all[1].ID, Limit: 50}); len(page) != 1 || page[0].ID != all[2].ID {
 		t.Fatalf("paging %+v", page)
 	}
+	d.Log(Event{At: day + 89999, UserID: uid, Kind: EventTokenCreate})
 	for i := range 5 {
-		d.Log(Event{At: day + 90000 + int64(i), UserID: uid, Kind: EventTokenCreate})
+		d.Log(Event{At: day + 90000 + int64(i), ShareID: s.ID, Kind: EventDownload, Visitor: "v", Name: strconv.Itoa(i)})
 	}
+	d.Log(Event{At: day + 90009, UserID: uid, Kind: EventShareCreate})
 	d.Flush()
 	if n, _ := d.PruneEvents(day+86400, 3); n != 5 {
 		t.Fatalf("pruned %d", n)
 	}
 	left, _ := d.Events(EventFilter{UserID: uid, Limit: 50})
-	if len(left) != 3 || left[2].At != day+90002 {
-		t.Fatalf("after prune %+v", left)
+	kept := []string{}
+	for _, e := range left {
+		kept = append(kept, e.Kind+e.Name)
+	}
+	slices.Sort(kept)
+	if strings.Join(kept, " ") != "download2 download3 download4 share_create token_create" {
+		t.Fatalf("after prune %v", kept)
 	}
 	d.QueryRow(`SELECT count(*) FROM share_views`).Scan(&rows)
 	if rows != 1 {
@@ -97,12 +105,28 @@ func TestEventQueueNeverBlocks(t *testing.T) {
 	d := open(t)
 	d.events.stop()
 	for range queueSize + 10 {
-		d.Log(Event{Kind: EventLogin})
+		d.Log(Event{Kind: EventDownload})
 	}
 	if d.events.dropped.Load() != 10 {
 		t.Fatalf("dropped %d", d.events.dropped.Load())
 	}
+}
+
+func TestAuditEventsSurviveAFlood(t *testing.T) {
+	d := open(t)
+	uid, _ := d.SetPassword("admin", "h")
+	for i := range queueSize * 2 {
+		d.Log(Event{At: 1, Kind: EventDownload, Visitor: strconv.Itoa(i)})
+	}
+	for range 300 {
+		d.Log(Event{At: 2, UserID: uid, Kind: EventLogin})
+	}
 	d.Flush()
+	var n int
+	d.QueryRow(`SELECT count(*) FROM events WHERE kind = 'login'`).Scan(&n)
+	if n != 300 {
+		t.Fatalf("%d of 300 login events kept", n)
+	}
 }
 
 func TestViewDedupeIsBounded(t *testing.T) {

@@ -5,6 +5,7 @@ import (
 	"os"
 	"path"
 	"path/filepath"
+	"slices"
 	"strconv"
 	"strings"
 	"testing"
@@ -509,6 +510,8 @@ func TestShareActivity(t *testing.T) {
 	anon(f, "GET", "/s/"+tok+"/info", "", ip("198.51.100.2")...)
 	anon(f, "GET", "/s/"+tok+"/raw/a.txt?dl", "", ip("198.51.100.1")...)
 	anon(f, "GET", "/s/"+tok+"/raw/a.txt", "", ip("198.51.100.1")...)
+	anon(f, "GET", "/s/"+tok+"/raw/a.txt?dl", "", append(ip("198.51.100.3"), "Range", "bytes=0-0")...)
+	anon(f, "GET", "/s/"+tok+"/raw/a.txt?dl", "", append(ip("198.51.100.4"), "Range", "bytes=0-")...)
 	anon(f, "GET", "/s/"+tok+"/zip", "", ip("198.51.100.1")...)
 	w := f.do("POST", "/s/"+drop+"/upload/", nil, "X-No-Auth", "1", "Tus-Resumable", "1.0.0", "Upload-Length", "2",
 		"Upload-Metadata", "filename "+b64("r.txt"))
@@ -526,24 +529,23 @@ func TestShareActivity(t *testing.T) {
 		More   bool
 	}](t, f.do("GET", "/api/activity", nil))
 	kinds := []string{}
+	byKind := map[string]ev{}
 	for _, e := range got.Events {
 		kinds = append(kinds, e.Kind)
+		byKind[e.Kind] = e
 		if strings.Contains(e.Visitor, "198.51") {
 			t.Fatalf("raw IP stored: %+v", e)
 		}
 	}
-	want := "login_failed share_edit upload download download share_create share_create login"
-	if strings.Join(kinds, " ") != want {
+	slices.Sort(kinds)
+	if want := "download download download login login_failed share_create share_create share_edit upload"; strings.Join(kinds, " ") != want {
 		t.Fatalf("events %v", kinds)
 	}
-	if e := got.Events[2]; e.Name != "r.txt" || e.Size != 2 || e.Target != "v:/in" {
+	if e := byKind["upload"]; e.Name != "r.txt" || e.Size != 2 || e.Target != "v:/in" {
 		t.Fatalf("upload event %+v", e)
 	}
-	if e := got.Events[4]; e.Name != "a.txt" || e.Size != 5 || e.Visitor == "" {
-		t.Fatalf("download event %+v", e)
-	}
 	dls := decode[struct{ Events []ev }](t, f.do("GET", "/api/activity?kind=download&share="+shareID(t, f, tok), nil)).Events
-	if len(dls) != 2 || dls[0].Target != "v:/d" {
+	if len(dls) != 3 || dls[0].Target != "v:/d" || !slices.ContainsFunc(dls, func(e ev) bool { return e.Name == "a.txt" && e.Size == 5 && e.Visitor != "" }) {
 		t.Fatalf("downloads %+v", dls)
 	}
 	var rows int

@@ -415,7 +415,7 @@ func (s *Service) raw(w http.ResponseWriter, r *http.Request) {
 	if fi, err := root.Stat(rel); err == nil {
 		if rg := r.Header.Get("Range"); rg == "" || strings.HasPrefix(rg, "bytes=0-") {
 			s.DB.HitShare(o.sh.ID)
-			if r.URL.Query().Has("dl") {
+			if r.URL.Query().Has("dl") && (rg == "" || rg == "bytes=0-") {
 				s.log(r, o.sh, db.EventDownload, path.Base(path.Join(o.sh.Path, rel)), fi.Size())
 			}
 		}
