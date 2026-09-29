@@ -352,9 +352,8 @@ func (d *DB) UpdateShare(s Share, logout bool) error {
 	return tx.Commit()
 }
 
-func (d *DB) ShareByToken(token string, now int64) (Share, error) {
-	return scanShare(d.QueryRow(`SELECT `+shareCols+` FROM shares
-		WHERE token = ? AND (expires_at = 0 OR expires_at > ?)`, token, now))
+func (d *DB) ShareByToken(token string) (Share, error) {
+	return scanShare(d.QueryRow(`SELECT `+shareCols+` FROM shares WHERE token = ?`, token))
 }
 
 func (d *DB) ListShares(userID int64) ([]Share, error) {

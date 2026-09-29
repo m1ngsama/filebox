@@ -1416,3 +1416,77 @@ test('a share can be reused, edited and shown as a QR code', async ({ page }) =>
   const [s] = (await (await page.request.get('/api/shares')).json()).shares
   expect([s.mode, s.max_upload, s.has_password]).toEqual(['upload', 5 << 20, true])
 })
+
+async function apiShare(page: Page, data: Record<string, unknown>) {
+  const r = await page.request.post('/api/shares', { data: { vol: 'v', mode: 'read', ...data } })
+  const { id, token } = await r.json()
+  return { id: id as number, url: `/s/${token}` }
+}
+
+test('a public folder page previews, switches to grid and zips a selection', async ({ page, browser, server }) => {
+  writeFileSync(join(server.vol, 'docs/more.md'), '# more')
+  writeFileSync(join(server.vol, 'docs/pic.png'), png(40, 30))
+  await login(page)
+  const { id, url } = await apiShare(page, { path: 'docs', expires_in: 7 * 86400 })
+  await page.request.patch(`/api/shares/${id}`, { data: { note: 'For the team' } })
+  const anon = await browser.newPage()
+  const scripts: string[] = []
+  anon.on('request', (r) => r.resourceType() === 'script' && scripts.push(new URL(r.url()).pathname))
+  await anon.goto(url)
+  await expect(anon.locator('.public-note')).toHaveText('For the team')
+  await expect(anon.locator('.public-info')).toContainText(t.expiresIn(7 * 86400))
+  expect(scripts.some((s) => /\/assets\/index-/.test(s))).toBe(false)
+  await row(anon, 'readme.txt').locator('button.name').click()
+  await expect(anon.locator('.viewer pre')).toHaveText('hello\n')
+  await anon.keyboard.press('Escape')
+  await row(anon, 'readme.txt').locator('input[type=checkbox]').check()
+  await row(anon, 'more.md').locator('input[type=checkbox]').check()
+  const dl = anon.waitForEvent('download')
+  await anon.locator('.list-head').getByRole('button', { name: t.download, exact: true }).click()
+  expect((await dl).suggestedFilename()).toBe(`${t.zipName('docs', 2)}.zip`)
+  expect(await unzipped(await dl)).toEqual(['more.md=# more', 'readme.txt=hello\n'])
+  await anon.getByRole('button', { name: t.gridView }).click()
+  await expect(anon.locator('.card')).toHaveCount(3)
+  await anon.close()
+})
+
+test('a single-file share previews inline and dead links explain themselves', async ({ page, browser }) => {
+  await login(page)
+  const { url } = await apiShare(page, { path: 'docs/readme.txt' })
+  const { url: short } = await apiShare(page, { path: 'docs', expires_in: 1 })
+  const anon = await browser.newPage()
+  await anon.goto(url)
+  await expect(anon.locator('.viewer.inline pre')).toHaveText('hello\n')
+  await expect(anon.getByRole('link', { name: t.download })).toHaveAttribute('href', /\?dl$/)
+  await anon.waitForTimeout(2100)
+  await anon.goto(short)
+  await expect(anon.getByText(t.linkExpired)).toBeVisible()
+  await anon.goto('/s/AAAAAAAAAAAAAAAAAAAAAA')
+  await expect(anon.getByText(t.linkGone)).toBeVisible()
+  await anon.close()
+})
+
+test('a drop share shows upload progress and enforces its size limit', async ({ page, browser, server }) => {
+  await login(page)
+  const { url } = await apiShare(page, { path: 'docs', mode: 'drop', max_upload: 1 << 20 })
+  const anon = await browser.newPage()
+  await anon.goto(url)
+  await expect(anon.locator('.public-info')).toContainText(t.maxUpload('1.0 MB'))
+  let release = () => {}
+  const gate = new Promise<void>((r) => (release = r))
+  await anon.route('**/upload/*', async (route) => {
+    if (route.request().method() === 'PATCH') await gate
+    await route.continue()
+  })
+  await fileInput(anon).setInputFiles({ name: 'small.bin', mimeType: 'application/octet-stream', buffer: Buffer.alloc(1000, 1) })
+  const panel = anon.locator('.uploads')
+  await expect(panel.locator('header')).toContainText(t.uploading(0, 1))
+  await expect(panel.locator('progress.up-total')).toBeVisible()
+  release()
+  await expect(anon.locator('.toast', { hasText: t.uploaded(1) })).toHaveCount(1)
+  expect(statSync(join(server.vol, 'docs/small.bin')).size).toBe(1000)
+  await fileInput(anon).setInputFiles({ name: 'big.bin', mimeType: 'application/octet-stream', buffer: Buffer.alloc((1 << 20) + 1) })
+  await expect(panel.locator('li.error')).toContainText(t.errors[413])
+  expect(existsSync(join(server.vol, 'docs/big.bin'))).toBe(false)
+  await anon.close()
+})

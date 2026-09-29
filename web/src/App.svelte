@@ -14,7 +14,6 @@
   let needLogin = $state(false)
   let error = $state('')
   const parts = $derived(route.path.split('/').filter(Boolean).map(decodeURIComponent))
-  const isShare = $derived(parts[0] === 's' && !!parts[1])
   const titles: Record<string, string> = { recent: t.recent, favorites: t.favorites, shares: t.myShares, trash: t.trash, settings: t.settings }
 
   session.lost = () => {
@@ -44,9 +43,7 @@
     needLogin = true
   }
 
-  $effect(() => {
-    if (!isShare) load()
-  })
+  load()
 
   $effect(() => {
     if (me && me.vols.length && (parts.length === 0 || (parts[0] === 'files' && parts.length === 1)))
@@ -54,10 +51,7 @@
   })
 </script>
 
-{#if isShare}
-  <Lazy load={() => import('./routes/SharePage.svelte')} token={parts[1]} />
-  <UploadPanel />
-{:else if error}
+{#if error}
   <div class="load-error">
     <p class="error">{error}</p>
     <button onclick={load}>{t.retry}</button>

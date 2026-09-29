@@ -209,9 +209,13 @@ type opened struct {
 }
 
 func (s *Service) open(w http.ResponseWriter, r *http.Request, allowed ...string) (opened, bool) {
-	sh, err := s.DB.ShareByToken(r.PathValue("token"), time.Now().Unix())
+	sh, err := s.DB.ShareByToken(r.PathValue("token"))
 	if err != nil {
 		httpx.Fail(w, 404, "not found")
+		return opened{}, false
+	}
+	if sh.ExpiresAt != 0 && sh.ExpiresAt <= time.Now().Unix() {
+		httpx.Fail(w, 410, "expired")
 		return opened{}, false
 	}
 	v, ok := s.Vols.Get(sh.Vol)

@@ -47,8 +47,8 @@ func TestShareRead(t *testing.T) {
 		"Upload-Metadata", "filename "+b64("x")); c != 403 {
 		t.Fatalf("upload on read share %d", c)
 	}
-	if c, _, _ := anon(f, "GET", "/s/"+tok, ""); c != 200 {
-		t.Fatalf("share page %d", c)
+	if c, b, _ := anon(f, "GET", "/s/"+tok, ""); c != 200 || b != "<!doctype html>share" {
+		t.Fatalf("share page %d %q", c, b)
 	}
 	list := decode[struct {
 		Shares []struct {
@@ -97,7 +97,7 @@ func TestShareExpired(t *testing.T) {
 	f := newTestApp(t)
 	f.write(t, "e.txt", "x")
 	f.App.DB.InsertShare(&db.Share{Token: "expiredtoken", UserID: f.UserID, Vol: "v", Path: "e.txt", Mode: "read", CreatedAt: 1, ExpiresAt: 2})
-	if c, _, _ := anon(f, "GET", "/s/expiredtoken/info", ""); c != 404 {
+	if c, _, _ := anon(f, "GET", "/s/expiredtoken/info", ""); c != 410 {
 		t.Fatalf("expired %d", c)
 	}
 }

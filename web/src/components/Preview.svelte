@@ -15,7 +15,8 @@
     url,
     onclose,
     siblings = true,
-  }: { entry: Entry; entries: Entry[]; url: Src; onclose: () => void; siblings?: boolean } = $props()
+    inline = false,
+  }: { entry: Entry; entries: Entry[]; url: Src; onclose: () => void; siblings?: boolean; inline?: boolean } = $props()
   const k = $derived(kind(entry.name))
   const src = $derived(url(entry))
   const images = $derived(k === 'image' ? entries.filter((e) => !e.dir && kind(e.name) === 'image') : [])
@@ -79,7 +80,7 @@
     const zoom = () => (zoomed = (vv?.scale ?? 1) > 1)
     zoom()
     vv?.addEventListener('resize', zoom)
-    const back = document.activeElement as HTMLElement | null
+    const back = inline ? null : (document.activeElement as HTMLElement | null)
     closer?.focus()
     return () => {
       vv?.removeEventListener('resize', zoom)
@@ -88,7 +89,7 @@
   })
 
   function key(e: KeyboardEvent) {
-    if (k === 'image') return
+    if (k === 'image' || inline) return
     if (e.key === 'Escape') onclose()
     else if (e.key === 'Tab' && root) {
       const f = [...root.querySelectorAll<HTMLElement>('a[href], button, video, audio, iframe, pre, article')].filter((x) => x.offsetParent)
@@ -104,7 +105,7 @@
   let zoomed = $state(false)
 
   function touchstart(e: TouchEvent) {
-    const one = e.touches.length === 1 && k !== 'text' && k !== 'pdf' && !zoomed
+    const one = e.touches.length === 1 && k !== 'text' && k !== 'pdf' && !zoomed && !inline
     start = one ? { x: e.touches[0].clientX, y: e.touches[0].clientY } : null
     off = { x: 0, y: 0 }
   }
@@ -159,8 +160,9 @@
 {:else}
 <div
   class="viewer"
-  role="dialog"
-  aria-modal="true"
+  class:inline
+  role={inline ? 'region' : 'dialog'}
+  aria-modal={inline ? undefined : 'true'}
   tabindex="-1"
   aria-label={entry.name}
   bind:this={root}
@@ -169,11 +171,13 @@
   ontouchend={touchend}
   ontouchcancel={touchcancel}
 >
-  <header>
-    <span class="title">{entry.name}</span>
-    <a class="icon-btn" href={url(entry, 'dl')} download aria-label={t.download}><Download size={20} /></a>
-    <button class="icon-btn" onclick={onclose} aria-label={t.close} bind:this={closer}><X size={20} /></button>
-  </header>
+  {#if !inline}
+    <header>
+      <span class="title">{entry.name}</span>
+      <a class="icon-btn" href={url(entry, 'dl')} download aria-label={t.download}><Download size={20} /></a>
+      <button class="icon-btn" onclick={onclose} aria-label={t.close} bind:this={closer}><X size={20} /></button>
+    </header>
+  {/if}
   <div
     class="body"
     aria-busy={status === 'loading'}
@@ -193,7 +197,7 @@
         {src}
         poster={thumbable(entry.name) ? url(entry, 'thumb') : undefined}
         controls
-        autoplay
+        autoplay={!inline}
         playsinline
         preload="metadata"
         class:audio-only={audioOnly}
@@ -208,7 +212,7 @@
         {/each}
       </video>
     {:else if k === 'audio'}
-      <audio {src} controls autoplay preload="metadata" onloadedmetadata={resume} ontimeupdate={track} onpause={track} onended={() => save(spot, '')} onerror={failed}></audio>
+      <audio {src} controls autoplay={!inline} preload="metadata" onloadedmetadata={resume} ontimeupdate={track} onpause={track} onended={() => save(spot, '')} onerror={failed}></audio>
     {:else if k === 'pdf'}
       <iframe src={src} title={entry.name} onload={ready}></iframe>
     {:else if k === 'text'}

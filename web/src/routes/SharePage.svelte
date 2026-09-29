@@ -1,24 +1,31 @@
 <script lang="ts">
+  import { SvelteSet } from 'svelte/reactivity'
   import Download from '@lucide/svelte/icons/download'
   import Upload from '@lucide/svelte/icons/upload'
   import Eye from '@lucide/svelte/icons/eye'
   import FolderOpen from '@lucide/svelte/icons/folder-open'
   import ChevronRight from '@lucide/svelte/icons/chevron-right'
   import Lock from '@lucide/svelte/icons/lock'
-  import EntryList, { type Action } from '../components/EntryList.svelte'
+  import LayoutGrid from '@lucide/svelte/icons/layout-grid'
+  import List from '@lucide/svelte/icons/list'
+  import Clock from '@lucide/svelte/icons/clock'
+  import Link2Off from '@lucide/svelte/icons/link-2-off'
+  import X from '@lucide/svelte/icons/x'
+  import type { Action } from '../components/EntryList.svelte'
   import FileIcon from '../components/FileIcon.svelte'
   import EmptyState from '../components/EmptyState.svelte'
-  import Preview from '../components/Preview.svelte'
+  import Toasts from '../components/Toasts.svelte'
   import { api, HttpError, shareFileURL, shareRawURL, shareThumbURL, shareURL, shareZipURL, saveURL, validShareToken, type Entry, type ShareInfo } from '../lib/api'
   import { route, link, navigate } from '../lib/router.svelte'
   import { enqueue } from '../lib/uploads.svelte'
-  import { arrange, size, thumbable, rawThumb, fallback, child, type Sort } from '../lib/format'
+  import { arrange, size, kind, thumbable, rawThumb, fallback, child, type Sort } from '../lib/format'
+  import { load as recall, save } from '../lib/storage'
   import { t } from '../lib/i18n'
 
   let { token }: { token: string } = $props()
 
   let info = $state<ShareInfo | null>(null)
-  let fatal = $state('')
+  let fatal = $state<'gone' | 'expired' | 'error' | ''>('')
   let password = $state('')
   let unlockError = $state('')
   let entries = $state.raw<Entry[]>([])
@@ -26,11 +33,13 @@
   let error = $state('')
   let sort = $state<Sort>('name')
   let desc = $state(false)
+  let grid = $state(recall('shareGrid') === '1')
   let preview = $state.raw<Entry | null>(null)
   let dragging = $state(false)
   let depth = 0
   let picker = $state<HTMLInputElement>()
   let tries = $state(0)
+  const selected = new SvelteSet<string>()
 
   const base = $derived(shareURL(token))
   const p = $derived(new URLSearchParams(route.search).get('p') ?? '')
@@ -41,20 +50,27 @@
   const shared = $derived(info?.locked === false ? info : null)
   const canUpload = $derived(shared?.mode === 'upload' || shared?.mode === 'drop')
   const listed = $derived(!!shared?.dir && shared.mode !== 'drop')
+  const lister = $derived(listed ? import('../components/EntryList.svelte') : null)
   const file = $derived<Entry | null>(shared && !shared.dir ? { name: shared.name, dir: false, size: shared.size ?? 0, mtime: 0 } : null)
-  const fileSrc = $derived(file && fallback([thumbable(file.name) && shareThumbURL(token, ''), rawThumb(file) && shareRawURL(token, '')], tries))
+  const fileKind = $derived(file ? kind(file.name) : '')
+  const imageSrc = $derived(file && fallback([shareRawURL(token, ''), thumbable(file.name) && shareThumbURL(token, '')], tries))
+  const folder = $derived(crumbs.at(-1) ?? shared?.name ?? '')
+  const left = $derived(shared?.expires ? shared.expires - Date.now() / 1000 : 0)
+
+  $effect(() => save('shareGrid', grid ? '1' : '0'))
 
   async function load() {
     fatal = ''
     if (!validShareToken(token)) {
-      fatal = t.shareGone
+      fatal = 'gone'
       return
     }
     try {
       info = await api.shareInfo(token)
     } catch (e) {
       info = null
-      fatal = e instanceof HttpError && e.status === 404 ? t.shareGone : t.loadFailed
+      const s = e instanceof HttpError ? e.status : 0
+      fatal = s === 404 ? 'gone' : s === 410 ? 'expired' : 'error'
     }
   }
   load()
@@ -76,6 +92,7 @@
 
   $effect(() => {
     p
+    selected.clear()
     if (listed) refresh()
   })
 
@@ -117,11 +134,17 @@
     else preview = e
   }
 
+  function download(names: string[]) {
+    const one = names.length === 1 ? shown.find((e) => e.name === names[0]) : undefined
+    if (one && !one.dir) saveURL(shareRawURL(token, join(one.name), true))
+    else saveURL(shareZipURL(token, names.map(join), one ? one.name : t.zipName(folder, names.length)))
+  }
+
   function onaction(id: string, e: Entry | null) {
     if (id === 'upload') picker?.click()
     else if (!e) return
     else if (id === 'open') open(e)
-    else if (id === 'download') saveURL(e.dir ? shareZipURL(token, [join(e.name)], e.name) : shareRawURL(token, join(e.name), true))
+    else if (id === 'download') download([e.name])
   }
 
   const hasFiles = (e: DragEvent) => !!e.dataTransfer?.types.includes('Files')
@@ -129,6 +152,11 @@
 
 <svelte:head><title>{shared?.name ?? t.brand}</title></svelte:head>
 <svelte:window ondragover={(e) => e.preventDefault()} ondrop={(e) => e.preventDefault()} />
+
+{#snippet batch()}
+  <button class="ghost" onclick={() => download([...selected])}><Download size={16} />{t.download}</button>
+  <button class="icon-btn" aria-label={t.clearSelection} onclick={() => selected.clear()}><X size={16} /></button>
+{/snippet}
 
 <div
   class="public"
@@ -166,20 +194,37 @@
       {/if}
       <span class="grow"></span>
       {#if file}
-        <a class="button primary" href={shareRawURL(token, '', true)} download><Download size={18} />{t.download}</a>
+        <a class="button primary" href={shareRawURL(token, '', true)} download><Download size={18} /><span>{t.download}</span></a>
       {:else if listed}
-        <a class={shared.mode === 'upload' ? 'button' : 'button primary'} href={shareZipURL(token, p ? [p] : [], crumbs.at(-1) ?? shared.name)} download
-          ><Download size={18} />{t.downloadAll}</a
+        <button class="icon-btn view" aria-label={grid ? t.listView : t.gridView} title={grid ? t.listView : t.gridView} onclick={() => (grid = !grid)}>
+          {#if grid}<List size={20} />{:else}<LayoutGrid size={20} />{/if}
+        </button>
+        <a class={shared.mode === 'upload' ? 'button' : 'button primary'} href={shareZipURL(token, p ? [p] : [], folder)} download
+          ><Download size={18} /><span>{t.downloadAll}</span></a
         >
-        {#if shared.mode === 'upload'}<button class="primary" onclick={() => picker?.click()}><Upload size={18} />{t.upload}</button>{/if}
+        {#if shared.mode === 'upload'}<button class="primary" onclick={() => picker?.click()}><Upload size={18} /><span>{t.upload}</span></button>{/if}
       {/if}
     {/if}
   </header>
 
-  {#if fatal}
+  {#if shared && (shared.note || shared.expires || (canUpload && shared.max_upload))}
+    <div class="public-info">
+      {#if shared.note}<p class="public-note">{shared.note}</p>{/if}
+      <p class="hint">
+        {#if shared.expires}<span><Clock size={14} />{left > 0 ? t.expiresIn(left) : t.expired}</span>{/if}
+        {#if canUpload && shared.max_upload}<span>{t.maxUpload(size(shared.max_upload))}</span>{/if}
+      </p>
+    </div>
+  {/if}
+
+  {#if fatal === 'error'}
     <div class="load-error">
-      <p class={fatal === t.shareGone ? 'hint big' : 'error'}>{fatal}</p>
-      {#if fatal !== t.shareGone}<button onclick={load}>{t.retry}</button>{/if}
+      <p class="error">{t.loadFailed}</p>
+      <button onclick={load}>{t.retry}</button>
+    </div>
+  {:else if fatal}
+    <div class="public-gone">
+      <EmptyState icon={fatal === 'expired' ? Clock : Link2Off} title={fatal === 'expired' ? t.linkExpired : t.linkGone} hint={fatal === 'expired' ? t.linkExpiredHint : t.shareGone} />
     </div>
   {:else if info?.locked}
     <form class="login" onsubmit={unlock}>
@@ -191,18 +236,25 @@
       {#if unlockError}<p class="error">{unlockError}</p>{/if}
     </form>
   {:else if file}
-    <div class="public-file">
-      <div class="details-thumb">
-        {#if fileSrc}
-          <img src={fileSrc} alt="" onerror={() => tries++} />
-        {:else}
-          <FileIcon name={file.name} dir={false} size={72} />
-        {/if}
+    {#if fileKind === 'image' && imageSrc}
+      <button class="public-image" aria-label={t.preview} onclick={() => (preview = file)}>
+        <img src={imageSrc} alt={file.name} onerror={() => tries++} />
+      </button>
+    {:else if fileKind && fileKind !== 'image'}
+      <div class="public-inline">
+        {#await import('../components/Preview.svelte') then { default: Preview }}
+          <Preview entry={file} entries={[file]} url={(_, as) => shareFileURL(token, '', as)} onclose={() => {}} inline />
+        {/await}
       </div>
-      <h2>{file.name}</h2>
-      <p class="hint">{size(file.size)}</p>
-      <button onclick={() => (preview = file)}><Eye size={18} />{t.preview}</button>
-    </div>
+    {:else}
+      <div class="public-file">
+        <div class="details-thumb"><FileIcon name={file.name} dir={false} size={72} /></div>
+        <h2>{file.name}</h2>
+        <p class="hint">{size(file.size)}</p>
+        <a class="button primary" href={shareRawURL(token, '', true)} download><Download size={18} />{t.download}</a>
+      </div>
+    {/if}
+    <p class="public-meta hint">{file.name} · {size(file.size)}</p>
   {:else if info && info.mode === 'drop'}
     <div class="dropbox">
       <Upload size={40} class="ficon" />
@@ -211,12 +263,16 @@
       <p class="hint">{t.dropHint}</p>
     </div>
   {:else if listed}
-    <section class="files">
+    <section class="files" class:selecting={selected.size > 0}>
       {#if error}<p class="error banner">{error}</p>{/if}
       {#key p}
+        {#await lister!}
+          <div class="loading" role="status" aria-label={t.loading}></div>
+        {:then { default: EntryList }}
         <EntryList
           entries={shown}
-          grid={false}
+          {grid}
+          {selected}
           bind:sort
           bind:desc
           thumb={(e) => (!e.dir && thumbable(e.name) ? shareThumbURL(token, join(e.name)) : null)}
@@ -224,14 +280,22 @@
           {actions}
           {onaction}
           onopen={open}
+          {batch}
           loading={at !== p}
         >
           {#snippet empty()}
             {#if !error}<EmptyState icon={FolderOpen} title={t.folderEmpty} hint={canUpload ? t.dropHere : ''} />{/if}
           {/snippet}
         </EntryList>
+        {/await}
       {/key}
     </section>
+    {#if selected.size}
+      <div class="sel-tools" role="group" aria-label={t.selected(selected.size)}>
+        <button onclick={() => download([...selected])}><Download size={20} /><span>{t.download}</span></button>
+        <button onclick={() => selected.clear()}><X size={20} /><span>{t.clearSelection}</span></button>
+      </div>
+    {/if}
   {/if}
 
   {#if dragging}<div class="dropzone">{t.dropHere}</div>{/if}
@@ -239,13 +303,17 @@
 
 {#if canUpload}
   <input bind:this={picker} type="file" multiple hidden onchange={(e) => upload(e.currentTarget.files)} />
+  {#await import('../components/UploadPanel.svelte') then { default: UploadPanel }}<UploadPanel />{/await}
 {/if}
 
 {#if preview}
-  <Preview
-    bind:entry={preview}
-    entries={file ? [file] : shown}
-    url={(e, as) => shareFileURL(token, file ? '' : join(e.name), as)}
-    onclose={() => (preview = null)}
-  />
+  {#await import('../components/Preview.svelte') then { default: Preview }}
+    <Preview
+      bind:entry={preview}
+      entries={file ? [file] : shown}
+      url={(e, as) => shareFileURL(token, file ? '' : join(e.name), as)}
+      onclose={() => (preview = null)}
+    />
+  {/await}
 {/if}
+<Toasts />

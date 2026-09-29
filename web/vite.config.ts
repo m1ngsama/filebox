@@ -23,13 +23,16 @@ const precompress = (): Plugin => ({
   },
 })
 
-export default defineConfig({
+export default defineConfig(({ mode }) => ({
   plugins: [svelte(), precompress()],
   build: {
     outDir: 'dist',
-    emptyOutDir: true,
+    emptyOutDir: mode !== 'share',
     target: 'es2022',
-    rolldownOptions: { output: { codeSplitting: { groups: [{ name: 'app', tags: ['$initial'] }] } } },
+    rolldownOptions: {
+      input: mode === 'share' ? 'share.html' : 'index.html',
+      output: { codeSplitting: { groups: [{ name: mode === 'share' ? 'share' : 'app', tags: ['$initial'] }] } },
+    },
   },
   server: { proxy: Object.fromEntries(['/api', '/raw', '/thumb', '/upload', '/s/'].map((p) => [p, api])) },
-})
+}))

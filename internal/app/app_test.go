@@ -50,6 +50,7 @@ func newTestApp(t *testing.T) *fixture {
 	bearer, _ := a.NewAppToken(uid, "test", false)
 	web := fstest.MapFS{
 		"index.html":         {Data: []byte("<!doctype html>app")},
+		"share.html":         {Data: []byte("<!doctype html>share")},
 		"assets/app-1.js":    {Data: []byte("js")},
 		"assets/app-1.js.br": {Data: []byte("js-br")},
 		"assets/app-1.js.gz": {Data: []byte("js-gz")},

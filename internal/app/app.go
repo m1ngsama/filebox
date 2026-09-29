@@ -56,8 +56,8 @@ func (a *App) Handler() http.Handler {
 	mux.Handle("/dav/", d)
 	mux.Handle("/upload/", a.Uploads.Handler("/upload/", a.userUploads()))
 	(&share.Service{DB: a.DB, Vols: a.Vols, Auth: a.Auth, Uploads: a.Uploads, Thumbs: a.Thumbs}).Register(mux)
-	mux.Handle("GET /s/{token}", a.spa())
-	mux.Handle("/", a.spa())
+	mux.Handle("GET /s/{token}", a.spa("share.html"))
+	mux.Handle("/", a.spa("index.html"))
 	return common(http.NewCrossOriginProtection().Handler(mux))
 }
 
@@ -197,9 +197,9 @@ func spaPolicy(index []byte) string {
 	return csp
 }
 
-func (a *App) spa() http.Handler {
+func (a *App) spa(page string) http.Handler {
 	files := http.FileServerFS(a.Web)
-	index, indexErr := fs.ReadFile(a.Web, "index.html")
+	index, indexErr := fs.ReadFile(a.Web, page)
 	csp := spaPolicy(index)
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodGet && r.Method != http.MethodHead {

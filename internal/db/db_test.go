@@ -94,26 +94,26 @@ func TestShares(t *testing.T) {
 	if err := d.InsertShare(s); err != nil {
 		t.Fatal(err)
 	}
-	got, err := d.ShareByToken("tok", 10)
+	got, err := d.ShareByToken("tok")
 	if err != nil || got.Path != "a/b" {
 		t.Fatalf("%+v %v", got, err)
 	}
 	d.HitShare(s.ID)
-	got, _ = d.ShareByToken("tok", 10)
+	got, _ = d.ShareByToken("tok")
 	if got.Hits != 1 {
 		t.Fatalf("hits = %d", got.Hits)
 	}
 	exp := &Share{Token: "old", UserID: uid, Vol: "v", Path: "x", Mode: "read", CreatedAt: 1, ExpiresAt: 5}
 	d.InsertShare(exp)
-	if _, err := d.ShareByToken("old", 10); !errors.Is(err, ErrNotFound) {
-		t.Fatal("expired share returned")
+	if got, err := d.ShareByToken("old"); err != nil || got.ExpiresAt != 5 {
+		t.Fatalf("expired share %+v %v", got, err)
 	}
 	list, _ := d.ListShares(uid)
 	if len(list) != 2 {
 		t.Fatalf("ListShares len = %d", len(list))
 	}
 	d.DeleteShare(uid, s.ID)
-	if _, err := d.ShareByToken("tok", 10); !errors.Is(err, ErrNotFound) {
+	if _, err := d.ShareByToken("tok"); !errors.Is(err, ErrNotFound) {
 		t.Fatal("deleted share returned")
 	}
 }

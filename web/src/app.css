@@ -408,6 +408,21 @@ button.quiet:hover:not(:disabled) { color: var(--danger); background: color-mix(
 .code-line { display: flex; align-items: center; gap: var(--space-1); }
 
 .public { position: relative; display: flex; flex-direction: column; height: 100dvh; padding: env(safe-area-inset-top) 0 env(safe-area-inset-bottom); }
+.viewer.inline { position: relative; inset: auto; z-index: auto; flex: 1; min-height: 0; border-radius: var(--radius-lg); }
+.viewer.inline .body { padding: var(--space-4); }
+.viewer.inline:has(.doc, pre, iframe) { background: var(--nav); color: var(--fg); }
+.viewer.inline pre { background: var(--panel); border: 1px solid var(--line); }
+.public-info { display: flex; flex-direction: column; gap: var(--space-1); padding: var(--space-2) var(--space-4) var(--space-3); border-bottom: 1px solid var(--line); }
+.public-info p { margin: 0; }
+.public-info .hint { display: flex; flex-wrap: wrap; gap: var(--space-3); font-size: var(--text-sm); }
+.public-info .hint span { display: inline-flex; align-items: center; gap: 4px; }
+.public-note { white-space: pre-wrap; overflow-wrap: anywhere; max-width: 72ch; }
+.public-inline { flex: 1; min-height: 0; display: flex; padding: var(--space-4) var(--space-4) 0; }
+.public-image { flex: 1; min-height: 0; display: block; padding: var(--space-4); border: 0; border-radius: 0; background: none; cursor: zoom-in; }
+.public-image img { display: block; width: 100%; height: 100%; object-fit: contain; }
+.public-meta { margin: 0; padding: var(--space-2) var(--space-4) var(--space-3); text-align: center; overflow-wrap: anywhere; }
+.public-gone { margin: 14vh auto 0; padding: 0 var(--space-4); max-width: 420px; }
+.public .files { min-height: 0; }
 .public-bar .brand { font-weight: 700; padding-right: 12px; border-right: 1px solid var(--line); }
 .public-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .public-file, .dropbox { display: flex; flex-direction: column; align-items: center; gap: 10px; width: min(440px, calc(100% - 32px)); margin: 8vh auto; text-align: center; }
@@ -415,7 +430,6 @@ button.quiet:hover:not(:disabled) { color: var(--danger); background: color-mix(
 .public-file h2 { overflow-wrap: anywhere; }
 .public-file p, .dropbox p { margin: 0; }
 .dropbox { padding: 40px 24px; border: 2px dashed var(--line); border-radius: var(--radius-xl); }
-.hint.big { font-size: var(--text-lg); }
 
 .login, .load-error { max-width: 320px; margin: 18vh auto; display: flex; flex-direction: column; gap: 10px; padding: 0 var(--space-4); }
 .login { max-width: 360px; margin-top: 14vh; }
@@ -490,6 +504,12 @@ button.quiet:hover:not(:disabled) { color: var(--danger); background: color-mix(
   .sel-tools span { max-width: 100%; overflow: hidden; text-overflow: ellipsis; }
   .details { width: 100vw; }
   .rows .wide { display: none; }
+  .public-bar { flex-wrap: nowrap; }
+  .public-bar .brand { display: none; }
+  .public-bar .button span, .public-bar button.primary span { display: none; }
+  .public-bar .crumbs { min-width: 0; overflow: hidden; }
+  .public-inline { padding: 0; }
+  .viewer.inline { border-radius: 0; }
 }
 @media (prefers-reduced-motion: reduce) {
   .nav { transition: none; }
