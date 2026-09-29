@@ -234,6 +234,11 @@
     return i === undefined ? undefined : shown[+i]
   }
 
+  function inList(el: Element) {
+    const at = getSelection()?.anchorNode
+    return !!el.closest('.files') || (el.matches('body, main') && (!at || !!at.parentElement?.closest('.files')))
+  }
+
   function keydown(e: KeyboardEvent) {
     if (document.querySelector('[role=dialog], [role=menu]')) return
     const typing = (e.target as Element).matches?.('input:not([type=checkbox], [type=radio]), select, textarea, [contenteditable]')
@@ -246,7 +251,7 @@
       else selected.clear()
     } else if (typing || e.altKey) return
     else if (mod && !e.shiftKey && !e.repeat && k === 'z' && runLatest(t.undo)) e.preventDefault()
-    else if (mod && !e.shiftKey && k === 'a') {
+    else if (mod && !e.shiftKey && k === 'a' && inList(e.target as Element)) {
       e.preventDefault()
       for (const x of shown) selected.add(x.name)
     } else if (mod) return

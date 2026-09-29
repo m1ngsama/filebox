@@ -747,6 +747,12 @@ test('keyboard shortcuts act on the list and stay quiet while typing', async ({ 
   expect(await page.evaluate(() => getSelection()?.toString())).toBe('')
   const count = await page.locator('.list-head .count').boundingBox()
   expect(count!.height).toBeLessThan(30)
+  await page.keyboard.press('Escape')
+  await row(page, 'a.txt').locator('button.more').click()
+  await page.getByRole('menuitem', { name: t.details }).click()
+  await page.locator('.details h2').click()
+  await page.keyboard.press('ControlOrMeta+a')
+  await expect(page.getByRole('row', { selected: true })).toHaveCount(0)
 })
 
 test.describe('on a phone', () => {
