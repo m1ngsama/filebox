@@ -335,12 +335,10 @@ func replaceable(root *os.Root, rel string, replace bool) bool {
 }
 
 func unique(root *os.Root, dir, name string) (string, error) {
-	ext := path.Ext(name)
-	base := strings.TrimSuffix(name, ext)
 	for i := 0; i < 1000; i++ {
 		n := name
 		if i > 0 {
-			n = fmt.Sprintf("%s (%d)%s", base, i, ext)
+			n = vol.Numbered(name, i)
 		}
 		if _, err := root.Lstat(path.Join(dir, n)); errors.Is(err, fs.ErrNotExist) {
 			return n, nil

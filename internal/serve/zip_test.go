@@ -61,7 +61,7 @@ func TestZip(t *testing.T) {
 
 	get := func(rels ...string) *httptest.ResponseRecorder {
 		w := httptest.NewRecorder()
-		Zip(w, httptest.NewRequest("GET", "/", nil), rt, rels, ZipName("vol", rels, ""))
+		Zip(w, httptest.NewRequest("GET", "/", nil), rt, rels, "", ZipName("vol", rels, ""))
 		return w
 	}
 	w := get("d")
@@ -117,7 +117,7 @@ func TestZipName(t *testing.T) {
 		}
 	}
 	w := httptest.NewRecorder()
-	Zip(w, httptest.NewRequest("GET", "/", nil), root(t, map[string]string{"a": "x"}), []string{"a"}, "照片.zip")
+	Zip(w, httptest.NewRequest("GET", "/", nil), root(t, map[string]string{"a": "x"}), []string{"a"}, "", "照片.zip")
 	if cd := w.Header().Get("Content-Disposition"); !strings.Contains(cd, "filename*=utf-8''%E7%85%A7%E7%89%87.zip") {
 		t.Fatalf("disposition %q", cd)
 	}
@@ -141,7 +141,7 @@ func TestZipClientGone(t *testing.T) {
 	done := make(chan struct{})
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		defer close(done)
-		Zip(w, r, rt, []string{"d"}, "d.zip")
+		Zip(w, r, rt, []string{"d"}, "", "d.zip")
 	}))
 	defer ts.Close()
 	runtime.GC()
@@ -168,5 +168,44 @@ func TestZipClientGone(t *testing.T) {
 	}
 	if n := openFiles(t); n > before {
 		t.Fatalf("open files %d > %d", n, before)
+	}
+	if n := runtime.NumGoroutine(); n > routines {
+		t.Fatalf("goroutines %d > %d", n, routines)
+	}
+}
+
+func TestZipSymlinkedFolder(t *testing.T) {
+	rt := root(t, map[string]string{"real/a.txt": "a"})
+	os.Symlink("real", filepath.Join(rt.Name(), "link"))
+	w := httptest.NewRecorder()
+	Zip(w, httptest.NewRequest("GET", "/", nil), rt, []string{"link"}, "", "link.zip")
+	if got := keys(unzip(t, w.Body.Bytes())); !slices.Equal(got, []string{"link/", "link/a.txt"}) {
+		t.Fatalf("got %v", got)
+	}
+}
+
+func TestZipUnreadable(t *testing.T) {
+	if os.Getuid() == 0 {
+		t.Skip("root reads everything")
+	}
+	rt := root(t, map[string]string{"d/a.jpg": strings.Repeat("x", 1<<20), "d/b.txt": "b", "c.txt": "c"})
+	os.Chmod(filepath.Join(rt.Name(), "d/b.txt"), 0)
+	os.Chmod(filepath.Join(rt.Name(), "c.txt"), 0)
+	w := httptest.NewRecorder()
+	Zip(w, httptest.NewRequest("GET", "/", nil), rt, []string{"c.txt"}, "", "c.zip")
+	if w.Code != 403 || w.Header().Get("Content-Disposition") != "" {
+		t.Fatalf("unreadable before any bytes: %d %v", w.Code, w.Header())
+	}
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		Zip(w, r, rt, []string{"d"}, "", "d.zip")
+	}))
+	defer ts.Close()
+	res, err := http.Get(ts.URL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer res.Body.Close()
+	if _, err := io.ReadAll(res.Body); err == nil {
+		t.Fatal("a zip missing a file ended cleanly")
 	}
 }

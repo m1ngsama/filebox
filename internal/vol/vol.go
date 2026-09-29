@@ -119,3 +119,8 @@ func Clean(p string) (string, error) {
 	}
 	return c, nil
 }
+
+func Numbered(name string, i int) string {
+	ext := path.Ext(name)
+	return fmt.Sprintf("%s (%d)%s", strings.TrimSuffix(name, ext), i, ext)
+}

@@ -286,7 +286,7 @@ func (s *Service) zip(w http.ResponseWriter, r *http.Request) {
 		rels = append(rels, rel)
 	}
 	s.DB.HitShare(o.sh.ID)
-	serve.Zip(w, r, o.v.Root, rels, serve.ZipName(o.v.Name, rels, q.Get("name")))
+	serve.Zip(w, r, o.v.Root, rels, "", serve.ZipName(o.v.Name, rels, q.Get("name")))
 }
 
 func (s *Service) thumb(w http.ResponseWriter, r *http.Request) {

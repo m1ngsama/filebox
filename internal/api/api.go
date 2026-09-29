@@ -214,7 +214,7 @@ func (a *API) zip(w http.ResponseWriter, r *http.Request) {
 		httpx.Fail(w, 400, "bad path")
 		return
 	}
-	serve.Zip(w, r, v.Root, rels, serve.ZipName(v.Name, rels, q.Get("name")))
+	serve.Zip(w, r, v.Root, rels, "", serve.ZipName(v.Name, rels, q.Get("name")))
 }
 
 func (a *API) mkdir(w http.ResponseWriter, r *http.Request) {
