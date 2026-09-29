@@ -477,6 +477,21 @@ test('delete and restore from trash', async ({ page, server }) => {
   await expect.poll(() => existsSync(join(server.vol, 'tmp.txt'))).toBe(true)
 })
 
+test('undo from the keyboard keeps focus and lets later toasts expire', async ({ page, server }) => {
+  writeFileSync(join(server.vol, 'kb.txt'), 'k')
+  await login(page)
+  await row(page, 'kb.txt').locator('input[type=checkbox]').check()
+  await page.locator('.list-head').getByRole('button', { name: t.remove, exact: true }).click()
+  await page.locator('.dialog').getByRole('button', { name: t.remove, exact: true }).click()
+  const undo = page.locator('.toast').getByRole('button', { name: t.undo, exact: true })
+  await undo.focus()
+  await page.keyboard.press('Enter')
+  await expect(row(page, 'kb.txt')).toHaveCount(1)
+  expect(await page.evaluate(() => document.activeElement !== document.body)).toBe(true)
+  await expect(page.locator('.toast', { hasText: t.undone })).toHaveCount(1)
+  await expect(page.locator('.toast', { hasText: t.undone })).toHaveCount(0, { timeout: 7000 })
+})
+
 test('delete, rename and move each offer an undo', async ({ page, server }) => {
   writeFileSync(join(server.vol, 'undo.txt'), 'u')
   await login(page)

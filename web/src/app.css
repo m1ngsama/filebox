@@ -94,7 +94,7 @@ button.ghost { border-color: transparent; background: none; }
 .scrim { position: fixed; inset: 0; z-index: 40; border: 0; padding: 0; border-radius: 0; }
 .scrim, .scrim:hover:not(:disabled) { background: var(--scrim); }
 
-.main { display: flex; flex-direction: column; min-width: 0; min-height: 0; }
+.main { display: flex; flex-direction: column; min-width: 0; min-height: 0; outline: none; }
 .bar { display: flex; align-items: center; gap: var(--space-2); min-height: 56px; padding: var(--space-2) var(--space-4); border-bottom: 1px solid var(--line); }
 .page { flex: 1; overflow: auto; padding: var(--space-4); }
 .crumbs { display: flex; align-items: center; gap: 2px; min-width: 0; overflow: hidden; color: var(--muted); }

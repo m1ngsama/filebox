@@ -4,6 +4,7 @@ export const toasts = $state<Toast[]>([])
 const timers = new Map<number, { left: number; start: number; id: number }>()
 let seq = 0
 let paused = false
+const holds = { hover: false, focus: false }
 
 export function toast(text: string, o: { kind?: Toast['kind']; action?: Toast['action']; ms?: number } = {}) {
   const id = ++seq
@@ -30,7 +31,12 @@ export function dismiss(id: number) {
   if (i >= 0) toasts.splice(i, 1)
 }
 
-export function pause(on: boolean) {
+export function hold(why: keyof typeof holds, on: boolean) {
+  holds[why] = on
+  pause(holds.hover || holds.focus)
+}
+
+function pause(on: boolean) {
   if (on === paused) return
   paused = on
   for (const [id, tm] of timers) {

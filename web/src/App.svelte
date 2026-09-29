@@ -67,7 +67,7 @@
 {:else if me}
   <div class="shell">
     <Nav vols={me.vols} {parts} onlogout={logout} />
-    <main class="main">
+    <main class="main" tabindex="-1">
       {#if me.vols.length && parts[0] === 'files' && parts[1]}
         <Browser vol={parts[1]} path={parts.slice(2).join('/')} vols={me.vols} />
       {:else}
