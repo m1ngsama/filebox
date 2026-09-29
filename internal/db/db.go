@@ -104,6 +104,9 @@ var migrations = []string{
 		created INTEGER NOT NULL,
 		PRIMARY KEY (vol, path)
 	) WITHOUT ROWID;`,
+	`ALTER TABLE shares ADD COLUMN note TEXT NOT NULL DEFAULT '';
+	ALTER TABLE shares ADD COLUMN max_upload INTEGER NOT NULL DEFAULT 0;
+	ALTER TABLE shares ADD COLUMN views INTEGER NOT NULL DEFAULT 0;`,
 }
 
 type DB struct{ *sql.DB }
@@ -133,6 +136,8 @@ type Share struct {
 	UserID                        int64
 	Vol, Path, Mode, PasswordHash string
 	ExpiresAt, CreatedAt, Hits    int64
+	Note                          string
+	MaxUpload, Views              int64
 }
 
 func Open(path string) (*DB, error) {
@@ -303,18 +308,48 @@ func (d *DB) ListTokens(userID int64, kind string) ([]Token, error) {
 	return out, rows.Err()
 }
 
-const shareCols = `id, token, user_id, vol, path, mode, password_hash, expires_at, created_at, hits`
+const shareCols = `id, token, user_id, vol, path, mode, password_hash, expires_at, created_at, hits, note, max_upload, views`
 
 func scanShare(r interface{ Scan(...any) error }) (Share, error) {
 	var s Share
-	err := r.Scan(&s.ID, &s.Token, &s.UserID, &s.Vol, &s.Path, &s.Mode, &s.PasswordHash, &s.ExpiresAt, &s.CreatedAt, &s.Hits)
+	err := r.Scan(&s.ID, &s.Token, &s.UserID, &s.Vol, &s.Path, &s.Mode, &s.PasswordHash, &s.ExpiresAt, &s.CreatedAt, &s.Hits,
+		&s.Note, &s.MaxUpload, &s.Views)
 	return s, notFound(err)
 }
 
 func (d *DB) InsertShare(s *Share) error {
-	return d.QueryRow(`INSERT INTO shares (token, user_id, vol, path, mode, password_hash, expires_at, created_at)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?) RETURNING id`,
-		s.Token, s.UserID, s.Vol, s.Path, s.Mode, s.PasswordHash, s.ExpiresAt, s.CreatedAt).Scan(&s.ID)
+	return d.QueryRow(`INSERT INTO shares (token, user_id, vol, path, mode, password_hash, expires_at, created_at, note, max_upload)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING id`,
+		s.Token, s.UserID, s.Vol, s.Path, s.Mode, s.PasswordHash, s.ExpiresAt, s.CreatedAt, s.Note, s.MaxUpload).Scan(&s.ID)
+}
+
+func (d *DB) SameShare(userID int64, vol, path, mode string, duration, now int64) (Share, error) {
+	return scanShare(d.QueryRow(`SELECT `+shareCols+` FROM shares
+		WHERE user_id = ? AND vol = ? AND path = ? AND mode = ? AND password_hash = '' AND note = '' AND max_upload = 0
+		AND iif(expires_at = 0, 0, expires_at - created_at) = ? AND (expires_at = 0 OR expires_at > ?)
+		ORDER BY id DESC LIMIT 1`, userID, vol, path, mode, duration, now))
+}
+
+func (d *DB) ShareByID(userID, id int64) (Share, error) {
+	return scanShare(d.QueryRow(`SELECT `+shareCols+` FROM shares WHERE user_id = ? AND id = ?`, userID, id))
+}
+
+func (d *DB) UpdateShare(s Share, logout bool) error {
+	tx, err := d.Begin()
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+	if err := one(tx.Exec(`UPDATE shares SET mode = ?, password_hash = ?, expires_at = ?, note = ?, max_upload = ?
+		WHERE user_id = ? AND id = ?`, s.Mode, s.PasswordHash, s.ExpiresAt, s.Note, s.MaxUpload, s.UserID, s.ID)); err != nil {
+		return err
+	}
+	if logout {
+		if _, err := tx.Exec(`DELETE FROM tokens WHERE kind = 'share' AND scope = ?`, strconv.FormatInt(s.ID, 10)); err != nil {
+			return err
+		}
+	}
+	return tx.Commit()
 }
 
 func (d *DB) ShareByToken(token string, now int64) (Share, error) {

@@ -372,3 +372,112 @@ func TestShareUploadStaysInShare(t *testing.T) {
 		t.Fatalf("files written outside the share: %v", es)
 	}
 }
+
+func TestShareDedupe(t *testing.T) {
+	f := newTestApp(t)
+	f.write(t, "d/a.txt", "x")
+	first := mkShare(t, f, `{"vol":"v","path":"d","mode":"read","expires_in":604800}`)
+	w := f.do("POST", "/api/shares", body(`{"vol":"v","path":"d","mode":"read","expires_in":604800}`))
+	if got := decode[struct{ Token string }](t, w).Token; w.Code != 200 || got != first {
+		t.Fatalf("identical share %d %s", w.Code, got)
+	}
+	for _, js := range []string{
+		`{"vol":"v","path":"d","mode":"read","expires_in":86400}`,
+		`{"vol":"v","path":"d","mode":"upload","expires_in":604800}`,
+		`{"vol":"v","path":"d","mode":"read","expires_in":604800,"password":"pw"}`,
+		`{"vol":"v","path":"d","mode":"read","expires_in":604800,"note":"hi"}`,
+	} {
+		if tok := mkShare(t, f, js); tok == first {
+			t.Fatalf("%s reused the existing link", js)
+		}
+	}
+	pw := mkShare(t, f, `{"vol":"v","path":"d","mode":"drop","password":"pw"}`)
+	if w := f.do("POST", "/api/shares", body(`{"vol":"v","path":"d","mode":"drop"}`)); w.Code != 201 || strings.Contains(w.Body.String(), pw) {
+		t.Fatalf("password share reused %d %s", w.Code, w.Body)
+	}
+}
+
+func shareID(t *testing.T, f *fixture, tok string) string {
+	t.Helper()
+	list := decode[struct {
+		Shares []struct {
+			ID    int64
+			Token string
+		}
+	}](t, f.do("GET", "/api/shares", nil)).Shares
+	for _, s := range list {
+		if s.Token == tok {
+			return strconv.FormatInt(s.ID, 10)
+		}
+	}
+	t.Fatalf("share %s not listed", tok)
+	return ""
+}
+
+func TestShareEdit(t *testing.T) {
+	f := newTestApp(t)
+	f.write(t, "d/a.txt", "x")
+	f.write(t, "one.txt", "x")
+	tok := mkShare(t, f, `{"vol":"v","path":"d","mode":"read","password":"old"}`)
+	id := shareID(t, f, tok)
+	_, _, cookie := anon(f, "POST", "/s/"+tok+"/unlock", `{"password":"old"}`)
+	jar := strings.SplitN(cookie, ";", 2)[0]
+	if c, _, _ := anon(f, "GET", "/s/"+tok+"/ls", "", "Cookie", jar); c != 200 {
+		t.Fatalf("unlocked ls %d", c)
+	}
+	if w := f.do("PATCH", "/api/shares/"+id, body(`{"note":"from me","mode":"upload","expires_in":3600,"max_upload":10}`)); w.Code != 204 {
+		t.Fatalf("edit %d %s", w.Code, w.Body)
+	}
+	if c, _, _ := anon(f, "GET", "/s/"+tok+"/ls", "", "Cookie", jar); c != 200 {
+		t.Fatalf("session lost without a password change %d", c)
+	}
+	if w := f.do("PATCH", "/api/shares/"+id, body(`{"password":""}`)); w.Code != 204 {
+		t.Fatalf("remove password %d", w.Code)
+	}
+	var n int
+	f.App.DB.QueryRow(`SELECT count(*) FROM tokens WHERE kind = 'share' AND scope = ?`, id).Scan(&n)
+	if n != 0 {
+		t.Fatalf("%d share sessions survived the password removal", n)
+	}
+	c, b, _ := anon(f, "GET", "/s/"+tok+"/info", "")
+	if c != 200 || !strings.Contains(b, `"locked":false`) || !strings.Contains(b, `"note":"from me"`) || !strings.Contains(b, `"mode":"upload"`) ||
+		!strings.Contains(b, `"max_upload":10`) {
+		t.Fatalf("info after edit %d %s", c, b)
+	}
+	if w := f.do("PATCH", "/api/shares/"+id, body(`{"password":"new"}`)); w.Code != 204 {
+		t.Fatalf("set password %d", w.Code)
+	}
+	if c, b, _ := anon(f, "GET", "/s/"+tok+"/info", ""); !strings.Contains(b, `"locked":true`) {
+		t.Fatalf("new password not applied %d %s", c, b)
+	}
+	file := mkShare(t, f, `{"vol":"v","path":"one.txt","mode":"read"}`)
+	if w := f.do("PATCH", "/api/shares/"+shareID(t, f, file), body(`{"mode":"drop"}`)); w.Code != 400 {
+		t.Fatalf("drop mode on a file %d", w.Code)
+	}
+	for _, js := range []string{`{"mode":"admin"}`, `{"expires_in":-1}`, `{"max_upload":-5}`} {
+		if w := f.do("PATCH", "/api/shares/"+id, body(js)); w.Code != 400 {
+			t.Fatalf("%s accepted %d", js, w.Code)
+		}
+	}
+	if w := f.do("PATCH", "/api/shares/999", body(`{"note":"x"}`)); w.Code != 404 {
+		t.Fatalf("missing share %d", w.Code)
+	}
+}
+
+func TestShareUploadLimit(t *testing.T) {
+	f := newTestApp(t)
+	f.write(t, "in/.keep", "")
+	for _, mode := range []string{"upload", "drop"} {
+		tok := mkShare(t, f, `{"vol":"v","path":"in","mode":"`+mode+`","max_upload":5}`)
+		up := "/s/" + tok + "/upload/"
+		if c, _, _ := anon(f, "POST", up, "", "Tus-Resumable", "1.0.0", "Upload-Length", "6", "Upload-Metadata", "filename "+b64("big")); c != 413 {
+			t.Fatalf("%s: oversized upload %d", mode, c)
+		}
+		if c, _, _ := anon(f, "POST", up, "", "Tus-Resumable", "1.0.0", "Upload-Defer-Length", "1", "Upload-Metadata", "filename "+b64("big")); c < 400 {
+			t.Fatalf("%s: deferred length upload %d", mode, c)
+		}
+		if c, _, _ := anon(f, "POST", up, "", "Tus-Resumable", "1.0.0", "Upload-Length", "5", "Upload-Metadata", "filename "+b64("ok")); c != 201 {
+			t.Fatalf("%s: upload at the limit %d", mode, c)
+		}
+	}
+}

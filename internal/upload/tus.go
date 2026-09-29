@@ -35,6 +35,7 @@ type Target struct {
 	Dir, Name string
 	Base      string
 	Replace   bool
+	MaxSize   int64
 }
 
 type Policy struct {
@@ -120,6 +121,7 @@ var (
 	errNoSpace  = handler.NewError("ERR_INSUFFICIENT_STORAGE", "insufficient storage", http.StatusInsufficientStorage)
 	errFinalize = handler.NewError("ERR_FINALIZE", "cannot store the upload", http.StatusInternalServerError)
 	errInternal = handler.NewError("ERR_INTERNAL", "internal error", http.StatusInternalServerError)
+	errTooLarge = handler.NewError("ERR_TOO_LARGE", "file too large", http.StatusRequestEntityTooLarge)
 )
 
 type Server struct {
@@ -302,6 +304,9 @@ func create(key string, hook handler.HookEvent) (handler.HTTPResponse, handler.F
 	c, ok := hook.Context.Value(creationKey{}).(creation)
 	if !ok {
 		return handler.HTTPResponse{}, none, errors.New("upload created without a policy")
+	}
+	if c.t.MaxSize > 0 && (hook.Upload.SizeIsDeferred || hook.Upload.Size > c.t.MaxSize) {
+		return handler.HTTPResponse{}, none, errTooLarge
 	}
 	if free, err := c.t.Vol.Free(); err != nil || uint64(hook.Upload.Size) > free {
 		return handler.HTTPResponse{}, none, errNoSpace

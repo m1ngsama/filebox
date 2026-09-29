@@ -275,9 +275,13 @@ kbd { display: inline-block; min-width: 24px; padding: 1px 6px; border: 1px soli
 .share-meta { flex: 1; min-width: 0; display: flex; flex-direction: column; }
 .share-meta a { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: var(--text-sm); }
 .share-form { display: flex; flex-direction: column; gap: var(--space-3); border-top: 1px solid var(--line); padding-top: 16px; }
-.share-form fieldset { border: 0; padding: 0; margin: 0; display: flex; gap: var(--space-4); flex-wrap: wrap; }
-.share-form legend { font-size: var(--text-sm); color: var(--muted); padding: 0; margin-bottom: 6px; }
+.share-form fieldset, fieldset.modes { border: 0; padding: 0; margin: 0; display: flex; gap: var(--space-4); flex-wrap: wrap; }
+.share-form legend, fieldset.modes legend { font-size: var(--text-sm); color: var(--muted); padding: 0; margin-bottom: 6px; }
 .radio { display: inline-flex; align-items: center; gap: 6px; }
+.share-meta .hint { font-size: var(--text-xs); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.menu.qr { display: flex; flex-direction: column; align-items: center; gap: var(--space-2); padding: var(--space-3); min-width: 0; }
+.menu.qr svg { width: 200px; height: 200px; border-radius: var(--radius-sm); }
+textarea { font: inherit; resize: vertical; }
 
 .viewer { position: fixed; inset: 0; z-index: 60; display: flex; flex-direction: column; background: var(--viewer-bg); color: var(--viewer-fg); }
 .viewer header { display: flex; align-items: center; gap: var(--space-2); padding: calc(8px + env(safe-area-inset-top)) 12px 8px 20px; }

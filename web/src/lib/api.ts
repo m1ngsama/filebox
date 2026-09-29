@@ -18,13 +18,16 @@ export type Favorite = RecentFile & { missing: boolean }
 export type Usage = { name: string; used: number; free: number; total: number }
 export type Loc = { vol: string; path: string }
 export type Move = { from: Loc; to: Loc }
-export type Share = { id: number; token: string; vol: string; path: string; mode: 'read' | 'upload' | 'drop'; has_password: boolean; expires: number; created: number; hits: number }
+export type Share = { id: number; token: string; vol: string; path: string; mode: 'read' | 'upload' | 'drop'; has_password: boolean; expires: number; created: number; hits: number; views: number; note: string; max_upload: number; dir: boolean }
+export type ShareEdit = Partial<{ mode: Share['mode']; password: string; expires_in: number; note: string; max_upload: number }>
 export type Token = { id: number; label: string; readonly: boolean; created: number; last_used: number }
 export type Session = { id: number; user_agent: string; ip: string; created: number; last_used: number; current: boolean }
 export type Passkey = { id: number; name: string; created: number; last_used: number }
 type Begun<T> = { ceremony: string; options: T }
 export type TrashItem = { id: string; name: string; path: string; dir: boolean; size: number; deleted: number }
-export type ShareInfo = { locked: true; mode: Share['mode'] } | { locked: false; mode: Share['mode']; name: string; dir: boolean; size?: number }
+export type ShareInfo =
+  | { locked: true; mode: Share['mode'] }
+  | { locked: false; mode: Share['mode']; name: string; dir: boolean; size?: number; note: string; expires: number; max_upload: number }
 
 export const session = { lost: () => {} }
 
@@ -146,7 +149,8 @@ export const api = {
   delPasskey: (id: number) => req<void>('DELETE', `/api/passkeys/${id}`),
   shares: () => req<{ shares: Share[] }>('GET', '/api/shares'),
   newShare: (s: { vol: string; path: string; mode: string; password: string; expires_in: number }) =>
-    req<{ id: number; token: string }>('POST', '/api/shares', s),
+    req<{ id: number; token: string; existing?: boolean }>('POST', '/api/shares', s),
+  editShare: (id: number, s: ShareEdit) => req<void>('PATCH', `/api/shares/${id}`, s),
   delShare: (id: number) => req<void>('DELETE', `/api/shares/${id}`),
   shareInfo: (tok: string) => req<ShareInfo>('GET', `${shareURL(tok)}/info`),
   unlock: (tok: string, password: string) => req<void>('POST', `${shareURL(tok)}/unlock`, { password }),

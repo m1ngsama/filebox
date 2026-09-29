@@ -34,6 +34,7 @@ type Service struct {
 func (s *Service) Register(mux *http.ServeMux) {
 	mux.Handle("GET /api/shares", s.Auth.RequireSession(http.HandlerFunc(s.list)))
 	mux.Handle("POST /api/shares", s.Auth.RequireSession(http.HandlerFunc(s.create)))
+	mux.Handle("PATCH /api/shares/{id}", s.Auth.RequireSession(http.HandlerFunc(s.edit)))
 	mux.Handle("DELETE /api/shares/{id}", s.Auth.RequireSession(http.HandlerFunc(s.remove)))
 	mux.HandleFunc("GET /s/{token}/info", s.info)
 	mux.HandleFunc("POST /s/{token}/unlock", s.unlock)
@@ -48,6 +49,8 @@ func (s *Service) Register(mux *http.ServeMux) {
 
 var modes = map[string]bool{"read": true, "upload": true, "drop": true}
 
+const maxNote = 1000
+
 func (s *Service) create(w http.ResponseWriter, r *http.Request) {
 	var in struct {
 		Vol       string `json:"vol"`
@@ -55,8 +58,10 @@ func (s *Service) create(w http.ResponseWriter, r *http.Request) {
 		Mode      string `json:"mode"`
 		Password  string `json:"password"`
 		ExpiresIn int64  `json:"expires_in"`
+		Note      string `json:"note"`
+		MaxUpload int64  `json:"max_upload"`
 	}
-	if err := httpx.Read(r, &in); err != nil || !modes[in.Mode] || in.ExpiresIn < 0 {
+	if err := httpx.Read(r, &in); err != nil || !modes[in.Mode] || in.ExpiresIn < 0 || in.MaxUpload < 0 || len(in.Note) > maxNote {
 		httpx.Fail(w, 400, "bad request")
 		return
 	}
@@ -75,11 +80,17 @@ func (s *Service) create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	p, _ := auth.From(r.Context())
+	now := time.Now().Unix()
+	if in.Password == "" && in.Note == "" && in.MaxUpload == 0 {
+		if sh, err := s.DB.SameShare(p.UserID, v.Name, rel, in.Mode, in.ExpiresIn, now); err == nil {
+			httpx.JSON(w, 200, map[string]any{"id": sh.ID, "token": sh.Token, "existing": true})
+			return
+		}
+	}
 	b := make([]byte, 16)
 	rand.Read(b)
-	now := time.Now().Unix()
 	sh := &db.Share{Token: base64.RawURLEncoding.EncodeToString(b), UserID: p.UserID, Vol: v.Name,
-		Path: rel, Mode: in.Mode, CreatedAt: now}
+		Path: rel, Mode: in.Mode, CreatedAt: now, Note: in.Note, MaxUpload: in.MaxUpload}
 	if in.ExpiresIn > 0 {
 		sh.ExpiresAt = now + in.ExpiresIn
 	}
@@ -105,11 +116,76 @@ func (s *Service) list(w http.ResponseWriter, r *http.Request) {
 	}
 	out := []map[string]any{}
 	for _, sh := range shs {
-		out = append(out, map[string]any{"id": sh.ID, "token": sh.Token, "vol": sh.Vol, "path": sh.Path,
+		dir := false
+		if v, ok := s.Vols.Get(sh.Vol); ok {
+			fi, err := v.Root.Stat(sh.Path)
+			dir = err == nil && fi.IsDir()
+		}
+		out = append(out, map[string]any{"dir": dir, "id": sh.ID, "token": sh.Token, "vol": sh.Vol, "path": sh.Path,
 			"mode": sh.Mode, "has_password": sh.PasswordHash != "", "expires": sh.ExpiresAt,
-			"created": sh.CreatedAt, "hits": sh.Hits})
+			"created": sh.CreatedAt, "hits": sh.Hits, "views": sh.Views, "note": sh.Note, "max_upload": sh.MaxUpload})
 	}
 	httpx.JSON(w, 200, map[string]any{"shares": out})
+}
+
+func (s *Service) edit(w http.ResponseWriter, r *http.Request) {
+	id, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
+	var in struct {
+		Mode      *string `json:"mode"`
+		Password  *string `json:"password"`
+		ExpiresIn *int64  `json:"expires_in"`
+		Note      *string `json:"note"`
+		MaxUpload *int64  `json:"max_upload"`
+	}
+	if err != nil || httpx.Read(r, &in) != nil || (in.Mode != nil && !modes[*in.Mode]) || (in.ExpiresIn != nil && *in.ExpiresIn < 0) ||
+		(in.MaxUpload != nil && *in.MaxUpload < 0) || (in.Note != nil && len(*in.Note) > maxNote) {
+		httpx.Fail(w, 400, "bad request")
+		return
+	}
+	p, _ := auth.From(r.Context())
+	sh, err := s.DB.ShareByID(p.UserID, id)
+	if err != nil {
+		httpx.Error(w, err)
+		return
+	}
+	if in.Mode != nil && *in.Mode != sh.Mode {
+		v, ok := s.Vols.Get(sh.Vol)
+		if !ok {
+			httpx.Fail(w, 404, "not found")
+			return
+		}
+		if fi, err := v.Root.Stat(sh.Path); *in.Mode != "read" && (err != nil || !fi.IsDir()) {
+			httpx.Fail(w, 400, "upload shares need a directory")
+			return
+		}
+		sh.Mode = *in.Mode
+	}
+	if in.ExpiresIn != nil {
+		sh.ExpiresAt = 0
+		if *in.ExpiresIn > 0 {
+			sh.ExpiresAt = time.Now().Unix() + *in.ExpiresIn
+		}
+	}
+	if in.Note != nil {
+		sh.Note = *in.Note
+	}
+	if in.MaxUpload != nil {
+		sh.MaxUpload = *in.MaxUpload
+	}
+	if in.Password != nil {
+		sh.PasswordHash = ""
+		if *in.Password != "" {
+			if sh.PasswordHash, err = auth.HashPassword(*in.Password); err != nil {
+				httpx.Error(w, err)
+				return
+			}
+		}
+	}
+	if err := s.DB.UpdateShare(sh, in.Password != nil); err != nil {
+		httpx.Error(w, err)
+		return
+	}
+	w.WriteHeader(204)
 }
 
 func (s *Service) remove(w http.ResponseWriter, r *http.Request) {
@@ -199,7 +275,8 @@ func (s *Service) info(w http.ResponseWriter, r *http.Request) {
 		httpx.JSON(w, 200, map[string]any{"locked": true, "mode": o.sh.Mode})
 		return
 	}
-	out := map[string]any{"name": o.name(), "dir": o.dir, "mode": o.sh.Mode, "locked": false}
+	out := map[string]any{"name": o.name(), "dir": o.dir, "mode": o.sh.Mode, "locked": false,
+		"note": o.sh.Note, "expires": o.sh.ExpiresAt, "max_upload": o.sh.MaxUpload}
 	if !o.dir {
 		if e, err := api.Stat(o.v.Root, o.sh.Path); err == nil {
 			out["size"] = e.Size
@@ -393,7 +470,9 @@ func (s *Service) upload(w http.ResponseWriter, r *http.Request) {
 	s.Uploads.Handler(prefix, upload.Policy{
 		Owner: func(*http.Request) (string, bool) { return owner, true },
 		Resolve: func(r *http.Request, meta map[string]string) (upload.Target, error) {
-			return upload.Within(o.v, o.sh.Path, meta)
+			t, err := upload.Within(o.v, o.sh.Path, meta)
+			t.MaxSize = o.sh.MaxUpload
+			return t, err
 		},
 	}).ServeHTTP(w, r)
 }
