@@ -509,6 +509,15 @@
               type="button"
               role="radio"
               aria-checked={scope === k}
+              tabindex={scope === k ? 0 : -1}
+              onkeydown={async (e) => {
+                if (!['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown'].includes(e.key)) return
+                e.preventDefault()
+                const group = e.currentTarget.parentElement
+                scope = scope === 'here' ? 'all' : 'here'
+                await tick()
+                group?.querySelector<HTMLElement>('[aria-checked=true]')?.focus()
+              }}
               onclick={() => {
                 scope = k
                 filterEl?.focus()
