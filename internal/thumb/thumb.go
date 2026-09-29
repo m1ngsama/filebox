@@ -31,7 +31,8 @@ var errCanceled = errors.New("thumb: request canceled")
 
 var kinds = map[string]string{
 	".jpg": "image", ".jpeg": "image", ".png": "image", ".gif": "image", ".webp": "image",
-	".bmp": "image", ".tif": "image", ".tiff": "image", ".heic": "image", ".avif": "image",
+	".bmp": "image", ".tif": "image", ".tiff": "image", ".avif": "image", ".heic": "heic", ".heif": "heic",
+	".cr2": "raw", ".cr3": "raw", ".nef": "raw", ".arw": "raw", ".dng": "raw", ".pdf": "pdf",
 	".mp4": "video", ".m4v": "video", ".mkv": "video", ".mov": "video", ".avi": "video",
 	".webm": "video", ".ts": "video", ".flv": "video", ".wmv": "video", ".mpg": "video", ".mpeg": "video",
 }
@@ -51,8 +52,11 @@ var (
 type Service struct {
 	FFmpeg, FFprobe, Dir string
 
-	format format
-	nice   string
+	format   format
+	nice     string
+	pdf      string
+	exiftool string
+	heic     bool
 
 	sem      chan struct{}
 	mu       sync.Mutex
@@ -103,6 +107,7 @@ func (s *Service) Probe(ctx context.Context) {
 	if s.FFmpeg == "" {
 		return
 	}
+	s.probeTools(ctx)
 	marker := filepath.Join(s.Dir, "format")
 	if b, err := os.ReadFile(marker); err == nil && string(b) == s.format.ext {
 		return
@@ -159,7 +164,7 @@ func (s *Service) Serve(w http.ResponseWriter, r *http.Request, v *vol.Volume, r
 
 func (s *Service) ServeFrom(w http.ResponseWriter, r *http.Request, root *os.Root, open, volName, rel string) {
 	kind := Kind(rel)
-	if s.FFmpeg == "" || kind == "" {
+	if s.FFmpeg == "" || !s.can(kind) {
 		httpx.Fail(w, 404, "no thumbnail")
 		return
 	}
@@ -239,6 +244,20 @@ func (s *Service) render(ctx context.Context, key string, src *os.File, kind, ou
 	rctx, cancel := context.WithTimeout(context.Background(), time.Minute)
 	defer cancel()
 
+	if kind == "pdf" || kind == "heic" || kind == "raw" {
+		pre := out + ".src"
+		defer os.Remove(pre)
+		if err := s.prepare(rctx, kind, src, pre); err != nil {
+			return err
+		}
+		f, err := os.Open(pre)
+		if err != nil {
+			return err
+		}
+		defer f.Close()
+		src = f
+	}
+
 	args := []string{"-nostdin", "-v", "error", "-y"}
 	if kind == "video" {
 		if d := s.duration(rctx, src); d > 0 {
@@ -249,11 +268,7 @@ func (s *Service) render(ctx context.Context, key string, src *os.File, kind, ou
 	args = append(args, "-protocol_whitelist", "file", "-i", "/dev/fd/3", "-frames:v", "1", "-vf", "scale='min(320,iw)':-2")
 	args = append(append(args, s.format.args...), tmp)
 	src.Seek(0, io.SeekStart)
-	name, argv := s.FFmpeg, args
-	if s.nice != "" {
-		name, argv = s.nice, append([]string{"-n", "19", s.FFmpeg}, args...)
-	}
-	cmd := exec.CommandContext(rctx, name, argv...)
+	cmd := s.command(rctx, s.FFmpeg, args...)
 	cmd.ExtraFiles = []*os.File{src}
 	if err := cmd.Run(); err != nil {
 		os.Remove(tmp)

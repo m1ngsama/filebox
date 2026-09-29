@@ -65,10 +65,10 @@ func (s *Service) ServeMeta(w http.ResponseWriter, r *http.Request, root *os.Roo
 		return
 	}
 	m := Meta{}
-	if kind := Kind(rel); kind != "" && s.FFprobe != "" {
+	if kind := Kind(rel); kind != "" && kind != "pdf" && s.FFprobe != "" {
 		ctx, cancel := context.WithTimeout(r.Context(), 20*time.Second)
 		defer cancel()
-		m = s.probe(ctx, f, kind == "image")
+		m = s.probe(ctx, f, kind != "video")
 	}
 	httpx.JSON(w, 200, m)
 }
