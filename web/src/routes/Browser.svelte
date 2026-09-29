@@ -20,6 +20,7 @@
   import SearchX from '@lucide/svelte/icons/search-x'
   import Search from '@lucide/svelte/icons/search'
   import ChevronLeft from '@lucide/svelte/icons/chevron-left'
+  import Ellipsis from '@lucide/svelte/icons/ellipsis'
   import EllipsisVertical from '@lucide/svelte/icons/ellipsis-vertical'
   import ArrowUp from '@lucide/svelte/icons/arrow-up'
   import ArrowDown from '@lucide/svelte/icons/arrow-down'
@@ -52,7 +53,7 @@
   let details = $state.raw<Entry | null>(null)
   let dialog = $state<Dialog | null>(null)
   let searching = $state(false)
-  let sheet = $state(false)
+  let sheet = $state<'new' | 'more' | null>(null)
   let filterEl = $state<HTMLInputElement>()
   const selected = new SvelteSet<string>()
   let files = $state<HTMLInputElement>()
@@ -62,6 +63,7 @@
   const join = (n: string) => (path ? `${path}/${n}` : n)
   const crumbs = $derived(path ? path.split('/') : [])
   const shown = $derived(arrange(at === here ? entries : [], query, sort, desc))
+  const one = $derived(selected.size === 1 ? entries.find((e) => selected.has(e.name)) : undefined)
   const selectedFiles = $derived(entries.filter((e) => !e.dir && selected.has(e.name)).map((e) => e.name))
   const thumb = (e: Entry) => (!e.dir && thumbable(e.name) ? thumbURL(vol, join(e.name)) : null)
   const raw = (e: Entry) => (rawThumb(e) ? rawURL(vol, join(e.name)) : null)
@@ -252,6 +254,7 @@
 <div class="files-wrap">
   <section
     class="files"
+    class:selecting={selected.size > 0}
     aria-label={vol}
     ondragenter={(e) => {
       if (!hasFiles(e)) return
@@ -356,7 +359,7 @@
     {/key}
 
     {#if dragging}<div class="dropzone">{t.dropHere}</div>{/if}
-    {#if !selected.size}<button class="primary fab" aria-label={t.new} onclick={() => (sheet = true)}><Plus size={24} /></button>{/if}
+    {#if !selected.size}<button class="primary fab" aria-label={t.new} onclick={() => (sheet = 'new')}><Plus size={24} /></button>{/if}
   </section>
 
   {#if details}
@@ -371,14 +374,25 @@
 <input bind:this={files} type="file" multiple hidden onchange={(e) => upload(e.currentTarget.files)} />
 <input bind:this={folder} type="file" webkitdirectory hidden onchange={(e) => upload(e.currentTarget.files, true)} />
 
+{#if selected.size}
+  <div class="sel-tools" role="toolbar" aria-label={t.selected(selected.size)}>
+    <button disabled={!selectedFiles.length} onclick={() => download(selectedFiles)}><Download size={20} /><span>{t.download}</span></button>
+    <button onclick={() => (dialog = { kind: 'move', names: [...selected] })}><FolderInput size={20} /><span>{t.moveOrCopy}</span></button>
+    <button disabled={!one} onclick={() => one && onaction('share', one)}><Share2 size={20} /><span>{t.share}</span></button>
+    <button class="danger" onclick={() => (dialog = { kind: 'delete', names: [...selected] })}><Trash size={20} /><span>{t.remove}</span></button>
+    <button disabled={!one} onclick={() => (sheet = 'more')}><Ellipsis size={20} /><span>{t.more}</span></button>
+  </div>
+{/if}
+
 {#if sheet}
   {#await import('../components/Sheet.svelte') then { default: Sheet }}
-    <Sheet title={t.new} onclose={() => (sheet = false)}>
-      {#each creators as c (c.label)}
+    {@const items = sheet === 'new' ? creators : one ? [act.rename, act.details].map((a) => ({ ...a, run: () => onaction(a.id, one) })) : []}
+    <Sheet title={sheet === 'new' ? t.new : (one?.name ?? '')} onclose={() => (sheet = null)}>
+      {#each items as c (c.label)}
         <button
           class="sheet-item"
           onclick={() => {
-            sheet = false
+            sheet = null
             c.run()
           }}><c.icon size={20} />{c.label}</button
         >

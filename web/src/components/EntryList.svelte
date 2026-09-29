@@ -58,6 +58,11 @@
   let anchor = -1
   let cur = $state(0)
   let want = -1
+  let touch = false
+  let swallow = false
+  let timer = 0
+  let origin = [0, 0]
+  let pressing = $state(-1)
 
   const cols = $derived(grid ? Math.max(1, Math.floor((width - 16) / 172)) : 1)
   const rows = $derived(Math.ceil(entries.length / cols))
@@ -95,8 +100,46 @@
     else selected.add(n)
   }
 
+  function press(ev: PointerEvent, i: number) {
+    touch = ev.pointerType !== 'mouse'
+    swallow = false
+    if (!touch || !selected || (ev.target as Element).closest('input, .more')) return
+    ev.stopPropagation()
+    origin = [ev.clientX, ev.clientY]
+    pressing = i
+    clearTimeout(timer)
+    timer = setTimeout(() => {
+      pressing = -1
+      swallow = true
+      anchor = i
+      selected.add(id(entries[i]))
+      navigator.vibrate?.(10)
+    }, 450)
+  }
+
+  function release() {
+    clearTimeout(timer)
+    pressing = -1
+  }
+
+  function drift(ev: PointerEvent) {
+    if (pressing >= 0 && Math.hypot(ev.clientX - origin[0], ev.clientY - origin[1]) > 10) release()
+  }
+
+  function menu(ev: MouseEvent, e: Entry) {
+    if (touch && selected) ev.preventDefault()
+    else ctx = e
+  }
+
+  function tap(i: number) {
+    if (swallow) return void (swallow = false)
+    if (touch && selected?.size) toggle(id(entries[i]))
+    else onopen(entries[i])
+  }
+
   function pick(ev: MouseEvent, i: number) {
     if (!selected || (ev.target as Element).closest('button, input, a')) return
+    if (touch) return tap(i)
     if (ev.shiftKey && anchor >= 0) {
       for (const e of entries.slice(Math.min(anchor, i), Math.max(anchor, i) + 1)) selected.add(id(e))
       return
@@ -188,6 +231,7 @@
   {#if selected?.size && batch}
     <span class="count">{t.selected(selected.size)}</span>
     {@render batch()}
+    <button class="ghost select-all" onclick={selectAll}>{all ? t.selectNone : t.selectAll}</button>
   {:else}
     <span></span>
     {#each [['name', t.name], ['size', t.size], ['mtime', t.mtime]] as [k, label] (k)}
@@ -202,7 +246,7 @@
 <ContextMenu.Root onOpenChange={(o) => !o && (ctx = null)}>
   <ContextMenu.Trigger disabled={!ctx && !actions(null).length}>
     {#snippet child({ props })}
-      <div {...props} class="scroller" class:selecting={!!selected?.size} bind:this={scroller} bind:clientWidth={width} oncontextmenucapture={() => (ctx = null)}>
+      <div {...props} class="scroller" class:selecting={!!selected?.size} bind:this={scroller} bind:clientWidth={width} oncontextmenucapture={() => (ctx = null)} onscroll={release}>
         {#if !entries.length && loading}
           <div class="skeleton" class:grid role="status" aria-label={t.loading}>
             {#each { length: grid ? 12 : 10 }, i (i)}
@@ -224,13 +268,18 @@
                     aria-selected={selected ? selected.has(id(e)) : undefined}
                     tabindex={i === tab ? 0 : -1}
                     data-i={i}
+                    class:pressing={pressing === i}
                     onclick={(ev) => pick(ev, i)}
                     onkeydown={(ev) => key(ev, i)}
                     onfocus={() => (cur = i)}
-                    oncontextmenu={() => (ctx = e)}
+                    oncontextmenu={(ev) => menu(ev, e)}
+                    onpointerdown={(ev) => press(ev, i)}
+                    onpointermove={drift}
+                    onpointerup={release}
+                    onpointercancel={release}
                   >
                     {@render check(e, 'card-check')}
-                    <button class="card-open" data-look={e.dir ? 'dir' : look(e.name)} onclick={() => onopen(e)} title={e.name}>
+                    <button class="card-open" data-look={e.dir ? 'dir' : look(e.name)} onclick={() => tap(i)} title={e.name}>
                       {#if s}<img src={s} alt="" loading="lazy" decoding="async" onerror={() => miss(e)} />{:else}<FileIcon name={e.name} dir={e.dir} size={56} />{/if}
                     </button>
                     <div class="card-foot">
@@ -252,17 +301,22 @@
                 aria-selected={selected ? selected.has(id(e)) : undefined}
                 tabindex={r.index === tab ? 0 : -1}
                 data-i={r.index}
+                class:pressing={pressing === r.index}
                 onclick={(ev) => pick(ev, r.index)}
                 onkeydown={(ev) => key(ev, r.index)}
                 onfocus={() => (cur = r.index)}
-                oncontextmenu={() => (ctx = e)}
+                oncontextmenu={(ev) => menu(ev, e)}
+                onpointerdown={(ev) => press(ev, r.index)}
+                onpointermove={drift}
+                onpointerup={release}
+                onpointercancel={release}
               >
                 <span class="cell check-cell" role="gridcell">{@render check(e, '')}</span>
                 <span class="thumb" role="gridcell">
                   {#if s}<img src={s} alt="" loading="lazy" decoding="async" onerror={() => miss(e)} />{:else}<FileIcon name={e.name} dir={e.dir} />{/if}
                 </span>
                 <span class="cell name-cell" role="gridcell">
-                  <button class="name" onclick={() => onopen(e)} title={e.name}>{e.name}</button>
+                  <button class="name" onclick={() => tap(r.index)} title={e.name}>{e.name}</button>
                   {#if narrow.current}
                     <span class="hint sub">{e.dir ? '' : `${size(e.size)} · `}{ago(e.mtime)}{sub ? ` · ${sub(e)}` : ''}</span>
                   {:else if sub}

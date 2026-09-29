@@ -65,6 +65,7 @@ export const t = {
   gridView: '切换到网格视图',
   listView: '切换到列表视图',
   selectAll: '全选',
+  selectNone: '取消全选',
   select: (n: string) => `选择 ${n}`,
   selected: (n: number) => `已选 ${n} 项`,
   clearSelection: '取消选择',
