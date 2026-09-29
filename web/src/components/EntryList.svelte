@@ -15,6 +15,7 @@
   import type { Entry } from '../lib/api'
   import { size, date, ago, look, fallback, type Sort } from '../lib/format'
   import { t } from '../lib/i18n'
+  import { narrow } from '../lib/shell.svelte'
 
   let {
     entries,
@@ -74,7 +75,7 @@
     const list = entries
     const opts = {
       count: rows,
-      estimateSize: () => (grid ? 212 : 48),
+      estimateSize: () => (grid ? 212 : narrow.current ? 56 : 48),
       getItemKey: grid ? (i: number) => i : (i: number) => (list[i] ? id(list[i]) : i),
     }
     untrack(() => {
@@ -201,7 +202,7 @@
 <ContextMenu.Root onOpenChange={(o) => !o && (ctx = null)}>
   <ContextMenu.Trigger disabled={!ctx && !actions(null).length}>
     {#snippet child({ props })}
-      <div {...props} class="scroller" bind:this={scroller} bind:clientWidth={width} oncontextmenucapture={() => (ctx = null)}>
+      <div {...props} class="scroller" class:selecting={!!selected?.size} bind:this={scroller} bind:clientWidth={width} oncontextmenucapture={() => (ctx = null)}>
         {#if !entries.length && loading}
           <div class="skeleton" class:grid role="status" aria-label={t.loading}>
             {#each { length: grid ? 12 : 10 }, i (i)}
@@ -256,13 +257,17 @@
                 onfocus={() => (cur = r.index)}
                 oncontextmenu={() => (ctx = e)}
               >
-                <span class="cell" role="gridcell">{@render check(e, '')}</span>
+                <span class="cell check-cell" role="gridcell">{@render check(e, '')}</span>
                 <span class="thumb" role="gridcell">
                   {#if s}<img src={s} alt="" loading="lazy" decoding="async" onerror={() => miss(e)} />{:else}<FileIcon name={e.name} dir={e.dir} />{/if}
                 </span>
                 <span class="cell name-cell" role="gridcell">
                   <button class="name" onclick={() => onopen(e)} title={e.name}>{e.name}</button>
-                  {#if sub}<span class="hint sub" title={sub(e)}>{sub(e)}</span>{/if}
+                  {#if narrow.current}
+                    <span class="hint sub">{e.dir ? '' : `${size(e.size)} · `}{ago(e.mtime)}{sub ? ` · ${sub(e)}` : ''}</span>
+                  {:else if sub}
+                    <span class="hint sub" title={sub(e)}>{sub(e)}</span>
+                  {/if}
                 </span>
                 <span class="cell" role="gridcell">{@render more(e)}</span>
                 <span class="num size" role="gridcell">{e.dir ? '' : size(e.size)}</span>
