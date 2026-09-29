@@ -3,7 +3,10 @@ package app
 import (
 	"archive/zip"
 	"bytes"
+	"os"
+	"path/filepath"
 	"slices"
+	"strings"
 	"testing"
 )
 
@@ -74,6 +77,25 @@ func TestShareZip(t *testing.T) {
 		if c, _, _ := anon(f, "GET", "/s/"+tok+"/zip?p="+p, ""); c != 404 {
 			t.Errorf("%s = %d", p, c)
 		}
+	}
+	for _, p := range []string{"missing", "in/missing"} {
+		if c, _, _ := anon(f, "GET", "/s/"+tok+"/zip?p="+p, ""); c != 404 {
+			t.Errorf("%s = %d", p, c)
+		}
+	}
+	if b := f.do("GET", "/api/shares", nil).Body.String(); !strings.Contains(b, `"hits":2`) {
+		t.Fatalf("hits after two zips and two misses: %s", b)
+	}
+	os.Symlink("../secret.txt", filepath.Join(f.Dir, "pub/link.txt"))
+	w = f.do("GET", "/s/"+tok+"/zip", nil, "X-No-Auth", "1")
+	if got := zipNames(t, w.Body.Bytes()); slices.Contains(got, "pub/link.txt") {
+		t.Fatalf("share zip followed a link out of the share: %v", got)
+	}
+	if c, _, _ := anon(f, "GET", "/s/"+tok+"/raw/link.txt", ""); c == 200 {
+		t.Fatal("share raw followed a link out of the share")
+	}
+	if _, b, _ := anon(f, "GET", "/s/"+tok+"/ls", ""); strings.Contains(b, "link.txt") {
+		t.Fatalf("share ls lists a link out of the share: %s", b)
 	}
 	drop := mkShare(t, f, `{"vol":"v","path":"pub","mode":"drop"}`)
 	if c, _, _ := anon(f, "GET", "/s/"+drop+"/zip", ""); c != 403 {

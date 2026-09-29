@@ -5,6 +5,7 @@ import (
 	"encoding/base64"
 	"io/fs"
 	"net/http"
+	"os"
 	"path"
 	"strconv"
 	"strings"
@@ -160,6 +161,31 @@ func (s *Service) open(w http.ResponseWriter, r *http.Request, allowed ...string
 	return opened{sh, v, fi.IsDir()}, true
 }
 
+func (o opened) name() string {
+	if o.sh.Path == "." {
+		return o.v.Name
+	}
+	return path.Base(o.sh.Path)
+}
+
+func (o opened) root(p string) (*os.Root, string, func(), error) {
+	rel, err := vol.Clean(p)
+	if err != nil {
+		return nil, "", nil, err
+	}
+	if !o.dir {
+		if rel != "." {
+			return nil, "", nil, fs.ErrNotExist
+		}
+		return o.v.Root, o.sh.Path, func() {}, nil
+	}
+	r, err := o.v.Root.OpenRoot(o.sh.Path)
+	if err != nil {
+		return nil, "", nil, err
+	}
+	return r, rel, func() { r.Close() }, nil
+}
+
 func (o opened) sub(p string) (string, error) {
 	rel, err := vol.Clean(p)
 	if err != nil {
@@ -183,10 +209,7 @@ func (s *Service) info(w http.ResponseWriter, r *http.Request) {
 		httpx.JSON(w, 200, map[string]any{"locked": true, "mode": o.sh.Mode})
 		return
 	}
-	out := map[string]any{"name": path.Base(o.sh.Path), "dir": o.dir, "mode": o.sh.Mode, "locked": false}
-	if o.sh.Path == "." {
-		out["name"] = o.v.Name
-	}
+	out := map[string]any{"name": o.name(), "dir": o.dir, "mode": o.sh.Mode, "locked": false}
 	if !o.dir {
 		if e, err := api.Stat(o.v.Root, o.sh.Path); err == nil {
 			out["size"] = e.Size
@@ -235,12 +258,13 @@ func (s *Service) ls(w http.ResponseWriter, r *http.Request) {
 		httpx.Fail(w, 400, "not a directory")
 		return
 	}
-	rel, err := o.sub(r.URL.Query().Get("path"))
+	root, rel, done, err := o.root(r.URL.Query().Get("path"))
 	if err != nil {
 		httpx.Error(w, err)
 		return
 	}
-	es, err := api.List(o.v.Root, rel)
+	defer done()
+	es, err := api.List(root, rel)
 	if err != nil {
 		httpx.Error(w, err)
 		return
@@ -253,17 +277,18 @@ func (s *Service) raw(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	rel, err := o.sub(r.PathValue("path"))
+	root, rel, done, err := o.root(r.PathValue("path"))
 	if err != nil {
 		httpx.Error(w, err)
 		return
 	}
-	if _, err := o.v.Root.Stat(rel); err == nil {
+	defer done()
+	if _, err := root.Stat(rel); err == nil {
 		if rg := r.Header.Get("Range"); rg == "" || strings.HasPrefix(rg, "bytes=0-") {
 			s.DB.HitShare(o.sh.ID)
 		}
 	}
-	serve.File(w, r, o.v.Root, rel, r.URL.Query().Has("dl"))
+	serve.File(w, r, root, rel, r.URL.Query().Has("dl"))
 }
 
 func (s *Service) zip(w http.ResponseWriter, r *http.Request) {
@@ -276,17 +301,34 @@ func (s *Service) zip(w http.ResponseWriter, r *http.Request) {
 	if len(ps) == 0 {
 		ps = []string{""}
 	}
+	root, _, done, err := o.root("")
+	if err != nil {
+		httpx.Error(w, err)
+		return
+	}
+	defer done()
 	var rels []string
 	for _, p := range ps {
-		rel, err := o.sub(p)
+		rel, err := vol.Clean(p)
+		if err == nil && !o.dir && rel != "." {
+			err = fs.ErrNotExist
+		}
 		if err != nil {
 			httpx.Error(w, err)
 			return
 		}
+		if !o.dir {
+			rel = o.sh.Path
+		}
 		rels = append(rels, rel)
 	}
-	s.DB.HitShare(o.sh.ID)
-	serve.Zip(w, r, o.v.Root, rels, "", serve.ZipName(o.v.Name, rels, q.Get("name")))
+	top := ""
+	if o.dir {
+		top = o.name()
+	}
+	if serve.Zip(w, r, root, rels, top, serve.ZipName(o.name(), rels, q.Get("name"))) {
+		s.DB.HitShare(o.sh.ID)
+	}
 }
 
 func (s *Service) thumb(w http.ResponseWriter, r *http.Request) {
