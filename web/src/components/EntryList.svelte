@@ -366,9 +366,10 @@
               {@const n = layout ? (layout.items[r.index] as number) : r.index}
               {@const e = entries[n]}
               {@const s = src(e)}
+              {@const gone = dim?.(e)}
               <div
                 class="row"
-                class:dim={!!dim?.(e)}
+                class:dim={!!gone}
                 {draggable}
                 ondragstart={(ev) => lift(ev, e)}
                 ondragend={drop}
@@ -397,14 +398,14 @@
                 <span class="cell name-cell" role="gridcell">
                   <button class="name" onclick={() => tap(n)} title={e.name}>{e.name}</button>
                   {#if narrow.current}
-                    <span class="hint sub">{e.dir ? '' : `${size(e.size)} · `}{ago(e.mtime)}{#if loc}{' · '}{@render trail(e)}{/if}{dim?.(e) ? ` · ${dim(e)}` : ''}</span>
+                    <span class="hint sub">{#if gone}{@render trail(e)} · {gone}{:else}{e.dir ? '' : `${size(e.size)} · `}{ago(e.mtime)}{#if loc}{' · '}{@render trail(e)}{/if}{/if}</span>
                   {:else if loc}
-                    <span class="hint sub">{@render trail(e)}{dim?.(e) ? ` · ${dim(e)}` : ''}</span>
+                    <span class="hint sub">{@render trail(e)}{gone ? ` · ${gone}` : ''}</span>
                   {/if}
                 </span>
                 <span class="cell" role="gridcell">{@render more(e)}</span>
-                <span class="num size" role="gridcell">{e.dir ? '' : size(e.size)}</span>
-                <span class="num mtime" role="gridcell" title={date(e.mtime)}>{ago(e.mtime)}</span>
+                <span class="num size" role="gridcell">{e.dir || gone ? '' : size(e.size)}</span>
+                <span class="num mtime" role="gridcell" title={gone ? undefined : date(e.mtime)}>{gone ? '' : ago(e.mtime)}</span>
               </div>
             {/if}
           {/each}
