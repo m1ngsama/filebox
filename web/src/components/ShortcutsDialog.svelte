@@ -3,7 +3,8 @@
   import { t } from '../lib/i18n'
 
   let { onclose }: { onclose: () => void } = $props()
-  const mod = /Mac|iP/.test(navigator.platform) ? '⌘' : 'Ctrl'
+  const platform = (navigator as Navigator & { userAgentData?: { platform: string } }).userAgentData?.platform ?? navigator.platform
+  const mod = /mac|ip/i.test(platform) ? '⌘' : 'Ctrl'
   const k = t.keys
   const rows: [string[][], string][] = [
     [[['/']], k.filter],

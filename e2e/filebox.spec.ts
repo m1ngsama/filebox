@@ -794,7 +794,7 @@ test.describe('on a phone', () => {
     expect((await row(page, 'm-01.txt').boundingBox())!.height).toBe(56)
 
     const f = await finger(page)
-    const bar = page.getByRole('toolbar', { name: t.selected(1) })
+    const bar = page.getByRole('group', { name: t.selected(1) })
     await f.hold(row(page, 'm-03.txt'), 40)
     await expect(row(page, 'm-03.txt')).toHaveAttribute('aria-selected', 'false')
     await expect(bar).toHaveCount(0)
@@ -817,7 +817,7 @@ test.describe('on a phone', () => {
     await page.getByRole('button', { name: t.selectAll, exact: true }).tap()
     await expect(page.locator('.list-head')).toContainText(t.selected(30))
     await page.getByRole('button', { name: t.clearSelection }).tap()
-    await expect(page.getByRole('toolbar')).toHaveCount(0)
+    await expect(page.locator('.sel-tools')).toHaveCount(0)
     await expect(page.locator('.files > .bar')).toBeVisible()
 
     await f.hold(row(page, 'm-00.txt'))
@@ -867,7 +867,7 @@ test.describe('on a phone', () => {
     await page.getByRole('button', { name: t.closeFilter }).tap()
     await expect(opener).toBeFocused()
     await (await finger(page)).hold(row(page, 'x.txt'))
-    await page.getByRole('toolbar').getByRole('button', { name: t.more }).tap()
+    await page.locator('.sel-tools').getByRole('button', { name: t.more }).tap()
     await page.getByRole('dialog').getByRole('button', { name: t.rename }).tap()
     await expect(page.getByLabel(t.newName)).toBeFocused()
     await page.keyboard.press('Escape')

@@ -429,7 +429,7 @@
 {/if}
 
 {#if selected.size}
-  <div class="sel-tools" role="toolbar" aria-label={t.selected(selected.size)} bind:offsetHeight={barH}>
+  <div class="sel-tools" role="group" aria-label={t.selected(selected.size)} bind:offsetHeight={barH}>
     <button disabled={!selectedFiles.length} onclick={() => download(selectedFiles)}><Download size={20} /><span>{t.download}</span></button>
     <button onclick={() => (dialog = { kind: 'move', names: [...selected] })}><FolderInput size={20} /><span>{t.moveOrCopy}</span></button>
     <button disabled={!one} onclick={() => pass('share')}><Share2 size={20} /><span>{t.share}</span></button>
