@@ -117,11 +117,15 @@ func (a *Auth) LoginWith(ip, ua string, verify func() (userID int64, ok bool)) (
 		return "", err
 	}
 	uid, ok := verify()
+	ev := db.Event{At: a.Now().Unix(), UserID: uid, Kind: db.EventLogin, Visitor: a.DB.Visitor(ip)}
 	if !ok {
 		a.lim.fail(ip, a.Now())
+		ev.Kind = db.EventLoginFailed
+		a.DB.Log(ev)
 		return "", ErrBadLogin
 	}
 	a.lim.ok(ip)
+	a.DB.Log(ev)
 	tok := base64.RawURLEncoding.EncodeToString(random(32))
 	return tok, a.issue(db.Token{UserID: uid, Kind: "session", UserAgent: truncate(ua, 256), IP: ip}, tok, SessionTTL)
 }

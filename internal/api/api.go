@@ -521,6 +521,7 @@ func (a *API) tokenNew(w http.ResponseWriter, r *http.Request) {
 		httpx.Error(w, err)
 		return
 	}
+	a.DB.Log(db.Event{At: time.Now().Unix(), UserID: p.UserID, Kind: db.EventTokenCreate, Name: in.Label})
 	httpx.JSON(w, 201, map[string]string{"token": tok})
 }
 
@@ -531,10 +532,19 @@ func (a *API) tokenDel(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	p, _ := auth.From(r.Context())
+	label := ""
+	if ts, err := a.DB.ListTokens(p.UserID, "app"); err == nil {
+		for _, t := range ts {
+			if t.ID == id {
+				label = t.Label
+			}
+		}
+	}
 	if err := a.DB.DeleteToken(p.UserID, id, "app"); err != nil {
 		httpx.Error(w, err)
 		return
 	}
+	a.DB.Log(db.Event{At: time.Now().Unix(), UserID: p.UserID, Kind: db.EventTokenRevoke, Name: label})
 	w.WriteHeader(204)
 }
 

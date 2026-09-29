@@ -117,6 +117,7 @@ func serveCmd(args []string) error {
 		for {
 			up.Sweep(24 * time.Hour)
 			d.PurgeTokens(time.Now().Unix())
+			d.PruneEvents(time.Now().Add(-90 * 24 * time.Hour).Unix())
 			pk.Sweep()
 			if err := ix.Scan(set); err != nil {
 				slog.Error("index scan", "err", err)

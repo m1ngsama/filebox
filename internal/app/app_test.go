@@ -79,6 +79,10 @@ func (f *fixture) do(method, url string, body io.Reader, hdr ...string) *httptes
 			noAuth = true
 			continue
 		}
+		if hdr[i] == "X-Remote-Addr" {
+			r.RemoteAddr = hdr[i+1]
+			continue
+		}
 		r.Header.Set(hdr[i], hdr[i+1])
 	}
 	if !noAuth {

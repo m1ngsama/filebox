@@ -125,8 +125,9 @@ var (
 )
 
 type Server struct {
-	Now   func() time.Time
-	Index *index.Index
+	Now      func() time.Time
+	Index    *index.Index
+	Received func(owner, rel string, size int64)
 
 	vols     []*volume
 	byKey    map[string]*volume
@@ -379,6 +380,9 @@ func (s *Server) finish(u *volume, info handler.FileInfo) (string, error) {
 	}
 	u.v.Root.Remove(path.Join(vol.UploadsDir, info.ID+".info"))
 	s.Index.Touch(u.v, dst)
+	if s.Received != nil {
+		s.Received(info.MetaData[keyOwner], dst, info.Size)
+	}
 	return trashed, nil
 }
 

@@ -4,6 +4,7 @@ import (
 	"crypto/rand"
 	"encoding/base64"
 	"io/fs"
+	"log/slog"
 	"net/http"
 	"net/url"
 	"os"
@@ -45,6 +46,67 @@ func (s *Service) Register(mux *http.ServeMux) {
 	mux.HandleFunc("GET /s/{token}/render", s.render)
 	mux.HandleFunc("GET /s/{token}/meta", s.meta)
 	mux.HandleFunc("/s/{token}/upload/{rest...}", s.upload)
+	mux.Handle("GET /api/activity", s.Auth.RequireSession(http.HandlerFunc(s.activity)))
+	s.Uploads.Received = s.received
+}
+
+func label(sh db.Share) string {
+	if sh.Path == "." {
+		return sh.Vol + ":/"
+	}
+	return sh.Vol + ":/" + sh.Path
+}
+
+func (s *Service) log(r *http.Request, sh db.Share, kind, name string, size int64) {
+	e := db.Event{At: time.Now().Unix(), UserID: sh.UserID, ShareID: sh.ID, Kind: kind, Name: name, Size: size}
+	if r != nil {
+		e.Visitor = s.DB.Visitor(auth.ClientIP(r))
+	}
+	if err := s.DB.Log(e); err != nil {
+		slog.Error("activity log", "kind", kind, "err", err)
+	}
+}
+
+func (s *Service) received(owner string, rel string, size int64) {
+	id, err := strconv.ParseInt(strings.TrimPrefix(owner, "share:"), 10, 64)
+	if err == nil && strings.HasPrefix(owner, "share:") {
+		s.log(nil, db.Share{ID: id}, db.EventUpload, path.Base(rel), size)
+	}
+}
+
+var kinds = map[string][]string{
+	db.EventView: {db.EventView}, db.EventDownload: {db.EventDownload}, db.EventUpload: {db.EventUpload},
+	"login": {db.EventLogin, db.EventLoginFailed},
+	"share": {db.EventShareCreate, db.EventShareEdit, db.EventShareDelete},
+	"token": {db.EventTokenCreate, db.EventTokenRevoke},
+}
+
+func (s *Service) activity(w http.ResponseWriter, r *http.Request) {
+	q := r.URL.Query()
+	p, _ := auth.From(r.Context())
+	f := db.EventFilter{UserID: p.UserID, Limit: 50, Kinds: kinds[q.Get("kind")]}
+	f.ShareID, _ = strconv.ParseInt(q.Get("share"), 10, 64)
+	f.Before, _ = strconv.ParseInt(q.Get("before"), 10, 64)
+	if q.Get("kind") != "" && f.Kinds == nil {
+		httpx.Fail(w, 400, "bad kind")
+		return
+	}
+	f.Limit++
+	es, err := s.DB.Events(f)
+	if err != nil {
+		httpx.Error(w, err)
+		return
+	}
+	more := len(es) == f.Limit
+	if more {
+		es = es[:len(es)-1]
+	}
+	out := []map[string]any{}
+	for _, e := range es {
+		out = append(out, map[string]any{"id": e.ID, "at": e.At, "kind": e.Kind, "share_id": e.ShareID, "share": e.Share,
+			"visitor": e.Visitor, "name": e.Name, "size": e.Size})
+	}
+	httpx.JSON(w, 200, map[string]any{"events": out, "more": more})
 }
 
 var modes = map[string]bool{"read": true, "upload": true, "drop": true}
@@ -104,6 +166,7 @@ func (s *Service) create(w http.ResponseWriter, r *http.Request) {
 		httpx.Error(w, err)
 		return
 	}
+	s.log(nil, *sh, db.EventShareCreate, label(*sh), 0)
 	httpx.JSON(w, 201, map[string]any{"id": sh.ID, "token": sh.Token})
 }
 
@@ -185,6 +248,7 @@ func (s *Service) edit(w http.ResponseWriter, r *http.Request) {
 		httpx.Error(w, err)
 		return
 	}
+	s.log(nil, sh, db.EventShareEdit, label(sh), 0)
 	w.WriteHeader(204)
 }
 
@@ -195,10 +259,15 @@ func (s *Service) remove(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	p, _ := auth.From(r.Context())
-	if err := s.DB.DeleteShare(p.UserID, id); err != nil {
+	sh, err := s.DB.ShareByID(p.UserID, id)
+	if err == nil {
+		err = s.DB.DeleteShare(p.UserID, id)
+	}
+	if err != nil {
 		httpx.Error(w, err)
 		return
 	}
+	s.log(nil, sh, db.EventShareDelete, label(sh), 0)
 	w.WriteHeader(204)
 }
 
@@ -279,6 +348,7 @@ func (s *Service) info(w http.ResponseWriter, r *http.Request) {
 		httpx.JSON(w, 200, map[string]any{"locked": true, "mode": o.sh.Mode})
 		return
 	}
+	s.log(r, o.sh, db.EventView, "", 0)
 	out := map[string]any{"name": o.name(), "dir": o.dir, "mode": o.sh.Mode, "locked": false,
 		"note": o.sh.Note, "expires": o.sh.ExpiresAt, "max_upload": o.sh.MaxUpload}
 	if !o.dir {
@@ -358,9 +428,12 @@ func (s *Service) raw(w http.ResponseWriter, r *http.Request) {
 		serve.VTT(w, r, root, rel)
 		return
 	}
-	if _, err := root.Stat(rel); err == nil {
+	if fi, err := root.Stat(rel); err == nil {
 		if rg := r.Header.Get("Range"); rg == "" || strings.HasPrefix(rg, "bytes=0-") {
 			s.DB.HitShare(o.sh.ID)
+			if r.URL.Query().Has("dl") {
+				s.log(r, o.sh, db.EventDownload, path.Base(path.Join(o.sh.Path, rel)), fi.Size())
+			}
 		}
 	}
 	serve.File(w, r, root, rel, r.URL.Query().Has("dl"))
@@ -401,8 +474,10 @@ func (s *Service) zip(w http.ResponseWriter, r *http.Request) {
 	if o.dir {
 		top = o.name()
 	}
-	if serve.Zip(w, r, root, rels, top, serve.ZipName(o.name(), rels, q.Get("name"))) {
+	name := serve.ZipName(o.name(), rels, q.Get("name"))
+	if serve.Zip(w, r, root, rels, top, name) {
 		s.DB.HitShare(o.sh.ID)
+		s.log(r, o.sh, db.EventDownload, name, 0)
 	}
 }
 

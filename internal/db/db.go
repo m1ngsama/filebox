@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/url"
 	"strconv"
+	"sync"
 
 	_ "modernc.org/sqlite"
 )
@@ -107,9 +108,26 @@ var migrations = []string{
 	`ALTER TABLE shares ADD COLUMN note TEXT NOT NULL DEFAULT '';
 	ALTER TABLE shares ADD COLUMN max_upload INTEGER NOT NULL DEFAULT 0;
 	ALTER TABLE shares ADD COLUMN views INTEGER NOT NULL DEFAULT 0;`,
+	`CREATE TABLE events (
+		id INTEGER PRIMARY KEY AUTOINCREMENT,
+		at INTEGER NOT NULL,
+		user_id INTEGER NOT NULL DEFAULT 0,
+		kind TEXT NOT NULL,
+		share_id INTEGER NOT NULL DEFAULT 0,
+		visitor TEXT NOT NULL DEFAULT '',
+		name TEXT NOT NULL DEFAULT '',
+		size INTEGER NOT NULL DEFAULT 0
+	);
+	CREATE INDEX events_at ON events(at);
+	CREATE UNIQUE INDEX events_view ON events(share_id, visitor, at / 86400) WHERE kind = 'view';
+	CREATE TABLE settings (key TEXT PRIMARY KEY, value BLOB NOT NULL) WITHOUT ROWID;
+	INSERT INTO settings (key, value) VALUES ('visitor_key', randomblob(32));`,
 }
 
-type DB struct{ *sql.DB }
+type DB struct {
+	*sql.DB
+	visitorKey func() ([]byte, error)
+}
 
 type User struct {
 	ID                 int64
@@ -147,7 +165,11 @@ func Open(path string) (*DB, error) {
 	if err != nil {
 		return nil, err
 	}
-	d := &DB{s}
+	d := &DB{DB: s}
+	d.visitorKey = sync.OnceValues(func() ([]byte, error) {
+		var k []byte
+		return k, d.QueryRow(`SELECT value FROM settings WHERE key = 'visitor_key'`).Scan(&k)
+	})
 	err = d.migrate()
 	if err == nil {
 		err = d.syncSearch()

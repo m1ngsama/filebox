@@ -481,3 +481,60 @@ func TestShareUploadLimit(t *testing.T) {
 		}
 	}
 }
+
+func TestShareActivity(t *testing.T) {
+	f := newTestApp(t)
+	f.write(t, "d/a.txt", "hello")
+	f.write(t, "in/.keep", "")
+	tok := mkShare(t, f, `{"vol":"v","path":"d","mode":"read"}`)
+	drop := mkShare(t, f, `{"vol":"v","path":"in","mode":"drop"}`)
+	ip := func(a string) []string { return []string{"X-Remote-Addr", a + ":1234"} }
+	for range 2 {
+		anon(f, "GET", "/s/"+tok+"/info", "", ip("198.51.100.1")...)
+	}
+	anon(f, "GET", "/s/"+tok+"/info", "", ip("198.51.100.2")...)
+	anon(f, "GET", "/s/"+tok+"/raw/a.txt?dl", "", ip("198.51.100.1")...)
+	anon(f, "GET", "/s/"+tok+"/raw/a.txt", "", ip("198.51.100.1")...)
+	anon(f, "GET", "/s/"+tok+"/zip", "", ip("198.51.100.1")...)
+	w := f.do("POST", "/s/"+drop+"/upload/", nil, "X-No-Auth", "1", "Tus-Resumable", "1.0.0", "Upload-Length", "2",
+		"Upload-Metadata", "filename "+b64("r.txt"))
+	f.do("PATCH", w.Header().Get("Location"), strings.NewReader("hi"), "X-No-Auth", "1", "Tus-Resumable", "1.0.0",
+		"Upload-Offset", "0", "Content-Type", "application/offset+octet-stream")
+	f.do("PATCH", "/api/shares/"+shareID(t, f, tok), body(`{"note":"n"}`))
+	f.do("POST", "/api/login", body(`{"name":"admin","password":"wrong"}`), "X-No-Auth", "1")
+	type ev struct {
+		Kind, Name, Share, Visitor string
+		Size                       int64
+	}
+	got := decode[struct {
+		Events []ev
+		More   bool
+	}](t, f.do("GET", "/api/activity", nil))
+	kinds := []string{}
+	for _, e := range got.Events {
+		kinds = append(kinds, e.Kind)
+		if strings.Contains(e.Visitor, "198.51") {
+			t.Fatalf("raw IP stored: %+v", e)
+		}
+	}
+	want := "login_failed share_edit upload download download view view share_create share_create login"
+	if strings.Join(kinds, " ") != want {
+		t.Fatalf("events %v", kinds)
+	}
+	if e := got.Events[2]; e.Name != "r.txt" || e.Size != 2 || e.Share != "v:/in" {
+		t.Fatalf("upload event %+v", e)
+	}
+	if e := got.Events[4]; e.Name != "a.txt" || e.Size != 5 || e.Visitor == "" {
+		t.Fatalf("download event %+v", e)
+	}
+	views := decode[struct{ Events []ev }](t, f.do("GET", "/api/activity?kind=view&share="+shareID(t, f, tok), nil)).Events
+	if len(views) != 2 || views[0].Visitor == views[1].Visitor {
+		t.Fatalf("views %+v", views)
+	}
+	if w := f.do("GET", "/api/activity?kind=bogus", nil); w.Code != 400 {
+		t.Fatalf("bogus kind %d", w.Code)
+	}
+	if b := f.do("GET", "/api/shares", nil).Body.String(); !strings.Contains(b, `"views":2`) {
+		t.Fatalf("views counter %s", b)
+	}
+}
