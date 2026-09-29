@@ -149,6 +149,7 @@ func TestScanLargeTree(t *testing.T) {
 	}
 	start := time.Now()
 	e.scan(t)
+	t.Logf("first scan of %d files took %v", n, time.Since(start))
 	if d := time.Since(start); d > 30*time.Second {
 		t.Fatalf("scan took %v", d)
 	}

@@ -91,9 +91,6 @@ var migrations = []string{
 	CREATE INDEX files_mtime ON files(mtime DESC);
 	CREATE VIRTUAL TABLE files_fts USING fts5(path, content='files', content_rowid='id', tokenize='trigram');
 	INSERT INTO files_fts (files_fts) VALUES ('rebuild');
-	CREATE TRIGGER files_fts_insert AFTER INSERT ON files BEGIN
-		INSERT INTO files_fts (rowid, path) VALUES (new.id, new.path);
-	END;
 	CREATE TRIGGER files_fts_delete AFTER DELETE ON files BEGIN
 		INSERT INTO files_fts (files_fts, rowid, path) VALUES ('delete', old.id, old.path);
 	END;

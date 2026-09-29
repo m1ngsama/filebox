@@ -124,7 +124,11 @@ func TestSearchScope(t *testing.T) {
 	e.write(t, ".trash/1-x/report.txt", "x", now)
 	e.write(t, ".filebox/uploads/report", "x", now)
 	e.scan(t)
-	e.x.db.Exec(`INSERT INTO files (vol, path, dir, size, mtime) VALUES ('v', '.trash/leak/report.txt', 0, 1, 1), ('w', 'report.doc', 0, 1, 1)`)
+	for _, b := range []*batch{{db: e.x.db, vol: "v", rows: []row{{path: ".trash/leak/report.txt", mtime: 1}}}, {db: e.x.db, vol: "w", rows: []row{{path: "report.doc", mtime: 1}}}} {
+		if err := b.flush(); err != nil {
+			t.Fatal(err)
+		}
+	}
 	all := e.find(t, Query{Text: "report"})
 	sort.Strings(all)
 	if !slices.Equal(all, []string{"v:a/deep/report.md", "v:a/report.txt", "v:ab/report.txt", "w:report.doc"}) {

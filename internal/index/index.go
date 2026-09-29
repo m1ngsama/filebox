@@ -325,6 +325,10 @@ func (b *batch) flush() error {
 		return err
 	}
 	defer tx.Rollback()
+	var top int64
+	if err := tx.QueryRow(`SELECT coalesce(max(id), 0) FROM files`).Scan(&top); err != nil {
+		return err
+	}
 	up, err := tx.Prepare(upsert)
 	if err != nil {
 		return err
@@ -344,6 +348,9 @@ func (b *batch) flush() error {
 				return err
 			}
 		}
+	}
+	if _, err := tx.Exec(`INSERT INTO files_fts (rowid, path) SELECT id, path FROM files WHERE id > ?`, top); err != nil {
+		return err
 	}
 	b.rows = b.rows[:0]
 	return tx.Commit()
