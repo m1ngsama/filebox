@@ -488,7 +488,9 @@
 {#if conflict}
   {@const c = conflict}
   {#await import('../components/ConflictDialog.svelte') then { default: ConflictDialog }}
-    <ConflictDialog name={c.name} rest={c.rest} onchoose={(choice, all) => c.resolve([choice, all])} onclose={() => c.resolve(null)} />
+    {#key c}
+      <ConflictDialog name={c.name} rest={c.rest} onchoose={(choice, all) => c.resolve([choice, all])} onclose={() => c.resolve(null)} />
+    {/key}
   {/await}
 {/if}
 
