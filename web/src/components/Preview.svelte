@@ -55,9 +55,15 @@
   })
 
   onMount(() => {
+    const vv = visualViewport
+    const zoom = () => (zoomed = (vv?.scale ?? 1) > 1)
+    vv?.addEventListener('resize', zoom)
     const back = document.activeElement as HTMLElement | null
     closer?.focus()
-    return () => back?.focus()
+    return () => {
+      vv?.removeEventListener('resize', zoom)
+      back?.focus()
+    }
   })
 
   function step(d: number) {
@@ -79,9 +85,10 @@
 
   let start: { x: number; y: number } | null = null
   let off = $state({ x: 0, y: 0 })
+  let zoomed = $state(false)
 
   function touchstart(e: TouchEvent) {
-    const one = e.touches.length === 1 && k !== 'text' && k !== 'pdf' && (visualViewport?.scale ?? 1) <= 1
+    const one = e.touches.length === 1 && k !== 'text' && k !== 'pdf' && !zoomed
     start = one ? { x: e.touches[0].clientX, y: e.touches[0].clientY } : null
     off = { x: 0, y: 0 }
   }
@@ -132,6 +139,7 @@
   </header>
   <div
     class="body"
+    style:touch-action={k === 'image' && !zoomed ? 'pinch-zoom' : null}
     aria-busy={status === 'loading'}
     style:translate={off.x || off.y ? `${off.x}px ${off.y}px` : null}
     style:opacity={off.y ? Math.max(0.3, 1 - off.y / 400) : null}

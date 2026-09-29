@@ -767,8 +767,7 @@ test.describe('on a phone', () => {
         await page.waitForTimeout(900)
         await send('touchEnd')
       },
-      async swipe(dx: number, dy: number) {
-        const [x, y] = [195, 420]
+      async swipe(dx: number, dy: number, [x, y] = [195, 420]) {
         await send('touchStart', x, y)
         for (let i = 1; i <= 6; i++) await send('touchMove', x + (dx * i) / 6, y + (dy * i) / 6)
         await send('touchEnd')
@@ -846,6 +845,19 @@ test.describe('on a phone', () => {
     const panel = page.locator('.uploads')
     await expect(panel).toBeVisible()
     await expect.poll(async () => (await fab.boundingBox())!.y + 56 <= (await panel.boundingBox())!.y).toBe(true)
+  })
+
+  test('a long text preview scrolls by touch', async ({ page, server }) => {
+    writeFileSync(join(server.vol, 'docs', 'long.txt'), Array.from({ length: 400 }, (_, i) => `line ${i}`).join('\n'))
+    await login(page)
+    await row(page, 'docs').locator('button.name').tap()
+    await row(page, 'long.txt').tap()
+    const body = page.getByRole('dialog', { name: 'long.txt' }).locator('.body')
+    await expect(body.locator('pre')).toContainText('line 399')
+    const f = await finger(page)
+    await f.swipe(0, -400, [195, 700])
+    await expect.poll(() => body.evaluate((b) => b.scrollTop)).toBeGreaterThan(0)
+    await expect(page.getByRole('dialog', { name: 'long.txt' })).toBeVisible()
   })
 
   test('swipes step through images and a downward swipe closes the preview', async ({ page, server }) => {
