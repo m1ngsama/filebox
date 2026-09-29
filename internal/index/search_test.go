@@ -187,6 +187,10 @@ func TestSearchKeepsNameHitsAmongManyPathHits(t *testing.T) {
 	for i := range 100_000 {
 		b.add(row{path: fmt.Sprintf("photos/2024/img-%06d.jpg", i), mtime: int64(3 + i)})
 	}
+	b.add(row{path: "z", dir: true, mtime: 1})
+	for i := range 5 {
+		b.add(row{path: fmt.Sprintf("z/img-%d.png", i), mtime: 1})
+	}
 	if err := b.flush(); err != nil {
 		t.Fatal(err)
 	}
@@ -214,6 +218,9 @@ func TestSearchKeepsNameHitsAmongManyPathHits(t *testing.T) {
 	}
 	if got := e.find(t, Query{Text: "img", Vol: "v", Under: "a"}); len(got) != 0 {
 		t.Fatalf("broad name search ignored the scope: %v", got[:min(3, len(got))])
+	}
+	if got := e.find(t, Query{Text: "img", Vol: "v", Under: "z"}); len(got) != 5 || len(slices.Compact(slices.Sorted(slices.Values(got)))) != 5 {
+		t.Fatalf("scoped broad name search %v", got)
 	}
 	if got := e.find(t, Query{Text: "2024", Vol: "v", Under: "a"}); !slices.Equal(got, []string{"v:a/report-2024.pdf"}) {
 		t.Fatalf("scoped %v", got)

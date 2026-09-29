@@ -48,18 +48,20 @@ func (x *Index) Search(ctx context.Context, q Query) ([]Hit, error) {
 		return nil, err
 	}
 	list, _ := json.Marshal(ids)
-	first, arg := ` WHERE f.id IN (SELECT value FROM json_each(?))`, any(string(list))
+	set, arg := `SELECT value FROM json_each(?)`, any(string(list))
+	first := ` WHERE f.id IN (` + set + `)`
 	if len(ids) > candidates {
-		first, arg = ` INDEXED BY files_mtime WHERE f.id IN (SELECT rowid FROM files_fts WHERE files_fts MATCH ?)`, `name : `+phrase
+		set, arg = `SELECT rowid FROM files_fts WHERE files_fts MATCH ?`, `name : `+phrase
+		first = ` INDEXED BY files_mtime WHERE f.id IN (` + set + `)`
 	}
 	out, err := x.hits(ctx, cols+first+scope+` ORDER BY f.mtime DESC LIMIT ?`, with(arg, q.Limit)...)
 	if err != nil || len(out) >= q.Limit {
 		return out, err
 	}
 	more, err := x.hits(ctx, cols+` WHERE f.id IN (SELECT files_fts.rowid FROM files_fts JOIN files f ON f.id = files_fts.rowid
-		WHERE files_fts MATCH ?`+scope+` ORDER BY files_fts.rowid DESC LIMIT ?) AND f.id NOT IN (SELECT value FROM json_each(?))
+		WHERE files_fts MATCH ?`+scope+` ORDER BY files_fts.rowid DESC LIMIT ?) AND f.id NOT IN (`+set+`)
 		ORDER BY f.mtime DESC LIMIT ?`,
-		with(`path : `+phrase, candidates+len(ids), string(list), q.Limit-len(out))...)
+		with(`path : `+phrase, candidates+len(ids), arg, q.Limit-len(out))...)
 	return append(out, more...), err
 }
 
