@@ -233,11 +233,21 @@ func (d *DB) View(shareID int64, visitor string, now int64) {
 }
 
 func (d *DB) Flush() {
+	w := d.events
+	select {
+	case <-w.exited:
+		return
+	default:
+	}
 	done := make(chan struct{})
 	select {
-	case d.events.ch <- item{done: done}:
-		<-done
-	case <-d.events.exited:
+	case w.ch <- item{done: done}:
+	case <-w.exited:
+		return
+	}
+	select {
+	case <-done:
+	case <-w.exited:
 	}
 }
 

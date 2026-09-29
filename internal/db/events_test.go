@@ -10,7 +10,7 @@ import (
 func TestVisitorHash(t *testing.T) {
 	d := open(t)
 	a, b := d.visitor("203.0.113.7", 1), d.visitor("203.0.113.8", 1)
-	if len(a) != 16 || a == b || a != d.visitor("203.0.113.7", 1) || strings.Contains(a, "203") {
+	if len(a) != 16 || a == b || a != d.visitor("203.0.113.7", 1) || strings.Contains(a, ".") {
 		t.Fatalf("visitor hashes %q %q", a, b)
 	}
 	if d.visitor("203.0.113.7", 2) == a {
@@ -112,6 +112,14 @@ func TestEventQueueNeverBlocks(t *testing.T) {
 	}
 	if d.events.dropped.Load() != 10 {
 		t.Fatalf("dropped %d", d.events.dropped.Load())
+	}
+}
+
+func TestFlushAfterCloseReturns(t *testing.T) {
+	d := open(t)
+	d.Close()
+	for range 100 {
+		d.Flush()
 	}
 }
 
