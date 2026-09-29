@@ -258,3 +258,16 @@ func TestRenderJPEG(t *testing.T) {
 		t.Fatalf("cache %v", cached)
 	}
 }
+
+func TestProbeTimeout(t *testing.T) {
+	p := filepath.Join(t.TempDir(), "ffmpeg")
+	os.WriteFile(p, []byte("#!/bin/sh\nexec sleep 60\n"), 0o755)
+	s, _, _ := setup(t, p)
+	defer func(d time.Duration) { probeTimeout = d }(probeTimeout)
+	probeTimeout = 200 * time.Millisecond
+	start := time.Now()
+	s.Probe(context.Background())
+	if time.Since(start) > 5*time.Second || s.FFmpeg != "" {
+		t.Fatalf("hung probe: %v, ffmpeg %q", time.Since(start), s.FFmpeg)
+	}
+}

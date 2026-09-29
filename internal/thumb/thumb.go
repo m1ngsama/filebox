@@ -24,6 +24,8 @@ import (
 
 const maxFailed = 10000
 
+var probeTimeout = 10 * time.Second
+
 var errCanceled = errors.New("thumb: request canceled")
 
 var kinds = map[string]string{
@@ -76,6 +78,8 @@ func New(ffmpeg, dir string) *Service {
 
 // Probe picks the thumbnail encoder; distro and Homebrew ffmpeg builds often lack libwebp.
 func (s *Service) Probe(ctx context.Context) {
+	ctx, cancel := context.WithTimeout(ctx, probeTimeout)
+	defer cancel()
 	if s.FFmpeg == "" {
 		slog.Info("thumbnails disabled: no -ffmpeg")
 		return
