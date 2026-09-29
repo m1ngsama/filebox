@@ -52,6 +52,9 @@
   let filter = $state('')
   let scope = $state<'here' | 'all'>('here')
   let hits = $state.raw<RecentFile[] | null>(null)
+  let hitSort = $state<Sort | null>(null)
+  let hitDesc = $state(false)
+  const ranked = $derived(hits && hitSort ? arrange(hits, '', hitSort, hitDesc) : hits)
   let finding = $state(false)
   let partial = $state(false)
   let reveal = $state('')
@@ -127,7 +130,7 @@
       () =>
         api
           .search(q)
-          .then((r) => live && ((hits = r.entries), (partial = r.scanning)), (e: Error) => live && fail(e))
+          .then((r) => live && ((hits = r.entries), (partial = r.scanning), (hitSort = null)), (e: Error) => live && fail(e))
           .finally(() => live && (finding = false)),
       200,
     )
@@ -546,11 +549,13 @@
 
     {#if error && at === here}<p class="error banner">{error}</p>{/if}
 
-    {#if hits}
+    {#if ranked}
       {#if partial}<p class="hint banner">{t.indexing}</p>{/if}
       <EntryList
-        entries={hits}
+        entries={ranked}
         grid={false}
+        bind:sort={() => hitSort as Sort, (v) => (hitSort = v)}
+        bind:desc={() => hitDesc, (v) => (hitDesc = v)}
         thumb={(e) => (!e.dir && thumbable(e.name) ? thumbURL(hitLoc(e).vol, hitLoc(e).path) : null)}
         raw={(e) => (rawThumb(e) ? rawURL(hitLoc(e).vol, hitLoc(e).path) : null)}
         actions={(e) => (e ? hitActions : [])}
