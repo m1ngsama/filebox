@@ -81,7 +81,7 @@ export const api = {
   search: (q: string, signal: AbortSignal) =>
     req<{ entries: RecentFile[]; scanning: boolean }>('GET', `/api/search?${new URLSearchParams({ q })}`, undefined, signal),
   vols: () => req<{ vols: Usage[] }>('GET', '/api/vols'),
-  size: (vol: string, path: string) => req<{ size: number; files: number; dirs: number; scanning: boolean }>('GET', `/api/size?${q({ vol, path })}`),
+  size: (vol: string, path: string) => req<{ size: number; files: number; scanning: boolean }>('GET', `/api/size?${q({ vol, path })}`),
   favorites: () => req<{ entries: Favorite[] }>('GET', '/api/favorites'),
   star: (vol: string, paths: string[], star: boolean) => req<void>('POST', '/api/favorites', { vol, paths, star }),
   recent: () => req<{ entries: Omit<RecentFile, 'dir'>[]; scanning: boolean }>('GET', '/api/recent'),

@@ -416,7 +416,7 @@ func (a *API) size(w http.ResponseWriter, r *http.Request) {
 		httpx.Error(w, err)
 		return
 	}
-	httpx.JSON(w, 200, map[string]any{"size": s.Size, "files": s.Files, "dirs": s.Dirs, "scanning": !a.Index.Ready()})
+	httpx.JSON(w, 200, map[string]any{"size": s.Size, "files": s.Files, "scanning": !a.Index.Ready()})
 }
 
 type favorite struct {

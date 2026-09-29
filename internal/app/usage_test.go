@@ -18,14 +18,14 @@ func TestVolumeUsageAndFolderSize(t *testing.T) {
 	f.write(t, "dx/c.txt", "zzzzzzzz")
 	f.write(t, "top.txt", "1")
 	type size struct {
-		Size, Files, Dirs int64
-		Scanning          bool
+		Size, Files int64
+		Scanning    bool
 	}
 	if s := decode[size](t, f.do("GET", "/api/size?vol=v&path=d", nil)); !s.Scanning {
 		t.Fatalf("before scan %+v", s)
 	}
 	f.App.Index.Scan(f.App.Vols)
-	for p, want := range map[string]size{"d": {8, 2, 1, false}, "/": {17, 4, 3, false}, "d/e": {5, 1, 0, false}, "nope": {}} {
+	for p, want := range map[string]size{"d": {8, 2, false}, "/": {17, 4, false}, "d/e": {5, 1, false}, "nope": {}} {
 		if s := decode[size](t, f.do("GET", "/api/size?vol=v&path="+p, nil)); s != want {
 			t.Errorf("size of %q = %+v, want %+v", p, s, want)
 		}

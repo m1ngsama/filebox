@@ -14,12 +14,12 @@
   let tries = $state(0)
   const src = $derived(fallback(thumbs, tries))
   const on = $derived(starred(vol, path))
-  let total = $state('')
+  let total = $state<string | null>('')
   $effect(() => {
     if (!entry.dir) return
     api.size(vol, path).then(
       (s) => (total = s.scanning ? t.sizeIndexing : t.folderSize(size(s.size), s.files)),
-      () => {},
+      () => (total = null),
     )
   })
 </script>
@@ -37,7 +37,7 @@
       </button>
     </div>
     <dl>
-      <dt>{t.size}</dt><dd class="size">{entry.dir ? total || '…' : size(entry.size)}</dd>
+      {#if total !== null}<dt>{t.size}</dt><dd class="size">{entry.dir ? total || '…' : size(entry.size)}</dd>{/if}
       <dt>{t.mtime}</dt><dd>{date(entry.mtime)}</dd>
       <dt>{t.path}</dt><dd class="path">{vol}:/{path}</dd>
     </dl>

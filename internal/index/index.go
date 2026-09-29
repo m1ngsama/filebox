@@ -153,7 +153,6 @@ func (x *Index) Scan(vols *vol.Set) error {
 type Size struct {
 	Size  int64 `json:"size"`
 	Files int64 `json:"files"`
-	Dirs  int64 `json:"dirs"`
 }
 
 func (x *Index) Size(vol, rel string) (Size, error) {
@@ -162,8 +161,8 @@ func (x *Index) Size(vol, rel string) (Size, error) {
 		q, args = `vol = ? AND path > ? AND path < ?`, []any{vol, rel + "/", rel + "0"}
 	}
 	var s Size
-	err := x.db.QueryRow(`SELECT coalesce(sum(size), 0), count(*) FILTER (WHERE dir = 0), count(*) FILTER (WHERE dir = 1) FROM files WHERE `+q, args...).
-		Scan(&s.Size, &s.Files, &s.Dirs)
+	err := x.db.QueryRow(`SELECT coalesce(sum(size), 0), count(*) FILTER (WHERE dir = 0) FROM files WHERE `+q, args...).
+		Scan(&s.Size, &s.Files)
 	return s, err
 }
 
