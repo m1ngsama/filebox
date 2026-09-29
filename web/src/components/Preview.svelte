@@ -14,14 +14,15 @@
     entries,
     url,
     onclose,
-  }: { entry: Entry; entries: Entry[]; url: Src; onclose: () => void } = $props()
+    siblings = true,
+  }: { entry: Entry; entries: Entry[]; url: Src; onclose: () => void; siblings?: boolean } = $props()
   const k = $derived(kind(entry.name))
   const src = $derived(url(entry))
   const images = $derived(k === 'image' ? entries.filter((e) => !e.dir && kind(e.name) === 'image') : [])
   const LIMIT = 1 << 20
   const stem = $derived(entry.name.slice(0, entry.name.lastIndexOf('.') + 1))
   const tracks = $derived(
-    k === 'video'
+    k === 'video' && siblings
       ? entries
           .filter((e) => !e.dir && e.name.startsWith(stem) && /\.(srt|vtt)$/i.test(e.name))
           .map((e) => ({ src: url(e) + '?vtt', lang: e.name.slice(stem.length, e.name.lastIndexOf('.')) }))
@@ -151,7 +152,7 @@
 
 {#if k === 'image'}
   {#await import('./Lightbox.svelte')}
-    <div class="viewer"><div class="spinner" role="status" aria-label={t.loading}></div></div>
+    <div class="viewer" role="dialog" aria-modal="true" aria-label={entry.name}><div class="spinner" role="status" aria-label={t.loading}></div></div>
   {:then { default: Lightbox }}
     <Lightbox bind:entry {images} {url} {onclose} />
   {/await}

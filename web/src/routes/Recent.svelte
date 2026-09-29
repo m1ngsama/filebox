@@ -72,5 +72,5 @@
 </section>
 
 {#if preview}
-  <Preview bind:entry={preview} entries={shown} url={(e, as) => fileURL(loc(e).vol, loc(e).path, as)} onclose={() => (preview = null)} />
+  <Preview bind:entry={preview} entries={shown} siblings={false} url={(e, as) => fileURL(loc(e).vol, loc(e).path, as)} onclose={() => (preview = null)} />
 {/if}
