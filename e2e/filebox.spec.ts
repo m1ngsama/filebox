@@ -1009,6 +1009,23 @@ test('a folder upload rolls up into one row', async ({ page, server }) => {
   release()
   await expect(page.locator('.toast', { hasText: t.uploaded(3) })).toHaveCount(1)
   expect(readFileSync(join(server.vol, 'album/sub/3.txt'), 'utf8')).toBe('sub/3.txt')
+
+  let first = ''
+  const deletes: string[] = []
+  page.on('request', (r) => r.method() === 'DELETE' && deletes.push(r.url()))
+  await page.route('**/upload/*', async (route) => {
+    if (route.request().method() === 'PATCH' && first) return
+    if (route.request().method() === 'PATCH') first = route.request().url()
+    await route.continue()
+  })
+  await page.locator('input[webkitdirectory]').setInputFiles(join(src, 'album'))
+  const dialog = page.getByRole('dialog', { name: t.conflictTitle })
+  await dialog.getByRole('button', { name: t.keepBoth }).click()
+  await expect(panel.locator('li')).toContainText('1/3')
+  await panel.getByRole('button', { name: t.cancelItem('album') }).click()
+  await expect(panel.locator('li.error')).toContainText(t.cancelled)
+  await expect.poll(() => deletes.length).toBeGreaterThan(0)
+  expect(deletes).not.toContain(first)
   rmSync(src, { recursive: true, force: true })
 })
 

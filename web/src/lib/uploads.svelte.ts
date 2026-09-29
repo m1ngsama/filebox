@@ -82,6 +82,7 @@ function progress(job: Job, sent: number) {
 async function run(job: Job, signal: AbortSignal) {
   const { file, endpoint, meta } = job
   const { Upload } = await import('tus-js-client')
+  const settled = new AbortController()
   return new Promise<string | null>((resolve, reject) => {
     const metadata = Object.fromEntries(
       Object.entries({ ...meta, filename: file.name }).filter(([, v]) => v !== undefined && v !== ''),
@@ -109,7 +110,7 @@ async function run(job: Job, signal: AbortSignal) {
         upload.abort(true).catch(() => {})
         reject(new DOMException('aborted', 'AbortError'))
       },
-      { once: true },
+      { once: true, signal: settled.signal },
     )
     upload.findPreviousUploads().then((prev) => {
       const newest = prev.sort((a, b) => Date.parse(b.creationTime) - Date.parse(a.creationTime))[0]
@@ -117,7 +118,7 @@ async function run(job: Job, signal: AbortSignal) {
       if (newest) upload.resumeFromPreviousUpload(newest)
       upload.start()
     })
-  })
+  }).finally(() => settled.abort())
 }
 
 function settle(item: Item) {
