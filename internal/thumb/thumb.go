@@ -225,10 +225,11 @@ func (s *Service) render(ctx context.Context, key string, src *os.File, kind, ou
 	args = append(args, "-protocol_whitelist", "file", "-i", "/dev/fd/3", "-frames:v", "1", "-vf", "scale='min(320,iw)':-2")
 	args = append(append(args, s.format.args...), tmp)
 	src.Seek(0, io.SeekStart)
-	cmd := exec.CommandContext(rctx, s.FFmpeg, args...)
+	name, argv := s.FFmpeg, args
 	if s.nice != "" {
-		cmd = exec.CommandContext(rctx, s.nice, append([]string{"-n", "19", s.FFmpeg}, args...)...)
+		name, argv = s.nice, append([]string{"-n", "19", s.FFmpeg}, args...)
 	}
+	cmd := exec.CommandContext(rctx, name, argv...)
 	cmd.ExtraFiles = []*os.File{src}
 	if err := cmd.Run(); err != nil {
 		os.Remove(tmp)
