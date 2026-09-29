@@ -204,7 +204,7 @@ export const t = {
   curlUpload: '命令行上传',
   curlDownload: '命令行下载',
   noTokens: '还没有应用密码',
-  lastUsed: (d: string) => `最近使用于${d}`,
+  lastUsed: (d: string) => `${d}用过`,
   neverUsed: '从未使用',
   revoke: '吊销',
   revokeTitle: '吊销应用密码',
