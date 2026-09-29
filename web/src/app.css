@@ -400,7 +400,7 @@ button.quiet:hover:not(:disabled) { color: var(--danger); background: color-mix(
   .files .bar .icon-btn { width: 44px; height: 44px; }
   .files .crumbs, .files .bar .new, .files .bar .view, .files .bar > .grow, .files .filter { display: none; }
   .up { display: inline-flex; }
-  .bar .title, .search-open, .overflow { display: inline-grid; }
+  .search-open, .overflow { display: inline-grid; }
   .bar .title { display: block; font-size: var(--text-lg); }
   .bar.searching > :not(.filter, .search-close) { display: none; }
   .bar.searching .filter { display: block; flex: 1; height: 40px; }

@@ -13,7 +13,7 @@
   import ArrowDown from '@lucide/svelte/icons/arrow-down'
   import FileIcon from './FileIcon.svelte'
   import type { Entry } from '../lib/api'
-  import { size, date, ago, look, fallback, type Sort } from '../lib/format'
+  import { size, date, ago, look, fallback, flip, type Sort } from '../lib/format'
   import { t } from '../lib/i18n'
   import { narrow } from '../lib/shell.svelte'
 
@@ -91,7 +91,7 @@
   })
 
   function by(k: Sort) {
-    desc = sort === k ? !desc : k !== 'name'
+    desc = flip(sort, desc, k)
     sort = k
   }
 

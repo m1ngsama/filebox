@@ -28,7 +28,7 @@
   import { toast, fail, runLatest } from '../lib/toast.svelte'
   import { navigate, link, route } from '../lib/router.svelte'
   import { enqueue } from '../lib/uploads.svelte'
-  import { thumbable, rawThumb, arrange, parent, base, type Sort } from '../lib/format'
+  import { thumbable, rawThumb, arrange, parent, base, flip, type Sort } from '../lib/format'
   import { t } from '../lib/i18n'
   import { load, save } from '../lib/storage'
   import NavToggle from '../components/NavToggle.svelte'
@@ -142,7 +142,7 @@
   ]
 
   function sortBy(k: Sort) {
-    desc = sort === k ? !desc : k !== 'name'
+    desc = flip(sort, desc, k)
     sort = k
   }
 
