@@ -63,6 +63,7 @@
   let timer = 0
   let origin = [0, 0]
   let pressing = $state(-1)
+  let held = $state(false)
 
   const cols = $derived(grid ? Math.max(1, Math.floor((width - 16) / 172)) : 1)
   const rows = $derived(Math.ceil(entries.length / cols))
@@ -104,7 +105,7 @@
     touch = ev.pointerType !== 'mouse'
     swallow = false
     if (!touch || !selected || (ev.target as Element).closest('input, .more')) return
-    ev.stopPropagation()
+    held = true
     origin = [ev.clientX, ev.clientY]
     pressing = i
     clearTimeout(timer)
@@ -120,6 +121,7 @@
   function release() {
     clearTimeout(timer)
     pressing = -1
+    held = false
   }
 
   function drift(ev: PointerEvent) {
@@ -245,7 +247,7 @@
 </div>
 
 <ContextMenu.Root onOpenChange={(o) => !o && (ctx = null)}>
-  <ContextMenu.Trigger disabled={!ctx && !actions(null).length}>
+  <ContextMenu.Trigger disabled={held || (!ctx && !actions(null).length)}>
     {#snippet child({ props })}
       <div {...props} class="scroller" class:selecting={!!selected?.size} bind:this={scroller} bind:clientWidth={width} oncontextmenucapture={() => (ctx = null)} onscroll={release}>
         {#if !entries.length && loading}

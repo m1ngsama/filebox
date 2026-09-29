@@ -223,6 +223,12 @@
     else toast(t.movedTo(w, `${done[0].to.vol}:/${parent(done[0].to.path)}`), { action: undo(() => reverse(done)) })
   }
 
+  function pass(id: string) {
+    const e = one
+    selected.clear()
+    if (e) onaction(id, e)
+  }
+
   function focused() {
     const i = (document.activeElement as HTMLElement | null)?.closest<HTMLElement>('[data-i]')?.dataset.i
     return i === undefined ? undefined : shown[+i]
@@ -380,7 +386,7 @@
     {/key}
 
     {#if dragging}<div class="dropzone">{t.dropHere}</div>{/if}
-    {#if !selected.size}<button class="primary fab" aria-label={t.new} onclick={() => (sheet = 'new')}><Plus size={24} /></button>{/if}
+    {#if !selected.size && !details}<button class="primary fab" aria-label={t.new} onclick={() => (sheet = 'new')}><Plus size={24} /></button>{/if}
   </section>
 
   {#if details}
@@ -405,7 +411,7 @@
   <div class="sel-tools" role="toolbar" aria-label={t.selected(selected.size)}>
     <button disabled={!selectedFiles.length} onclick={() => download(selectedFiles)}><Download size={20} /><span>{t.download}</span></button>
     <button onclick={() => (dialog = { kind: 'move', names: [...selected] })}><FolderInput size={20} /><span>{t.moveOrCopy}</span></button>
-    <button disabled={!one} onclick={() => one && onaction('share', one)}><Share2 size={20} /><span>{t.share}</span></button>
+    <button disabled={!one} onclick={() => pass('share')}><Share2 size={20} /><span>{t.share}</span></button>
     <button class="danger" onclick={() => (dialog = { kind: 'delete', names: [...selected] })}><Trash size={20} /><span>{t.remove}</span></button>
     <button disabled={!one} onclick={() => (sheet = 'more')}><Ellipsis size={20} /><span>{t.more}</span></button>
   </div>
@@ -413,7 +419,7 @@
 
 {#if sheet}
   {#await import('../components/Sheet.svelte') then { default: Sheet }}
-    {@const items = sheet === 'new' ? creators : one ? [act.rename, act.details].map((a) => ({ ...a, run: () => onaction(a.id, one) })) : []}
+    {@const items = sheet === 'new' ? creators : [act.rename, act.details].map((a) => ({ ...a, run: () => pass(a.id) }))}
     <Sheet title={sheet === 'new' ? t.new : (one?.name ?? '')} onclose={() => (sheet = null)}>
       {#each items as c (c.label)}
         <button
