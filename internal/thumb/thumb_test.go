@@ -236,6 +236,14 @@ func TestProbe(t *testing.T) {
 		if c.enabled && (len(left) != 1 || filepath.Ext(left[0]) != "."+c.ext) {
 			t.Errorf("%s cache left %v", c.ext, left)
 		}
+		if c.enabled {
+			stale := filepath.Join(s.Dir, "ab", "z.other")
+			os.WriteFile(stale, []byte("x"), 0o644)
+			s.Probe(context.Background())
+			if !fileExists(stale) {
+				t.Errorf("%s: cache walked again although the format did not change", c.ext)
+			}
+		}
 		if (s.FFmpeg != "") != c.enabled || (c.enabled && s.format.ext != c.ext) {
 			t.Errorf("%q: ffmpeg %q ext %q", c.encoders, s.FFmpeg, s.format.ext)
 		}

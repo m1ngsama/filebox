@@ -100,9 +100,16 @@ func (s *Service) Probe(ctx context.Context) {
 		slog.Error("thumbnails disabled: ffmpeg has neither libwebp nor mjpeg", "ffmpeg", s.FFmpeg)
 		s.FFmpeg = ""
 	}
-	if s.FFmpeg != "" {
-		s.purge()
+	if s.FFmpeg == "" {
+		return
 	}
+	marker := filepath.Join(s.Dir, "format")
+	if b, err := os.ReadFile(marker); err == nil && string(b) == s.format.ext {
+		return
+	}
+	s.purge()
+	os.MkdirAll(s.Dir, 0o755)
+	os.WriteFile(marker, []byte(s.format.ext), 0o644)
 }
 
 func (s *Service) purge() {
