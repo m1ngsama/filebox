@@ -267,6 +267,7 @@
     {@const segs = l.path.split('/')}
     {#each [l.vol, ...segs.slice(0, -1)] as s, i (i)}{#if i}<span class="slash">/</span>{/if}<a
         href={selectURL(l.vol, segs.slice(0, i + 1).join('/'))}
+        tabindex="-1"
         onclick={link}>{s}</a
       >{/each}
   {/if}
