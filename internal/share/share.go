@@ -5,6 +5,7 @@ import (
 	"encoding/base64"
 	"io/fs"
 	"net/http"
+	"net/url"
 	"os"
 	"path"
 	"strconv"
@@ -15,6 +16,7 @@ import (
 	"github.com/m1ngsama/filebox/internal/auth"
 	"github.com/m1ngsama/filebox/internal/db"
 	"github.com/m1ngsama/filebox/internal/httpx"
+	"github.com/m1ngsama/filebox/internal/render"
 	"github.com/m1ngsama/filebox/internal/serve"
 	"github.com/m1ngsama/filebox/internal/thumb"
 	"github.com/m1ngsama/filebox/internal/upload"
@@ -39,6 +41,7 @@ func (s *Service) Register(mux *http.ServeMux) {
 	mux.HandleFunc("GET /s/{token}/raw/{path...}", s.raw)
 	mux.HandleFunc("GET /s/{token}/thumb/{path...}", s.thumb)
 	mux.HandleFunc("GET /s/{token}/zip", s.zip)
+	mux.HandleFunc("GET /s/{token}/render", s.render)
 	mux.HandleFunc("/s/{token}/upload/{rest...}", s.upload)
 }
 
@@ -315,6 +318,24 @@ func (s *Service) zip(w http.ResponseWriter, r *http.Request) {
 	if serve.Zip(w, r, root, rels, top, serve.ZipName(o.name(), rels, q.Get("name"))) {
 		s.DB.HitShare(o.sh.ID)
 	}
+}
+
+func (s *Service) render(w http.ResponseWriter, r *http.Request) {
+	o, ok := s.open(w, r, "read", "upload")
+	if !ok {
+		return
+	}
+	root, rel, done, err := o.root(r.URL.Query().Get("p"))
+	if err != nil {
+		httpx.Error(w, err)
+		return
+	}
+	defer done()
+	raw := ""
+	if o.dir {
+		raw = "/s/" + url.PathEscape(o.sh.Token) + "/raw/"
+	}
+	render.Serve(w, r, root, rel, raw)
 }
 
 func (s *Service) thumb(w http.ResponseWriter, r *http.Request) {

@@ -5,8 +5,9 @@
   import ChevronLeft from '@lucide/svelte/icons/chevron-left'
   import ChevronRight from '@lucide/svelte/icons/chevron-right'
   import CircleAlert from '@lucide/svelte/icons/circle-alert'
-  import type { Entry } from '../lib/api'
-  import { kind } from '../lib/format'
+  import type { Entry, Src } from '../lib/api'
+  import { kind, look } from '../lib/format'
+  import '../lib/render.css'
   import { t } from '../lib/i18n'
 
   let {
@@ -14,13 +15,16 @@
     entries,
     url,
     onclose,
-  }: { entry: Entry; entries: Entry[]; url: (e: Entry, dl?: boolean) => string; onclose: () => void } = $props()
+  }: { entry: Entry; entries: Entry[]; url: Src; onclose: () => void } = $props()
   const k = $derived(kind(entry.name))
   const src = $derived(url(entry))
   const images = $derived(k === 'image' ? entries.filter((e) => !e.dir && kind(e.name) === 'image') : [])
   const at = $derived(images.findIndex((e) => e.name === entry.name))
   const LIMIT = 1 << 20
+  const md = $derived(/\.(md|markdown)$/i.test(entry.name))
+  const rich = $derived(k === 'text' && (md || look(entry.name) === 'code'))
   let text = $state<string | null>(null)
+  let html = $state<string | null>(null)
   let partial = $state(false)
   let status = $state<'loading' | 'ready' | 'error'>('loading')
   let root = $state<HTMLDivElement>()
@@ -34,17 +38,19 @@
   $effect(() => {
     if (k !== 'text') return
     let stale = false
-    text = null
-    fetch(src, { headers: { Range: `bytes=0-${LIMIT - 1}` } })
-      .then((r) => {
-        if (!r.ok) throw new Error(String(r.status))
-        if (!stale) partial = Number(r.headers.get('Content-Range')?.split('/')[1] ?? 0) > LIMIT
-        return r.text()
+    const r = rich
+    text = html = null
+    fetch(r ? url(entry, 'render') : src, r ? {} : { headers: { Range: `bytes=0-${LIMIT - 1}` } })
+      .then((res) => {
+        if (!res.ok) throw new Error(String(res.status))
+        if (!stale) partial = r ? res.headers.has('X-Truncated') : Number(res.headers.get('Content-Range')?.split('/')[1] ?? 0) > LIMIT
+        return res.text()
       })
       .then(
         (s) => {
           if (stale) return
-          text = s
+          if (r) html = s
+          else text = s
           status = 'ready'
         },
         () => !stale && (status = 'error'),
@@ -76,7 +82,7 @@
     else if (e.key === 'ArrowLeft') step(-1)
     else if (e.key === 'ArrowRight') step(1)
     else if (e.key === 'Tab' && root) {
-      const f = [...root.querySelectorAll<HTMLElement>('a[href], button, video, audio, iframe, pre')].filter((x) => x.offsetParent)
+      const f = [...root.querySelectorAll<HTMLElement>('a[href], button, video, audio, iframe, pre, article')].filter((x) => x.offsetParent)
       const i = f.indexOf(document.activeElement as HTMLElement)
       const to = e.shiftKey ? (i <= 0 ? f.length - 1 : i - 1) : i === f.length - 1 ? 0 : i + 1
       e.preventDefault()
@@ -135,7 +141,7 @@
   <header>
     <span class="title">{entry.name}</span>
     {#if images.length > 1}<span class="hint">{at + 1} / {images.length}</span>{/if}
-    <a class="icon-btn" href={url(entry, true)} download aria-label={t.download}><Download size={20} /></a>
+    <a class="icon-btn" href={url(entry, 'dl')} download aria-label={t.download}><Download size={20} /></a>
     <button class="icon-btn" onclick={onclose} aria-label={t.close} bind:this={closer}><X size={20} /></button>
   </header>
   <div
@@ -150,7 +156,7 @@
       <div class="viewer-error" role="alert">
         <CircleAlert size={40} aria-hidden="true" />
         <p>{k === 'video' ? t.cantPlay : t.previewFailed}</p>
-        <a class="button primary" href={url(entry, true)} download><Download size={18} />{t.download}</a>
+        <a class="button primary" href={url(entry, 'dl')} download><Download size={18} />{t.download}</a>
       </div>
     {:else if k === 'image'}
       <img src={src} alt={entry.name} class:dim={status === 'loading'} onload={ready} onerror={failed} />
@@ -162,12 +168,14 @@
     {:else if k === 'pdf'}
       <iframe src={src} title={entry.name} onload={ready}></iframe>
     {:else if k === 'text'}
-      {#if text !== null}<pre tabindex="-1">{text}</pre>{/if}
+      {#if html !== null}
+        <article class="doc" class:code={!md} tabindex="-1">{@html html}</article>
+      {:else if text !== null}<pre tabindex="-1">{text}</pre>{/if}
       {#if partial}<p class="hint">{t.truncated}</p>{/if}
     {:else}
       <div class="viewer-error">
         <p>{t.noPreview}</p>
-        <a class="button primary" href={url(entry, true)} download><Download size={18} />{t.download}</a>
+        <a class="button primary" href={url(entry, 'dl')} download><Download size={18} />{t.download}</a>
       </div>
     {/if}
     {#if k === 'image' && images.length > 1}

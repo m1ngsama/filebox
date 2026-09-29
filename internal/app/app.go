@@ -8,6 +8,7 @@ import (
 	"io/fs"
 	"mime"
 	"net/http"
+	"net/url"
 	"path"
 	"regexp"
 	"strconv"
@@ -20,6 +21,7 @@ import (
 	"github.com/m1ngsama/filebox/internal/httpx"
 	"github.com/m1ngsama/filebox/internal/index"
 	"github.com/m1ngsama/filebox/internal/passkey"
+	"github.com/m1ngsama/filebox/internal/render"
 	"github.com/m1ngsama/filebox/internal/serve"
 	"github.com/m1ngsama/filebox/internal/share"
 	"github.com/m1ngsama/filebox/internal/thumb"
@@ -45,6 +47,7 @@ func (a *App) Handler() http.Handler {
 	mux := http.NewServeMux()
 	mux.Handle("GET /raw/{vol}/{path...}", a.Auth.RequireAny(http.HandlerFunc(a.raw)))
 	mux.Handle("GET /thumb/{vol}/{path...}", a.Auth.RequireAny(http.HandlerFunc(a.thumb)))
+	mux.Handle("GET /api/render", a.Auth.RequireAny(http.HandlerFunc(a.render)))
 	(&api.API{Vols: a.Vols, DB: a.DB, Auth: a.Auth, Jobs: api.NewJobs(a.Index), Index: a.Index}).Register(mux)
 	a.Passkeys.Register(mux)
 	d := dav.Handler(a.Vols, a.Auth, a.Index)
@@ -94,6 +97,16 @@ func (a *App) raw(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	serve.File(w, r, v.Root, rel, r.URL.Query().Has("dl"))
+}
+
+func (a *App) render(w http.ResponseWriter, r *http.Request) {
+	q := r.URL.Query()
+	v, rel, err := a.Vols.Resolve(q.Get("vol"), q.Get("p"))
+	if err != nil {
+		httpx.Error(w, err)
+		return
+	}
+	render.Serve(w, r, v.Root, rel, "/raw/"+url.PathEscape(v.Name)+"/")
 }
 
 func (a *App) thumb(w http.ResponseWriter, r *http.Request) {

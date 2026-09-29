@@ -73,7 +73,7 @@ const groups: Record<string, string> = {
   video: 'mp4 m4v webm mov mkv ogv',
   audio: 'mp3 m4a aac flac wav ogg opus',
   pdf: 'pdf',
-  text: 'txt md log json yaml yml toml ini conf cfg csv tsv go js ts py rs c h cpp java kt sh fish zsh srt ass vtt xml html css sql',
+  text: 'txt md markdown log json yaml yml toml ini conf cfg csv tsv go js ts py rs c h cpp java kt sh fish zsh srt ass vtt xml html css sql',
 }
 const kinds = new Map(Object.entries(groups).flatMap(([k, v]) => v.split(' ').map((e) => [e, k] as const)))
 

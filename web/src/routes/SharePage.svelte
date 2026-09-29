@@ -9,7 +9,7 @@
   import FileIcon from '../components/FileIcon.svelte'
   import EmptyState from '../components/EmptyState.svelte'
   import Preview from '../components/Preview.svelte'
-  import { api, HttpError, shareRawURL, shareThumbURL, shareURL, shareZipURL, saveURL, validShareToken, type Entry, type ShareInfo } from '../lib/api'
+  import { api, HttpError, shareFileURL, shareRawURL, shareThumbURL, shareURL, shareZipURL, saveURL, validShareToken, type Entry, type ShareInfo } from '../lib/api'
   import { route, link, navigate } from '../lib/router.svelte'
   import { enqueue } from '../lib/uploads.svelte'
   import { arrange, size, thumbable, rawThumb, fallback, child, type Sort } from '../lib/format'
@@ -245,7 +245,7 @@
   <Preview
     bind:entry={preview}
     entries={file ? [file] : shown}
-    url={(e, dl) => shareRawURL(token, file ? '' : join(e.name), dl)}
+    url={(e, as) => shareFileURL(token, file ? '' : join(e.name), as)}
     onclose={() => (preview = null)}
   />
 {/if}

@@ -28,7 +28,7 @@
   import EllipsisVertical from '@lucide/svelte/icons/ellipsis-vertical'
   import ArrowUp from '@lucide/svelte/icons/arrow-up'
   import ArrowDown from '@lucide/svelte/icons/arrow-down'
-  import { api, filesURL, rawURL, thumbURL, zipURL, saveURL, type Entry, type Move, type RecentFile } from '../lib/api'
+  import { api, filesURL, fileURL, rawURL, thumbURL, zipURL, saveURL, type Entry, type Move, type RecentFile } from '../lib/api'
   import { toast, fail, runLatest } from '../lib/toast.svelte'
   import { navigate, link, route } from '../lib/router.svelte'
   import { enqueue, type Replaced } from '../lib/uploads.svelte'
@@ -672,7 +672,7 @@
 
 {#if preview}
   {#await import('../components/Preview.svelte') then { default: Preview }}
-    <Preview bind:entry={preview} entries={shown} url={(e, dl) => rawURL(vol, join(e.name), dl)} onclose={() => (preview = null)} />
+    <Preview bind:entry={preview} entries={shown} url={(e, as) => fileURL(vol, join(e.name), as)} onclose={() => (preview = null)} />
   {/await}
 {/if}
 

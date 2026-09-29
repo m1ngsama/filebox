@@ -132,6 +132,27 @@ test('browse and preview', async ({ page }) => {
   await expect(page).toHaveURL(/\/files\/v\/$/)
 })
 
+test('markdown renders with tables and highlighted code, and code files are highlighted', async ({ page, server }) => {
+  const png = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==', 'base64')
+  writeFileSync(join(server.vol, 'docs/pic.png'), png)
+  writeFileSync(join(server.vol, 'docs/notes.md'), '# Notes\n\n| a | b |\n|---|---|\n| 1 | 2 |\n\n![dot](pic.png)\n\n<img src=x onerror="window.pwned=1">\n\n```go\nfunc main() {}\n```\n')
+  writeFileSync(join(server.vol, 'docs/main.go'), 'package main\n\nfunc main() {}\n')
+  await login(page)
+  await row(page, 'docs').locator('button.name').click()
+  await row(page, 'notes.md').locator('button.name').click()
+  const doc = page.getByRole('dialog', { name: 'notes.md' }).locator('.doc')
+  await expect(doc.getByRole('heading', { name: 'Notes' })).toBeVisible()
+  await expect(doc.getByRole('table')).toContainText('2')
+  await expect(doc.locator('.chroma .kd', { hasText: 'func' })).toBeVisible()
+  await expect(doc.getByRole('img', { name: 'dot' })).toHaveJSProperty('naturalWidth', 1)
+  expect(await page.evaluate(() => (window as unknown as { pwned?: number }).pwned)).toBeUndefined()
+  await page.keyboard.press('Escape')
+  await row(page, 'main.go').locator('button.name').click()
+  const code = page.getByRole('dialog', { name: 'main.go' }).locator('.doc.code')
+  await expect(code.locator('.kn', { hasText: 'package' })).toBeVisible()
+  expect(await code.locator('.kn').evaluate((e) => getComputedStyle(e).color)).not.toBe(await code.evaluate((e) => getComputedStyle(e).color))
+})
+
 test('a slow folder shows skeleton rows and a broken image offers a download', async ({ page, server }) => {
   writeFileSync(join(server.vol, 'docs/broken.jpg'), 'not an image')
   await login(page)

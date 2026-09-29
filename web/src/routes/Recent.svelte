@@ -4,7 +4,7 @@
   import EmptyState from '../components/EmptyState.svelte'
   import EntryList, { type Action } from '../components/EntryList.svelte'
   import Preview from '../components/Preview.svelte'
-  import { api, rawURL, thumbURL, type Entry, type RecentFile } from '../lib/api'
+  import { api, fileURL, rawURL, thumbURL, type Entry, type RecentFile } from '../lib/api'
   import { thumbable, rawThumb, arrange, days, type Sort } from '../lib/format'
   import { t } from '../lib/i18n'
   import { folderAction, downloadAction, actOn } from '../lib/located'
@@ -72,5 +72,5 @@
 </section>
 
 {#if preview}
-  <Preview bind:entry={preview} entries={shown} url={(e, dl) => rawURL(loc(e).vol, loc(e).path, dl)} onclose={() => (preview = null)} />
+  <Preview bind:entry={preview} entries={shown} url={(e, as) => fileURL(loc(e).vol, loc(e).path, as)} onclose={() => (preview = null)} />
 {/if}

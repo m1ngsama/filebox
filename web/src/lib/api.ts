@@ -60,6 +60,12 @@ export const shareLink = (tok: string) => location.origin + shareURL(tok)
 export const shareRawURL = (tok: string, path: string, dl = false) => `${shareURL(tok)}/raw/${enc(path)}${dl ? '?dl' : ''}`
 export const shareThumbURL = (tok: string, path: string) => `${shareURL(tok)}/thumb/${enc(path)}`
 const q = (o: Record<string, string>) => new URLSearchParams(o).toString()
+export type As = 'dl' | 'thumb' | 'render' | 'meta'
+export type Src = (e: Entry, as?: As) => string
+export const fileURL = (vol: string, p: string, as?: As) =>
+  as === 'thumb' ? thumbURL(vol, p) : as === 'render' || as === 'meta' ? `/api/${as}?${q({ vol, p })}` : rawURL(vol, p, as === 'dl')
+export const shareFileURL = (tok: string, p: string, as?: As) =>
+  as === 'thumb' ? shareThumbURL(tok, p) : as === 'render' || as === 'meta' ? `${shareURL(tok)}/${as}?${q({ p })}` : shareRawURL(tok, p, as === 'dl')
 const zipQuery = (paths: string[], name: string) => new URLSearchParams([...paths.map((p) => ['p', p]), ['name', name]]).toString()
 export const zipURL = (vol: string, paths: string[], name: string) => `/api/zip?vol=${encodeURIComponent(vol)}&${zipQuery(paths, name)}`
 export const shareZipURL = (tok: string, paths: string[], name: string) => `${shareURL(tok)}/zip?${zipQuery(paths, name)}`
