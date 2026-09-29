@@ -186,6 +186,12 @@
     margin: 0 8px;
     color: var(--viewer-fg);
   }
+  :global(.pswp .pswp__button),
+  :global(.pswp .pswp__button:hover:not(:disabled)) {
+    border: 0;
+    border-radius: 0;
+    background: none;
+  }
   :global(.pswp__button--download),
   :global(.pswp__button--info) {
     display: grid;
