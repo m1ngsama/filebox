@@ -314,6 +314,7 @@ export const t = {
   chooseFiles: '选择文件',
   uploadTo: '上传到…',
   uploadHere: '上传到这里',
+  sharedTooLarge: '分享来的文件太多或太大，没有接收。请分批分享，或者在 filebox 里直接上传。',
   sharedFiles: (names: string[]) => (names.length === 1 ? `从其他应用分享来的“${names[0]}”` : `从其他应用分享来的 ${names.length} 个文件`),
   dropTitle: '把文件拖到这里，或者点击按钮选择文件',
   dropHint: '这里只能上传，看不到文件夹里已有的文件。同名文件会自动改名，不会覆盖。',

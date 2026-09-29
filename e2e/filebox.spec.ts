@@ -1533,32 +1533,63 @@ test('the app installs as a PWA whose service worker caches only the shell', asy
   expect(cached.filter((p) => p !== '/' && !p.startsWith('/assets/'))).toEqual([])
 })
 
-test('files shared from another app land in the upload flow', async ({ page, server }) => {
-  await login(page)
-  await page.evaluate(() => navigator.serviceWorker.ready)
-  await page.reload()
-  await expect.poll(() => page.evaluate(() => !!navigator.serviceWorker.controller)).toBe(true)
-  await page.evaluate(() => {
-    const f = document.createElement('form')
-    f.method = 'POST'
-    f.action = '/share-target'
-    f.enctype = 'multipart/form-data'
-    const i = document.createElement('input')
-    i.type = 'file'
-    i.name = 'files'
+async function shareIn(page: Page, files: { name: string; body: string }[]) {
+  await page.evaluate((files) => {
+    const f = Object.assign(document.createElement('form'), { method: 'POST', action: '/share-target', enctype: 'multipart/form-data' })
+    const i = Object.assign(document.createElement('input'), { type: 'file', name: 'files' })
     const dt = new DataTransfer()
-    dt.items.add(new File(['from the phone'], 'shared.txt', { type: 'text/plain' }))
+    for (const x of files) dt.items.add(new File([x.body], x.name, { type: 'text/plain' }))
     i.files = dt.files
     f.append(i)
     document.body.append(f)
     f.submit()
-  })
+  }, files)
+}
+
+async function withWorker(page: Page) {
+  await login(page)
+  await page.evaluate(() => navigator.serviceWorker.ready)
+  await page.reload()
+  await expect.poll(() => page.evaluate(() => !!navigator.serviceWorker.controller)).toBe(true)
+}
+
+test('files shared from another app wait for an explicit confirm before uploading', async ({ page, server }) => {
+  await withWorker(page)
+  const uploads: string[] = []
+  page.on('request', (r) => new URL(r.url()).pathname.startsWith('/upload/') && uploads.push(r.method()))
+  await shareIn(page, [{ name: 'shared.txt', body: 'from the phone' }])
   const dialog = page.locator('.dialog')
   await expect(dialog).toContainText(t.uploadTo)
   await expect(dialog).toContainText(t.sharedFiles(['shared.txt']))
+  await expect(dialog.locator('.shared-files')).toContainText('14 B')
+  await page.waitForTimeout(500)
+  expect(uploads).toEqual([])
+  expect(existsSync(join(server.vol, 'shared.txt'))).toBe(false)
+  await dialog.getByRole('button', { name: t.cancel }).click()
+  await expect(dialog).toHaveCount(0)
+  expect(uploads).toEqual([])
+  expect(await page.evaluate(() => caches.has('share-target'))).toBe(false)
+
+  await shareIn(page, [{ name: 'shared.txt', body: 'from the phone' }])
   await dialog.locator('.picker-list').getByRole('button', { name: 'docs' }).click()
   await dialog.getByRole('button', { name: t.uploadHere }).click()
   await expect(page).toHaveURL(/\/files\/v\/docs\/$/)
   await expect(page.locator('.toast', { hasText: t.uploaded(1) })).toHaveCount(1)
   expect(readFileSync(join(server.vol, 'docs/shared.txt'), 'utf8')).toBe('from the phone')
+})
+
+test('stale or oversized share-target stashes are discarded', async ({ page }) => {
+  await withWorker(page)
+  await page.evaluate(async () => {
+    const c = await caches.open('share-target')
+    await c.put('/share-target/0', new Response('old', { headers: { 'X-Name': 'old.txt', 'X-At': String(Date.now() - 11 * 60_000) } }))
+  })
+  await page.goto('/?share-target')
+  await expect(row(page, 'docs')).toBeVisible()
+  await expect(page.locator('.dialog')).toHaveCount(0)
+  await expect.poll(() => page.evaluate(() => caches.has('share-target'))).toBe(false)
+  await shareIn(page, Array.from({ length: 51 }, (_, i) => ({ name: `f${i}.txt`, body: 'x' })))
+  await expect(page.locator('.toast', { hasText: t.sharedTooLarge })).toHaveCount(1)
+  await expect(page.locator('.dialog')).toHaveCount(0)
+  expect(await page.evaluate(() => caches.has('share-target'))).toBe(false)
 })

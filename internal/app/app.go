@@ -226,6 +226,10 @@ func (a *App) spa(page string) http.Handler {
 				return
 			}
 		}
+		if strings.HasPrefix(r.URL.Path, "/assets/") {
+			http.NotFound(w, r)
+			return
+		}
 		if indexErr != nil {
 			http.Error(w, "frontend not built", 404)
 			return

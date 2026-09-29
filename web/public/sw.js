@@ -1,8 +1,10 @@
 const SHELL = 'shell'
+const STASH = 'share-target'
+const MAX_FILES = 50
 const BYPASS = /^\/(api|s|dav|raw|thumb|upload)(\/|$)/
 
 self.addEventListener('install', () => self.skipWaiting())
-self.addEventListener('activate', (e) => e.waitUntil(self.clients.claim()))
+self.addEventListener('activate', (e) => e.waitUntil(Promise.all([caches.delete(STASH), self.clients.claim()])))
 
 self.addEventListener('fetch', (e) => {
   const r = e.request
@@ -19,7 +21,7 @@ async function asset(r) {
   const hit = await c.match(r)
   if (hit) return hit
   const res = await fetch(r)
-  if (res.ok) await c.put(r, res.clone())
+  if (res.ok && !res.headers.get('Content-Type')?.startsWith('text/html')) await c.put(r, res.clone())
   return res
 }
 
@@ -39,15 +41,28 @@ async function page(r) {
   }
 }
 
+async function room() {
+  const { quota = 0, usage = 0 } = (await navigator.storage?.estimate?.()) ?? {}
+  return (quota - usage) / 2
+}
+
 async function receive(r) {
-  const form = await r.formData()
-  await caches.delete('share-target')
-  const c = await caches.open('share-target')
-  let i = 0
-  for (const f of form.getAll('files')) {
-    if (!(f instanceof File)) continue
-    const headers = { 'Content-Type': f.type || 'application/octet-stream', 'X-Name': encodeURIComponent(f.name), 'X-Modified': String(f.lastModified) }
-    await c.put(`/share-target/${i++}`, new Response(f, { headers }))
+  await caches.delete(STASH)
+  const back = (status) => Response.redirect(`/?share-target${status ? `=${status}` : ''}`, 303)
+  const limit = await room()
+  if (Number(r.headers.get('Content-Length')) > limit) return back('too-large')
+  let files
+  try {
+    files = (await r.formData()).getAll('files').filter((f) => f instanceof File)
+  } catch {
+    return back('failed')
   }
-  return Response.redirect('/?share-target', 303)
+  if (files.length > MAX_FILES || files.reduce((n, f) => n + f.size, 0) > limit) return back('too-large')
+  const c = await caches.open(STASH)
+  const at = String(Date.now())
+  for (const [i, f] of files.entries()) {
+    const headers = { 'Content-Type': f.type || 'application/octet-stream', 'X-Name': encodeURIComponent(f.name), 'X-Modified': String(f.lastModified), 'X-At': at }
+    await c.put(`/share-target/${i}`, new Response(f, { headers }))
+  }
+  return back('')
 }

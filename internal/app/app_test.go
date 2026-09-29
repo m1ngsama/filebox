@@ -206,3 +206,10 @@ func TestPWAFiles(t *testing.T) {
 		t.Fatalf("share target without a service worker %d %v", w.Code, w.Header())
 	}
 }
+
+func TestMissingAssetIs404(t *testing.T) {
+	f := newTestApp(t)
+	if w := f.do("GET", "/assets/gone-1.js", nil, "X-No-Auth", "1"); w.Code != 404 || strings.Contains(w.Body.String(), "doctype") {
+		t.Fatalf("missing asset %d %q", w.Code, w.Body)
+	}
+}
