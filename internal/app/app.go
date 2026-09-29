@@ -60,6 +60,7 @@ func (a *App) Handler() http.Handler {
 		http.Redirect(w, r, "/?share-target", http.StatusSeeOther)
 	})
 	mux.Handle("GET /s/{token}", a.spa("share.html"))
+	mux.Handle("GET /s/{token}/{$}", a.spa("share.html"))
 	mux.Handle("/", a.spa("index.html"))
 	return common(http.NewCrossOriginProtection().Handler(mux))
 }

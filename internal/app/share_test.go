@@ -47,8 +47,10 @@ func TestShareRead(t *testing.T) {
 		"Upload-Metadata", "filename "+b64("x")); c != 403 {
 		t.Fatalf("upload on read share %d", c)
 	}
-	if c, b, _ := anon(f, "GET", "/s/"+tok, ""); c != 200 || b != "<!doctype html>share" {
-		t.Fatalf("share page %d %q", c, b)
+	for _, u := range []string{"/s/" + tok, "/s/" + tok + "/"} {
+		if c, b, _ := anon(f, "GET", u, ""); c != 200 || b != "<!doctype html>share" {
+			t.Fatalf("share page %s %d %q", u, c, b)
+		}
 	}
 	list := decode[struct {
 		Shares []struct {
