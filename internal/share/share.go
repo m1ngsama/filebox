@@ -37,6 +37,7 @@ func (s *Service) Register(mux *http.ServeMux) {
 	mux.HandleFunc("GET /s/{token}/ls", s.ls)
 	mux.HandleFunc("GET /s/{token}/raw/{path...}", s.raw)
 	mux.HandleFunc("GET /s/{token}/thumb/{path...}", s.thumb)
+	mux.HandleFunc("GET /s/{token}/zip", s.zip)
 	mux.HandleFunc("/s/{token}/upload/{rest...}", s.upload)
 }
 
@@ -263,6 +264,29 @@ func (s *Service) raw(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	serve.File(w, r, o.v.Root, rel, r.URL.Query().Has("dl"))
+}
+
+func (s *Service) zip(w http.ResponseWriter, r *http.Request) {
+	o, ok := s.open(w, r, "read", "upload")
+	if !ok {
+		return
+	}
+	q := r.URL.Query()
+	ps := q["p"]
+	if len(ps) == 0 {
+		ps = []string{""}
+	}
+	var rels []string
+	for _, p := range ps {
+		rel, err := o.sub(p)
+		if err != nil {
+			httpx.Error(w, err)
+			return
+		}
+		rels = append(rels, rel)
+	}
+	s.DB.HitShare(o.sh.ID)
+	serve.Zip(w, r, o.v.Root, rels, serve.ZipName(o.v.Name, rels, q.Get("name")))
 }
 
 func (s *Service) thumb(w http.ResponseWriter, r *http.Request) {

@@ -1,7 +1,7 @@
 import { test as base, expect, type Locator, type Page } from '@playwright/test'
 import { execFileSync, spawn } from 'node:child_process'
 import { createHash } from 'node:crypto'
-import { closeSync, cpSync, createReadStream, existsSync, mkdirSync, mkdtempSync, openSync, readFileSync, rmSync, statSync, writeFileSync, writeSync } from 'node:fs'
+import { closeSync, cpSync, createReadStream, existsSync, mkdirSync, mkdtempSync, openSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync, writeSync } from 'node:fs'
 import { createServer, type AddressInfo } from 'node:net'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -1003,4 +1003,51 @@ test('a folder upload rolls up into one row', async ({ page, server }) => {
   await expect(page.locator('.toast', { hasText: t.uploaded(3) })).toHaveCount(1)
   expect(readFileSync(join(server.vol, 'album/sub/3.txt'), 'utf8')).toBe('sub/3.txt')
   rmSync(src, { recursive: true, force: true })
+})
+
+async function unzipped(dl: import('@playwright/test').Download) {
+  const out = mkdtempSync(join(tmpdir(), 'filebox-e2e-zip-'))
+  const file = join(out, 'z.zip')
+  await dl.saveAs(file)
+  execFileSync('unzip', ['-q', file, '-d', join(out, 'x')])
+  const walk = (d: string, pre = ''): string[] =>
+    readdirSync(join(d, pre), { withFileTypes: true }).flatMap((e) => (e.isDirectory() ? walk(d, join(pre, e.name)) : [`${join(pre, e.name)}=${readFileSync(join(d, pre, e.name), 'utf8')}`]))
+  const got = walk(join(out, 'x')).sort()
+  rmSync(out, { recursive: true, force: true })
+  return got
+}
+
+test('folders and selections download as one zip', async ({ page, server }) => {
+  writeFileSync(join(server.vol, 'docs/more.md'), '# more')
+  mkdirSync(join(server.vol, 'docs/deep'))
+  writeFileSync(join(server.vol, 'docs/deep/x.txt'), 'x')
+  writeFileSync(join(server.vol, 'top.txt'), 'top')
+  await login(page)
+  await row(page, 'docs').locator('button.more').click()
+  let dl = page.waitForEvent('download')
+  await page.getByRole('menuitem', { name: t.download, exact: true }).click()
+  expect((await dl).suggestedFilename()).toBe('docs.zip')
+  expect(await unzipped(await dl)).toEqual(['docs/deep/x.txt=x', 'docs/more.md=# more', 'docs/readme.txt=hello\n'])
+
+  await row(page, 'docs').locator('input[type=checkbox]').check()
+  await row(page, 'top.txt').locator('input[type=checkbox]').check()
+  const downloads: string[] = []
+  page.on('download', (d) => downloads.push(d.suggestedFilename()))
+  dl = page.waitForEvent('download')
+  await page.locator('.list-head').getByRole('button', { name: t.download, exact: true }).click()
+  expect((await dl).suggestedFilename()).toBe(`${t.zipName('v', 2)}.zip`)
+  expect(await unzipped(await dl)).toEqual(['docs/deep/x.txt=x', 'docs/more.md=# more', 'docs/readme.txt=hello\n', 'top.txt=top'])
+  expect(downloads).toHaveLength(1)
+})
+
+test('a read share downloads everything as a zip', async ({ page, browser }) => {
+  await login(page)
+  const url = await shareDocs(page, 'read')
+  const anon = await browser.newPage()
+  await anon.goto(url)
+  const dl = anon.waitForEvent('download')
+  await anon.getByRole('link', { name: t.downloadAll }).click()
+  expect((await dl).suggestedFilename()).toBe('docs.zip')
+  expect(await unzipped(await dl)).toEqual(['docs/readme.txt=hello\n'])
+  await anon.close()
 })

@@ -15,6 +15,7 @@ import (
 	"github.com/m1ngsama/filebox/internal/db"
 	"github.com/m1ngsama/filebox/internal/httpx"
 	"github.com/m1ngsama/filebox/internal/index"
+	"github.com/m1ngsama/filebox/internal/serve"
 	"github.com/m1ngsama/filebox/internal/vol"
 )
 
@@ -97,6 +98,7 @@ func (a *API) Register(mux *http.ServeMux) {
 	h("GET /api/me", a.me)
 	h("GET /api/ls", a.ls)
 	h("GET /api/stat", a.stat)
+	mux.Handle("GET /api/zip", a.Auth.RequireAny(http.HandlerFunc(a.zip)))
 	h("GET /api/recent", a.recent)
 	h("POST /api/mkdir", a.mkdir)
 	h("POST /api/mv", a.mv)
@@ -190,6 +192,29 @@ func (a *API) stat(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	httpx.JSON(w, 200, e)
+}
+
+func (a *API) zip(w http.ResponseWriter, r *http.Request) {
+	q := r.URL.Query()
+	v, ok := a.Vols.Get(q.Get("vol"))
+	if !ok {
+		httpx.Error(w, fs.ErrNotExist)
+		return
+	}
+	var rels []string
+	for _, p := range q["p"] {
+		rel, err := vol.Clean(p)
+		if err != nil {
+			httpx.Error(w, err)
+			return
+		}
+		rels = append(rels, rel)
+	}
+	if len(rels) == 0 {
+		httpx.Fail(w, 400, "bad path")
+		return
+	}
+	serve.Zip(w, r, v.Root, rels, serve.ZipName(v.Name, rels, q.Get("name")))
 }
 
 func (a *API) mkdir(w http.ResponseWriter, r *http.Request) {

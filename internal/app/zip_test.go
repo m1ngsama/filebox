@@ -1,0 +1,90 @@
+package app
+
+import (
+	"archive/zip"
+	"bytes"
+	"slices"
+	"testing"
+)
+
+func zipNames(t *testing.T, b []byte) []string {
+	t.Helper()
+	zr, err := zip.NewReader(bytes.NewReader(b), int64(len(b)))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var out []string
+	for _, f := range zr.File {
+		out = append(out, f.Name)
+	}
+	slices.Sort(out)
+	return out
+}
+
+func TestZipRoute(t *testing.T) {
+	f := newTestApp(t)
+	f.write(t, "pub/a.txt", "a")
+	f.write(t, "pub/in/b.txt", "b")
+	f.write(t, "secret.txt", "s")
+	w := f.do("GET", "/api/zip?vol=v&p=pub/a.txt&p=pub/in&name=pub-2", nil)
+	if w.Code != 200 || w.Header().Get("Content-Disposition") != "attachment; filename=pub-2.zip" {
+		t.Fatalf("%d %v", w.Code, w.Header())
+	}
+	if got := zipNames(t, w.Body.Bytes()); !slices.Equal(got, []string{"a.txt", "in/", "in/b.txt"}) {
+		t.Fatalf("got %v", got)
+	}
+	if w := f.do("GET", "/api/zip?vol=v&p=pub", nil, "X-No-Auth", "1"); w.Code != 401 {
+		t.Fatalf("anon %d", w.Code)
+	}
+	if w := f.do("GET", "/api/zip?vol=v&p=pub", nil, "X-No-Auth", "1", "Authorization", "Bearer "+f.Bearer); w.Code != 200 {
+		t.Fatalf("app token %d", w.Code)
+	}
+	for p, code := range map[string]int{"../../../etc": 404, ".filebox": 400, "": 400} {
+		q := "/api/zip?vol=v"
+		if p != "" {
+			q += "&p=" + p
+		}
+		if w := f.do("GET", q, nil); w.Code != code {
+			t.Errorf("%q = %d, want %d", p, w.Code, code)
+		}
+	}
+	if w := f.do("GET", "/api/zip?vol=nope&p=pub", nil); w.Code != 404 {
+		t.Fatalf("unknown volume %d", w.Code)
+	}
+}
+
+func TestShareZip(t *testing.T) {
+	f := newTestApp(t)
+	f.write(t, "pub/a.txt", "a")
+	f.write(t, "pub/in/b.txt", "b")
+	f.write(t, "secret.txt", "s")
+	tok := mkShare(t, f, `{"vol":"v","path":"pub","mode":"read"}`)
+	w := f.do("GET", "/s/"+tok+"/zip", nil, "X-No-Auth", "1")
+	if w.Code != 200 || w.Header().Get("Content-Disposition") != "attachment; filename=pub.zip" {
+		t.Fatalf("%d %v", w.Code, w.Header())
+	}
+	if got := zipNames(t, w.Body.Bytes()); !slices.Equal(got, []string{"pub/", "pub/a.txt", "pub/in/", "pub/in/b.txt"}) {
+		t.Fatalf("got %v", got)
+	}
+	w = f.do("GET", "/s/"+tok+"/zip?p=in", nil, "X-No-Auth", "1")
+	if got := zipNames(t, w.Body.Bytes()); !slices.Equal(got, []string{"in/", "in/b.txt"}) {
+		t.Fatalf("got %v", got)
+	}
+	for _, p := range []string{"../secret.txt", "../../secret.txt"} {
+		if c, _, _ := anon(f, "GET", "/s/"+tok+"/zip?p="+p, ""); c != 404 {
+			t.Errorf("%s = %d", p, c)
+		}
+	}
+	drop := mkShare(t, f, `{"vol":"v","path":"pub","mode":"drop"}`)
+	if c, _, _ := anon(f, "GET", "/s/"+drop+"/zip", ""); c != 403 {
+		t.Fatalf("drop share zip %d", c)
+	}
+	locked := mkShare(t, f, `{"vol":"v","path":"pub","mode":"read","password":"pw"}`)
+	if c, _, _ := anon(f, "GET", "/s/"+locked+"/zip", ""); c != 401 {
+		t.Fatalf("locked share zip %d", c)
+	}
+	file := mkShare(t, f, `{"vol":"v","path":"pub/a.txt","mode":"read"}`)
+	if c, _, _ := anon(f, "GET", "/s/"+file+"/zip?p=../secret.txt", ""); c != 404 {
+		t.Fatalf("file share escape %d", c)
+	}
+}

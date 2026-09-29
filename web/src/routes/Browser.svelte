@@ -26,7 +26,7 @@
   import EllipsisVertical from '@lucide/svelte/icons/ellipsis-vertical'
   import ArrowUp from '@lucide/svelte/icons/arrow-up'
   import ArrowDown from '@lucide/svelte/icons/arrow-down'
-  import { api, filesURL, rawURL, thumbURL, type Entry, type Move } from '../lib/api'
+  import { api, filesURL, rawURL, thumbURL, zipURL, saveURL, type Entry, type Move } from '../lib/api'
   import { toast, fail, runLatest } from '../lib/toast.svelte'
   import { navigate, link, route } from '../lib/router.svelte'
   import { enqueue } from '../lib/uploads.svelte'
@@ -71,7 +71,6 @@
   const crumbs = $derived(path ? path.split('/') : [])
   const shown = $derived(arrange(at === here ? entries : [], query, sort, desc))
   const one = $derived(selected.size === 1 ? entries.find((e) => selected.has(e.name)) : undefined)
-  const selectedFiles = $derived(entries.filter((e) => !e.dir && selected.has(e.name)).map((e) => e.name))
   const thumb = (e: Entry) => (!e.dir && thumbable(e.name) ? thumbURL(vol, join(e.name)) : null)
   const raw = (e: Entry) => (rawThumb(e) ? rawURL(vol, join(e.name)) : null)
 
@@ -134,12 +133,9 @@
   }
 
   function download(names: string[]) {
-    for (const n of names) {
-      const a = document.createElement('a')
-      a.href = rawURL(vol, join(n), true)
-      a.download = ''
-      a.click()
-    }
+    const hit = names.length === 1 ? entries.find((e) => e.name === names[0]) : undefined
+    if (hit && !hit.dir) saveURL(rawURL(vol, join(hit.name), true))
+    else saveURL(zipURL(vol, names.map(join), t.zipName(hit ? hit.name : (crumbs.at(-1) ?? vol), names.length)))
   }
 
   const ask = (name: string, rest: number) => new Promise<[Choice, boolean] | null>((resolve) => (conflict = { name, rest, resolve }))
@@ -220,7 +216,7 @@
 
   const actions = (e: Entry | null): Action[] =>
     !e ? [act.mkdir, act.upload]
-    : [...(narrow.current ? [act.select] : []), act.open, ...(e.dir ? [] : [act.download]), act.rename, act.move, act.share, act.details, act.remove]
+    : [...(narrow.current ? [act.select] : []), act.open, act.download, act.rename, act.move, act.share, act.details, act.remove]
 
   function onaction(id: string, e: Entry | null) {
     if (id === 'mkdir') dialog = { kind: 'mkdir' }
@@ -326,7 +322,7 @@
 <svelte:window onkeydowncapture={keydown} ondragover={(e) => e.preventDefault()} ondrop={(e) => e.preventDefault()} />
 
 {#snippet batch()}
-  <button class="ghost" disabled={!selectedFiles.length} onclick={() => download(selectedFiles)}>
+  <button class="ghost" onclick={() => download([...selected])}>
     <Download size={16} />{t.download}
   </button>
   <button class="ghost" onclick={() => (dialog = { kind: 'move', names: [...selected] })}><FolderInput size={16} />{t.moveOrCopy}</button>
@@ -472,7 +468,7 @@
 
 {#if selected.size}
   <div class="sel-tools" role="group" aria-label={t.selected(selected.size)} bind:offsetHeight={barH}>
-    <button disabled={!selectedFiles.length} onclick={() => download(selectedFiles)}><Download size={20} /><span>{t.download}</span></button>
+    <button onclick={() => download([...selected])}><Download size={20} /><span>{t.download}</span></button>
     <button onclick={() => (dialog = { kind: 'move', names: [...selected] })}><FolderInput size={20} /><span>{t.moveOrCopy}</span></button>
     <button disabled={!one} onclick={() => pass('share')}><Share2 size={20} /><span>{t.share}</span></button>
     <button class="danger" onclick={() => (dialog = { kind: 'delete', names: [...selected] })}><Trash size={20} /><span>{t.remove}</span></button>

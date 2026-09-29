@@ -9,7 +9,7 @@
   import FileIcon from '../components/FileIcon.svelte'
   import EmptyState from '../components/EmptyState.svelte'
   import Preview from '../components/Preview.svelte'
-  import { api, HttpError, shareRawURL, shareThumbURL, shareURL, validShareToken, type Entry, type ShareInfo } from '../lib/api'
+  import { api, HttpError, shareRawURL, shareThumbURL, shareURL, shareZipURL, saveURL, validShareToken, type Entry, type ShareInfo } from '../lib/api'
   import { route, link, navigate } from '../lib/router.svelte'
   import { enqueue } from '../lib/uploads.svelte'
   import { arrange, size, thumbable, rawThumb, fallback, type Sort } from '../lib/format'
@@ -110,7 +110,7 @@
   } satisfies Record<string, Action>
 
   const actions = (e: Entry | null): Action[] =>
-    !e ? (canUpload ? [act.upload] : []) : e.dir ? [act.open] : [act.preview, act.download]
+    !e ? (canUpload ? [act.upload] : []) : e.dir ? [act.open, act.download] : [act.preview, act.download]
 
   function open(e: Entry) {
     if (e.dir) navigate(here(join(e.name)))
@@ -121,7 +121,7 @@
     if (id === 'upload') picker?.click()
     else if (!e) return
     else if (id === 'open') open(e)
-    else if (id === 'download') location.assign(shareRawURL(token, join(e.name), true))
+    else if (id === 'download') saveURL(e.dir ? shareZipURL(token, [join(e.name)], e.name) : shareRawURL(token, join(e.name), true))
   }
 
   const hasFiles = (e: DragEvent) => !!e.dataTransfer?.types.includes('Files')
@@ -167,8 +167,11 @@
       <span class="grow"></span>
       {#if file}
         <a class="button primary" href={shareRawURL(token, '', true)} download><Download size={18} />{t.download}</a>
-      {:else if listed && shared.mode === 'upload'}
-        <button class="primary" onclick={() => picker?.click()}><Upload size={18} />{t.upload}</button>
+      {:else if listed}
+        <a class={shared.mode === 'upload' ? 'button' : 'button primary'} href={shareZipURL(token, p ? [p] : [], crumbs.at(-1) ?? shared.name)} download
+          ><Download size={18} />{t.downloadAll}</a
+        >
+        {#if shared.mode === 'upload'}<button class="primary" onclick={() => picker?.click()}><Upload size={18} />{t.upload}</button>{/if}
       {/if}
     {/if}
   </header>

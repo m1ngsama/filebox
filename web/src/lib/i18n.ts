@@ -46,6 +46,8 @@ export const t = {
   create: '创建',
   open: '打开',
   download: '下载',
+  downloadAll: '全部下载',
+  zipName: (folder: string, n: number) => (n > 1 ? `${folder}-${n}项` : folder),
   rename: '重命名',
   newName: '新名称',
   moveOrCopy: '移动或复制',

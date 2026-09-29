@@ -55,6 +55,15 @@ export const shareLink = (tok: string) => location.origin + shareURL(tok)
 export const shareRawURL = (tok: string, path: string, dl = false) => `${shareURL(tok)}/raw/${enc(path)}${dl ? '?dl' : ''}`
 export const shareThumbURL = (tok: string, path: string) => `${shareURL(tok)}/thumb/${enc(path)}`
 const q = (o: Record<string, string>) => new URLSearchParams(o).toString()
+const zipQuery = (paths: string[], name: string) => new URLSearchParams([...paths.map((p) => ['p', p]), ['name', name]]).toString()
+export const zipURL = (vol: string, paths: string[], name: string) => `/api/zip?vol=${encodeURIComponent(vol)}&${zipQuery(paths, name)}`
+export const shareZipURL = (tok: string, paths: string[], name: string) => `${shareURL(tok)}/zip?${zipQuery(paths, name)}`
+export function saveURL(url: string) {
+  const a = document.createElement('a')
+  a.href = url
+  a.download = ''
+  a.click()
+}
 
 export type JobStatus = { state: 'running' | 'done' | 'error'; code?: string; total: number; done: number }
 const jobCodes: Record<string, number> = { exists: 409, notfound: 404, nospace: 507 }
