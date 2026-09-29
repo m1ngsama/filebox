@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"io/fs"
 	"log/slog"
 	"net/http"
 	"os"
@@ -99,6 +100,18 @@ func (s *Service) Probe(ctx context.Context) {
 		slog.Error("thumbnails disabled: ffmpeg has neither libwebp nor mjpeg", "ffmpeg", s.FFmpeg)
 		s.FFmpeg = ""
 	}
+	if s.FFmpeg != "" {
+		s.purge()
+	}
+}
+
+func (s *Service) purge() {
+	filepath.WalkDir(s.Dir, func(p string, d fs.DirEntry, err error) error {
+		if err == nil && !d.IsDir() && filepath.Ext(p) != "."+s.format.ext {
+			os.Remove(p)
+		}
+		return nil
+	})
 }
 
 func hasEncoder(list []byte, name string) bool {

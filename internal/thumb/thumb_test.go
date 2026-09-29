@@ -227,7 +227,15 @@ func TestProbe(t *testing.T) {
 	}
 	for _, c := range cases {
 		s, _, _ := setup(t, fakeFFmpeg(t, c.encoders))
+		for _, n := range []string{"ab/x.webp", "ab/y.jpg"} {
+			os.MkdirAll(filepath.Join(s.Dir, "ab"), 0o755)
+			os.WriteFile(filepath.Join(s.Dir, n), []byte("x"), 0o644)
+		}
 		s.Probe(context.Background())
+		left, _ := filepath.Glob(filepath.Join(s.Dir, "ab", "*"))
+		if c.enabled && (len(left) != 1 || filepath.Ext(left[0]) != "."+c.ext) {
+			t.Errorf("%s cache left %v", c.ext, left)
+		}
 		if (s.FFmpeg != "") != c.enabled || (c.enabled && s.format.ext != c.ext) {
 			t.Errorf("%q: ffmpeg %q ext %q", c.encoders, s.FFmpeg, s.format.ext)
 		}
