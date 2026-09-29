@@ -72,7 +72,7 @@ func New(ffmpeg, dir string) *Service {
 			ffmpeg = p
 		}
 	}
-	s := &Service{FFmpeg: ffmpeg, Dir: dir, format: webp, sem: make(chan struct{}, 2), probes: make(chan struct{}, runtime.NumCPU()),
+	s := &Service{FFmpeg: ffmpeg, Dir: dir, format: webp, sem: make(chan struct{}, runtime.NumCPU()), probes: make(chan struct{}, runtime.NumCPU()),
 		inflight: map[string]chan struct{}{}, failed: map[string]struct{}{}}
 	s.nice, _ = exec.LookPath("nice")
 	if ffmpeg != "" {

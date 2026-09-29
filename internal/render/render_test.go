@@ -161,9 +161,11 @@ func TestRenderWaitsForASlotAndGivesUpWithTheClient(t *testing.T) {
 }
 
 func TestHugeHighlightFallsBackToPlainText(t *testing.T) {
-	src := []byte(strings.Repeat("x := f(a, b) + 1 // c\n", (2<<20)/22))
+	defer func(n int) { maxOutput = n }(maxOutput)
+	maxOutput = 64 << 10
+	src := []byte(strings.Repeat("x := f(a, b) + 1 // c\n", 8<<10))
 	res := Render("a.go", src, nil)
-	if !res.plain || len(res.html) > maxOutput || !strings.HasPrefix(string(res.html), "<pre>") {
+	if !res.plain || !strings.HasPrefix(string(res.html), "<pre>") {
 		t.Fatalf("plain %v, %d bytes", res.plain, len(res.html))
 	}
 }

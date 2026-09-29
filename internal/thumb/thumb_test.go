@@ -111,8 +111,9 @@ func TestCancelWhileQueued(t *testing.T) {
 	}
 	key := cacheKey(v.Name, "a.jpg", fi.Size(), fi.ModTime().UnixNano())
 
-	s.sem <- struct{}{}
-	s.sem <- struct{}{}
+	for range cap(s.sem) {
+		s.sem <- struct{}{}
+	}
 
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
@@ -135,8 +136,9 @@ func TestCancelWhileQueued(t *testing.T) {
 		t.Fatal("cancellation was negative-cached")
 	}
 
-	<-s.sem
-	<-s.sem
+	for range cap(s.sem) {
+		<-s.sem
+	}
 
 	if w := get(s, v, "a.jpg"); w.Code != 404 {
 		t.Fatalf("second attempt code = %d", w.Code)

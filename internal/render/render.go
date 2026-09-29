@@ -33,7 +33,7 @@ import (
 	"github.com/m1ngsama/filebox/internal/httpx"
 )
 
-const Limit = 16 << 20
+const Limit = 1 << 20
 
 const version = "1"
 
@@ -76,10 +76,9 @@ var (
 	cached int
 )
 
-const (
-	maxCache  = 256 << 20
-	maxOutput = 16 << 20
-)
+const maxCache = 256 << 20
+
+var maxOutput = 16 << 20
 
 func Serve(w http.ResponseWriter, r *http.Request, root *os.Root, rel, rawPrefix string) {
 	f, err := root.Open(rel)
