@@ -198,7 +198,7 @@ func slot(ctx context.Context, f io.Reader, rel, rawPrefix string) (result, erro
 	cmd := exec.CommandContext(wctx, name, args...)
 	cmd.Stdin = io.MultiReader(bytes.NewReader(head), strings.NewReader("\n"), bytes.NewReader(src))
 	cmd.WaitDelay = time.Second
-	out, err := cmd.Output()
+	out, err := output(cmd, int64(maxOutput)+1<<20)
 	switch {
 	case ctx.Err() != nil:
 		return result{}, ctx.Err()
@@ -211,7 +211,7 @@ func slot(ctx context.Context, f io.Reader, rel, rawPrefix string) (result, erro
 	}
 	flags, body, ok := bytes.Cut(out, []byte("\n"))
 	if err != nil || !ok {
-		slog.Warn("render worker failed", "file", rel, "err", err, "stderr", stderr(err))
+		slog.Warn("render worker failed", "file", rel, "err", err)
 		return result{}, errWorker
 	}
 	t, reason, _ := strings.Cut(string(flags), " ")
@@ -249,15 +249,29 @@ func RunWorker() {
 	os.Exit(0)
 }
 
-var errWorker = errors.New("render: worker failed")
-
-func stderr(err error) string {
-	var ee *exec.ExitError
-	if errors.As(err, &ee) {
-		return string(ee.Stderr)
+func output(cmd *exec.Cmd, max int64) ([]byte, error) {
+	var errb bytes.Buffer
+	cmd.Stderr = &errb
+	pipe, err := cmd.StdoutPipe()
+	if err != nil {
+		return nil, err
 	}
-	return ""
+	if err := cmd.Start(); err != nil {
+		return nil, err
+	}
+	out, _ := io.ReadAll(io.LimitReader(pipe, max+1))
+	if int64(len(out)) > max {
+		cmd.Process.Kill()
+		cmd.Wait()
+		return nil, fmt.Errorf("render: worker wrote more than %d bytes", max)
+	}
+	if err := cmd.Wait(); err != nil {
+		return out, fmt.Errorf("%w: %s", err, bytes.TrimSpace(errb.Bytes()))
+	}
+	return out, nil
 }
+
+var errWorker = errors.New("render: worker failed")
 
 // /proc/<pid>/exe keeps pointing at the running binary after an upgrade replaces the file.
 func executable() string {

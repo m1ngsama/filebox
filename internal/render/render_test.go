@@ -5,6 +5,7 @@ import (
 	"context"
 	"net/http/httptest"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"sync"
@@ -248,5 +249,19 @@ func TestWorkerFailureIsAnUncachedError(t *testing.T) {
 	self, _ = os.Executable()
 	if w, _ := serve(t, "a.md", "# hi"); w.Code != 200 || !strings.Contains(w.Body.String(), "<h1") {
 		t.Fatalf("failure was cached: %d %s", w.Code, w.Body)
+	}
+}
+
+func TestWorkerOutputIsBounded(t *testing.T) {
+	yes, err := exec.LookPath("yes")
+	if err != nil {
+		t.Skip("no yes(1)")
+	}
+	start := time.Now()
+	if _, err := output(exec.Command(yes), 1000); err == nil || time.Since(start) > 5*time.Second {
+		t.Fatalf("%v after %v", err, time.Since(start))
+	}
+	if out, err := output(exec.Command("echo", "ok"), 1000); err != nil || string(out) != "ok\n" {
+		t.Fatalf("%q %v", out, err)
 	}
 }
