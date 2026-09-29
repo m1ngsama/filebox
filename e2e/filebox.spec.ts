@@ -173,15 +173,17 @@ test('markdown renders with tables and highlighted code, and code files are high
 })
 
 test('images open in a lightbox that zooms, steps, shows info and closes back to the row', async ({ page, server }) => {
+  await page.emulateMedia({ reducedMotion: 'reduce' })
   for (const n of ['big1.png', 'big2.png']) writeFileSync(join(server.vol, 'docs', n), png(2400, 1600))
   await login(page)
   await row(page, 'docs').locator('button.name').click()
+  const fetched: string[] = []
+  page.on('request', (r) => r.url().includes('/raw/') && fetched.push(new URL(r.url()).pathname))
   await row(page, 'big1.png').locator('button.name').click()
   const box = page.getByRole('dialog', { name: 'big1.png' })
   await expect(box).toContainText('1 / 2')
   await expect(box.getByRole('button', { name: t.close })).toBeFocused()
   await expect(box.locator('.pswp__img:not(.pswp__img--placeholder)').first()).toHaveJSProperty('complete', true)
-  await page.waitForTimeout(500)
   await box.getByRole('button', { name: t.zoom }).click()
   await expect(box).toHaveClass(/pswp--zoomed-in/)
   await page.keyboard.press('z')
@@ -194,6 +196,8 @@ test('images open in a lightbox that zooms, steps, shows info and closes back to
   await page.keyboard.press('i')
   const info = page.getByRole('complementary', { name: t.info })
   await expect(info).toContainText(t.size)
+  await page.locator('.pswp__button--close').click({ trial: true, timeout: 5000 })
+  expect(fetched.filter((p) => p.endsWith('/big1.png'))).toHaveLength(1)
   await expect(info.getByRole('status')).toHaveCount(0)
   await page.keyboard.press('Escape')
   await expect(info).toHaveCount(0)
@@ -1124,6 +1128,7 @@ test.describe('on a phone', () => {
   })
 
   test('swipes step through images and a downward swipe closes the preview', async ({ page, server }) => {
+    await page.emulateMedia({ reducedMotion: 'reduce' })
     const png = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==', 'base64')
     for (const n of ['p1.png', 'p2.png', 'p3.png']) writeFileSync(join(server.vol, 'docs', n), png)
     await login(page)
@@ -1132,7 +1137,6 @@ test.describe('on a phone', () => {
     const f = await finger(page)
     await expect(page.getByRole('dialog', { name: 'p1.png' })).toContainText('1 / 3')
     await expect(page.getByRole('button', { name: t.next })).toBeHidden()
-    await page.waitForTimeout(500)
     await f.swipe(-200, 10)
     await expect(page.getByRole('dialog', { name: 'p2.png' })).toContainText('2 / 3')
     await f.swipe(200, -10)

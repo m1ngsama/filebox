@@ -13,6 +13,13 @@
   let info = $state(false)
   let meta = $state<Meta | null>(null)
   let host = $state<HTMLElement>()
+  let box: PhotoSwipe | undefined
+  const side = () => info && innerWidth > 640
+
+  $effect(() => {
+    info
+    box?.updateSize(true)
+  })
   const portal = (el: HTMLElement) => host?.append(el)
   const stop = (e: Event) => e.stopPropagation()
 
@@ -52,7 +59,7 @@
       bgOpacity: 1,
       wheelToZoom: true,
       loop: images.length > 1,
-      showHideAnimationType: 'fade',
+      showHideAnimationType: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'none' : 'fade',
       preloaderDelay: 150,
       indexIndicatorSep: ' / ',
       closeTitle: t.close,
@@ -60,7 +67,9 @@
       arrowPrevTitle: t.prev,
       arrowNextTitle: t.next,
       errorMsg: t.previewFailed,
+      paddingFn: () => ({ top: 0, bottom: 0, left: 0, right: side() ? 340 : 0 }),
     })
+    box = pswp
 
     pswp.on('contentLoad', (e) => {
       const c = e.content
@@ -220,11 +229,11 @@
   .exif {
     position: fixed;
     z-index: 100001;
-    top: 0;
+    top: calc(60px + env(safe-area-inset-top));
     right: 0;
     bottom: 0;
     width: min(340px, 100%);
-    padding: calc(12px + env(safe-area-inset-top)) var(--space-5) var(--space-5);
+    padding: var(--space-3) var(--space-5) var(--space-5);
     overflow: auto;
     background: var(--panel);
     color: var(--fg);
