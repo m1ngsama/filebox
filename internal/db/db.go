@@ -358,7 +358,7 @@ func (d *DB) InsertShare(s *Share) error {
 func (d *DB) SameShare(userID int64, vol, path, mode string, duration, now int64) (Share, error) {
 	return scanShare(d.QueryRow(`SELECT `+shareCols+` FROM shares
 		WHERE user_id = ? AND vol = ? AND path = ? AND mode = ? AND password_hash = '' AND note = '' AND max_upload = 0
-		AND iif(expires_at = 0, 0, expires_at - created_at) = ? AND (expires_at = 0 OR expires_at > ?)
+		AND iif(?5 = 0, expires_at = 0, expires_at - ?6 BETWEEN ?5 - 60 AND ?5 + 60)
 		ORDER BY id DESC LIMIT 1`, userID, vol, path, mode, duration, now))
 }
 

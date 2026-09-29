@@ -391,8 +391,20 @@ func TestShareDedupe(t *testing.T) {
 			t.Fatalf("%s reused the existing link", js)
 		}
 	}
+	f.App.DB.Exec(`UPDATE shares SET created_at = created_at - 3600, expires_at = expires_at - 3600 WHERE token = ?`, first)
+	if tok := mkShare(t, f, `{"vol":"v","path":"d","mode":"read","expires_in":604800}`); tok == first {
+		t.Fatal("reused a link with an hour less than requested")
+	}
+	long := mkShare(t, f, `{"vol":"v","path":"d","mode":"upload","expires_in":2592000}`)
+	if tok := mkShare(t, f, `{"vol":"v","path":"d","mode":"upload","expires_in":86400}`); tok == long {
+		t.Fatal("reused a 30-day link for a 1-day request")
+	}
+	forever := mkShare(t, f, `{"vol":"v","path":"d","mode":"drop"}`)
+	if w := f.do("POST", "/api/shares", body(`{"vol":"v","path":"d","mode":"drop"}`)); !strings.Contains(w.Body.String(), forever) {
+		t.Fatalf("permanent link not reused %s", w.Body)
+	}
 	pw := mkShare(t, f, `{"vol":"v","path":"d","mode":"drop","password":"pw"}`)
-	if w := f.do("POST", "/api/shares", body(`{"vol":"v","path":"d","mode":"drop"}`)); w.Code != 201 || strings.Contains(w.Body.String(), pw) {
+	if w := f.do("POST", "/api/shares", body(`{"vol":"v","path":"d","mode":"drop"}`)); strings.Contains(w.Body.String(), pw) {
 		t.Fatalf("password share reused %d %s", w.Code, w.Body)
 	}
 }
