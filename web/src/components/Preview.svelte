@@ -29,6 +29,7 @@
   )
   const spot = $derived('pos:' + src)
   let last = 0
+  let audioOnly = $state(false)
   const md = $derived(/\.(md|markdown)$/i.test(entry.name))
   const rich = $derived(k === 'text' && (md || look(entry.name) === 'code'))
   let text = $state<string | null>(null)
@@ -41,6 +42,7 @@
 
   $effect(() => {
     src
+    audioOnly = false
     status = k === 'audio' || !k ? 'ready' : 'loading'
   })
 
@@ -127,9 +129,13 @@
   const ready = () => (status = 'ready')
   const failed = () => (status = 'error')
 
-  function resume(e: Event) {
+  async function resume(e: Event) {
     const m = e.currentTarget as HTMLVideoElement
-    if (k === 'video' && !m.videoWidth) return failed()
+    if (k === 'video' && !m.videoWidth) {
+      const meta: { width?: number } = await fetch(url(entry, 'meta')).then((r) => (r.ok ? r.json() : {}), () => ({}))
+      if (meta.width) return failed()
+      audioOnly = true
+    }
     const at = Number(load(spot))
     if (at > 5 && at < m.duration - 5) m.currentTime = at
     ready()
@@ -189,6 +195,7 @@
         autoplay
         playsinline
         preload="metadata"
+        class:audio-only={audioOnly}
         onloadedmetadata={resume}
         ontimeupdate={track}
         onpause={track}
