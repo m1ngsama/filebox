@@ -35,6 +35,13 @@ func TestPDFThumb(t *testing.T) {
 			if left, _ := filepath.Glob(filepath.Join(s.Dir, "*", "*.src*")); len(left) != 0 {
 				t.Fatalf("left %v", left)
 			}
+			os.WriteFile(filepath.Join(dir, "bad.pdf"), []byte("%PDF-1.4 broken"), 0o644)
+			if w := get(s, v, "bad.pdf"); w.Code != 404 {
+				t.Fatalf("broken pdf %d", w.Code)
+			}
+			if left, _ := filepath.Glob(filepath.Join(s.Dir, "*", "*.src*")); len(left) != 0 {
+				t.Fatalf("broken pdf left %v", left)
+			}
 		})
 	}
 }

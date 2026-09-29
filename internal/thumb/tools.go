@@ -114,9 +114,10 @@ func (s *Service) prepare(ctx context.Context, kind string, src *os.File, out st
 	case "heic":
 		return s.decode(ctx, src, out)
 	case "pdf":
+		defer os.Remove(out + ".png")
 		var cmd *exec.Cmd
 		if strings.HasSuffix(s.pdf, "mutool") {
-			cmd = s.command(ctx, s.pdf, "draw", "-q", "-o", out, "-w", "640", "-F", "png", "/dev/fd/3", "1")
+			cmd = s.command(ctx, s.pdf, "draw", "-q", "-o", out, "-w", "640", "-h", "640", "-F", "png", "/dev/fd/3", "1")
 		} else {
 			cmd = s.command(ctx, s.pdf, "-f", "1", "-l", "1", "-singlefile", "-scale-to", "640", "-png", "/dev/fd/3", strings.TrimSuffix(out, ".png"))
 		}
@@ -131,15 +132,32 @@ func (s *Service) prepare(ctx context.Context, kind string, src *os.File, out st
 	case "raw":
 		if s.exiftool != "" {
 			for _, tag := range []string{"-PreviewImage", "-JpgFromRaw"} {
-				cmd := s.command(ctx, s.exiftool, "-b", tag, "/dev/fd/3")
-				cmd.ExtraFiles = []*os.File{src}
-				if b, err := cmd.Output(); err == nil && len(b) > 3 && b[0] == 0xff && b[1] == 0xd8 {
-					return os.WriteFile(out, b, 0o644)
+				if s.exif(ctx, src, tag, out) == nil {
+					return nil
 				}
 				src.Seek(0, io.SeekStart)
 			}
 		}
 		return s.decode(ctx, src, out)
 	}
+	return errNoTool
+}
+
+func (s *Service) exif(ctx context.Context, src *os.File, tag, out string) error {
+	f, err := os.Create(out)
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+	cmd := s.command(ctx, s.exiftool, "-b", tag, "/dev/fd/3")
+	cmd.ExtraFiles = []*os.File{src}
+	cmd.Stdout = f
+	var head [2]byte
+	if err := cmd.Run(); err == nil {
+		if _, err := f.ReadAt(head[:], 0); err == nil && head == [2]byte{0xff, 0xd8} {
+			return nil
+		}
+	}
+	os.Remove(out)
 	return errNoTool
 }
