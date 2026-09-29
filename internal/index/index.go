@@ -141,6 +141,23 @@ func (x *Index) Scan(vols *vol.Set) error {
 	return nil
 }
 
+type Size struct {
+	Size  int64 `json:"size"`
+	Files int64 `json:"files"`
+	Dirs  int64 `json:"dirs"`
+}
+
+func (x *Index) Size(vol, rel string) (Size, error) {
+	q, args := `vol = ?`, []any{vol}
+	if rel != "." {
+		q, args = `vol = ? AND path > ? AND path < ?`, []any{vol, rel + "/", rel + "0"}
+	}
+	var s Size
+	err := x.db.QueryRow(`SELECT coalesce(sum(size), 0), count(*) FILTER (WHERE dir = 0), count(*) FILTER (WHERE dir = 1) FROM files WHERE `+q, args...).
+		Scan(&s.Size, &s.Files, &s.Dirs)
+	return s, err
+}
+
 func (x *Index) Recent(limit int) ([]File, error) {
 	rows, err := x.db.Query(`SELECT vol, path, size, mtime FROM files WHERE dir = 0 ORDER BY mtime DESC LIMIT ?`, limit)
 	if err != nil {

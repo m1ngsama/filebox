@@ -4,7 +4,7 @@
   import Star from '@lucide/svelte/icons/star'
   import FileIcon from './FileIcon.svelte'
   import SharePanel from './SharePanel.svelte'
-  import type { Entry } from '../lib/api'
+  import { api, type Entry } from '../lib/api'
   import { size, date, fallback } from '../lib/format'
   import { t } from '../lib/i18n'
   import { starred, star } from '../lib/favorites.svelte'
@@ -14,6 +14,14 @@
   let tries = $state(0)
   const src = $derived(fallback(thumbs, tries))
   const on = $derived(starred(vol, path))
+  let total = $state('')
+  $effect(() => {
+    if (!entry.dir) return
+    api.size(vol, path).then(
+      (s) => (total = s.scanning ? t.sizeIndexing : t.folderSize(size(s.size), s.files)),
+      () => {},
+    )
+  })
 </script>
 
 <aside class="details" aria-label={t.details}>
@@ -29,7 +37,7 @@
       </button>
     </div>
     <dl>
-      {#if !entry.dir}<dt>{t.size}</dt><dd>{size(entry.size)}</dd>{/if}
+      <dt>{t.size}</dt><dd class="size">{entry.dir ? total || '…' : size(entry.size)}</dd>
       <dt>{t.mtime}</dt><dd>{date(entry.mtime)}</dd>
       <dt>{t.path}</dt><dd class="path">{vol}:/{path}</dd>
     </dl>

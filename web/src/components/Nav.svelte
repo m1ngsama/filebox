@@ -7,10 +7,19 @@
   import Settings from '@lucide/svelte/icons/settings'
   import LogOut from '@lucide/svelte/icons/log-out'
   import { link } from '../lib/router.svelte'
+  import { api, type Usage } from '../lib/api'
+  import { size } from '../lib/format'
   import { shell, narrow } from '../lib/shell.svelte'
   import { t } from '../lib/i18n'
 
   let { vols, parts, onlogout }: { vols: string[]; parts: string[]; onlogout: () => void } = $props()
+  let usage = $state.raw<Record<string, Usage>>({})
+  const measure = () =>
+    api.vols().then(
+      (r) => (usage = Object.fromEntries(r.vols.map((u) => [u.name, u]))),
+      () => {},
+    )
+  $effect(() => void measure())
   const cur = $derived(parts[0] === 'files' || parts[0] === 'trash' ? parts[1] : undefined)
 
   function go(e: MouseEvent) {
@@ -19,7 +28,7 @@
   }
 </script>
 
-<svelte:window onkeydown={(e) => e.key === 'Escape' && (shell.nav = false)} />
+<svelte:window onkeydown={(e) => e.key === 'Escape' && (shell.nav = false)} onfocus={measure} />
 
 {#if shell.nav}<button class="scrim" aria-label={t.close} onclick={() => (shell.nav = false)}></button>{/if}
 <nav class="nav" class:open={shell.nav} aria-label={t.navigation} inert={narrow.current && !shell.nav}>
@@ -38,6 +47,13 @@
         <a href={`/files/${encodeURIComponent(v)}/`} onclick={go} aria-current={parts[0] === 'files' && cur === v ? 'page' : undefined}>
           <HardDrive size={18} /><span>{v}</span>
         </a>
+        {#if usage[v]?.total}
+          {@const u = usage[v]}
+          <div class="usage">
+            <div class="usage-bar" style:--p={`${Math.min(100, (100 * u.used) / (u.used + u.free))}%`}></div>
+            <span class="hint">{t.usage(size(u.used), size(u.total))}</span>
+          </div>
+        {/if}
       </li>
     {/each}
   </ul>

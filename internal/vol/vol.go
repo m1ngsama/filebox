@@ -25,12 +25,24 @@ type Volume struct {
 	Root *os.Root
 }
 
-func (v *Volume) Free() (uint64, error) {
+type Usage struct {
+	Used  uint64 `json:"used"`
+	Free  uint64 `json:"free"`
+	Total uint64 `json:"total"`
+}
+
+func (v *Volume) Usage() (Usage, error) {
 	var st syscall.Statfs_t
 	if err := syscall.Statfs(v.Path, &st); err != nil {
-		return 0, err
+		return Usage{}, err
 	}
-	return uint64(st.Bavail) * uint64(st.Bsize), nil
+	b := uint64(st.Bsize)
+	return Usage{Used: (uint64(st.Blocks) - uint64(st.Bfree)) * b, Free: uint64(st.Bavail) * b, Total: uint64(st.Blocks) * b}, nil
+}
+
+func (v *Volume) Free() (uint64, error) {
+	u, err := v.Usage()
+	return u.Free, err
 }
 
 type Set struct {

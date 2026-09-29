@@ -3,6 +3,7 @@ package api
 import (
 	"errors"
 	"io/fs"
+	"log/slog"
 	"net/http"
 	"os"
 	"path"
@@ -102,6 +103,8 @@ func (a *API) Register(mux *http.ServeMux) {
 	mux.Handle("GET /api/zip", a.Auth.RequireAny(http.HandlerFunc(a.zip)))
 	h("GET /api/recent", a.recent)
 	h("GET /api/search", a.search)
+	h("GET /api/vols", a.vols)
+	h("GET /api/size", a.size)
 	h("GET /api/favorites", a.favorites)
 	h("POST /api/favorites", a.star)
 	h("POST /api/mkdir", a.mkdir)
@@ -377,6 +380,36 @@ func (a *API) search(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	httpx.JSON(w, 200, map[string]any{"entries": hits, "scanning": !a.Index.Ready()})
+}
+
+func (a *API) vols(w http.ResponseWriter, r *http.Request) {
+	type usage struct {
+		Name string `json:"name"`
+		vol.Usage
+	}
+	out := []usage{}
+	for _, v := range a.Vols.All() {
+		u, err := v.Usage()
+		if err != nil {
+			slog.Warn("volume usage", "vol", v.Name, "err", err)
+		}
+		out = append(out, usage{v.Name, u})
+	}
+	httpx.JSON(w, 200, map[string]any{"vols": out})
+}
+
+func (a *API) size(w http.ResponseWriter, r *http.Request) {
+	v, rel, err := a.query(r)
+	if err != nil {
+		httpx.Error(w, err)
+		return
+	}
+	s, err := a.Index.Size(v.Name, rel)
+	if err != nil {
+		httpx.Error(w, err)
+		return
+	}
+	httpx.JSON(w, 200, map[string]any{"size": s.Size, "files": s.Files, "dirs": s.Dirs, "scanning": !a.Index.Ready()})
 }
 
 type favorite struct {

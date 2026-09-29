@@ -91,6 +91,8 @@ button.ghost { border-color: transparent; background: none; }
 .nav a span, .nav-item span { overflow: hidden; text-overflow: ellipsis; }
 .nav a:hover, .nav-item:hover:not(:disabled) { background: var(--hover); }
 .nav a[aria-current='page'] { background: var(--sel); color: var(--accent); font-weight: 600; }
+.usage { display: flex; flex-direction: column; gap: 3px; padding: 0 12px 6px 40px; }
+.usage-bar { height: 4px; border-radius: var(--radius-full); background: linear-gradient(to right, var(--accent) var(--p), var(--line) var(--p)); }
 .nav-foot { border-top: 1px solid var(--line); padding-top: 8px !important; }
 .nav-toggle { display: none; }
 .scrim { position: fixed; inset: 0; z-index: 40; border: 0; padding: 0; border-radius: 0; }

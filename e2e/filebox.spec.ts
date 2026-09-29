@@ -746,6 +746,17 @@ test('starred items show under favorites, follow a rename and open where they li
   await expect(page).toHaveURL(/\/files\/v\/docs\/$/)
 })
 
+test('the nav shows volume usage and details add up a folder from the index', async ({ page }) => {
+  await login(page)
+  const usage = page.locator('.nav .usage')
+  await expect(usage).toBeVisible()
+  await expect(usage.locator('.hint')).toHaveText(new RegExp(`^${t.usage('.+', '.+')}$`))
+  expect((await usage.locator('.usage-bar').boundingBox())!.height).toBe(4)
+  await row(page, 'docs').locator('button.more').click()
+  await page.getByRole('menuitem', { name: t.details }).click()
+  await expect(page.locator('.details dd.size')).toHaveText(t.folderSize('6 B', 1))
+})
+
 test('searching everything finds a file in another folder and opens it there, selected', async ({ page }) => {
   await login(page)
   await page.getByRole('radio', { name: t.scopeAll }).click()
