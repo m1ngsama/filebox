@@ -149,7 +149,7 @@ func TestPathologicalMarkdownFallsBackToPlainText(t *testing.T) {
 	} {
 		w, took := serve(t, "a.md", src)
 		t.Logf("%s: %d bytes, %v", name, len(src), took)
-		if w.Header().Get("X-Plain") != "complex" || !strings.HasPrefix(w.Body.String(), "<pre>") || took > 6*time.Second {
+		if w.Header().Get("X-Plain") != "complex" || !strings.HasPrefix(w.Body.String(), "<pre>") || took > 10*time.Second {
 			t.Errorf("%s: plain %q in %v", name, w.Header().Get("X-Plain"), took)
 		}
 	}
@@ -218,5 +218,21 @@ func TestConcurrentRendersOfOneFileRunOnce(t *testing.T) {
 	wg.Wait()
 	if n := runs.Load(); n != 1 {
 		t.Fatalf("rendered %d times", n)
+	}
+}
+
+func TestBackstopFallbackIsNotCached(t *testing.T) {
+	if backstop <= 5*time.Second {
+		t.Skip("no CPU limit on this platform")
+	}
+	defer func(d time.Duration) { timeout = d }(timeout)
+	timeout = time.Nanosecond
+	w, _ := serve(t, "a.md", "# hi")
+	if w.Header().Get("X-Plain") != "complex" {
+		t.Fatalf("plain %q", w.Header().Get("X-Plain"))
+	}
+	timeout = backstop
+	if w, _ := serve(t, "a.md", "# hi"); w.Header().Get("X-Plain") != "" {
+		t.Fatal("a backstop kill was cached")
 	}
 }

@@ -72,12 +72,13 @@ type result struct {
 	html      []byte
 	truncated bool
 	plain     string
+	transient bool
 }
 
 const workerArg = "render-worker"
 
 var (
-	timeout = 5 * time.Second
+	timeout = backstop
 	self, _ = os.Executable()
 	nice, _ = exec.LookPath("nice")
 )
@@ -161,7 +162,7 @@ func once(ctx context.Context, key string, run func() (result, error)) (result, 
 		mu.Lock()
 		delete(inflight, key)
 		close(ch)
-		if err == nil {
+		if err == nil && !res.transient {
 			if cached+len(res.html) > maxCache {
 				clear(cache)
 				cached = 0
@@ -196,15 +197,22 @@ func slot(ctx context.Context, f io.Reader, rel, rawPrefix string) (result, erro
 	cmd.Stdin = io.MultiReader(bytes.NewReader(head), strings.NewReader("\n"), bytes.NewReader(src))
 	cmd.WaitDelay = time.Second
 	out, err := cmd.Output()
-	if ctx.Err() != nil {
+	switch {
+	case ctx.Err() != nil:
 		return result{}, ctx.Err()
+	case wctx.Err() != nil:
+		r := plain(src, "complex")
+		r.transient = backstop > 5*time.Second
+		return r, nil
+	case cpuKilled(err):
+		return plain(src, "complex"), nil
 	}
 	flags, body, ok := bytes.Cut(out, []byte("\n"))
 	if err != nil || !ok {
 		return plain(src, "complex"), nil
 	}
 	t, reason, _ := strings.Cut(string(flags), " ")
-	return result{body, t == "1", strings.TrimPrefix(reason, "-")}, nil
+	return result{html: body, truncated: t == "1", plain: strings.TrimPrefix(reason, "-")}, nil
 }
 
 // RunWorker must run before anything else in main and in TestMain of packages that render.
@@ -212,6 +220,8 @@ func RunWorker() {
 	if len(os.Args) != 2 || os.Args[1] != workerArg {
 		return
 	}
+	runtime.GOMAXPROCS(1)
+	limitCPU()
 	in := bufio.NewReader(os.Stdin)
 	line, err := in.ReadBytes('\n')
 	var j job
@@ -243,7 +253,7 @@ func plain(src []byte, reason string) result {
 	if truncated {
 		src = cut(src, Limit)
 	}
-	return result{policy.SanitizeBytes(fmt.Appendf(nil, "<pre>%s</pre>", html.EscapeString(string(src)))), truncated, reason}
+	return result{html: policy.SanitizeBytes(fmt.Appendf(nil, "<pre>%s</pre>", html.EscapeString(string(src)))), truncated: truncated, plain: reason}
 }
 
 func Render(name string, src []byte, link func(string) string) result {
@@ -262,7 +272,7 @@ func Render(name string, src []byte, link func(string) string) result {
 		r.truncated = truncated
 		return r
 	}
-	return result{policy.SanitizeBytes(buf.Bytes()), truncated, ""}
+	return result{html: policy.SanitizeBytes(buf.Bytes()), truncated: truncated}
 }
 
 func cut(src []byte, n int) []byte {
