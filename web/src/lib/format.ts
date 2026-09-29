@@ -99,3 +99,19 @@ export const rawThumb = (e: { name: string; size: number; dir: boolean }) => !e.
 
 const thumbs = new Set('jpg jpeg png gif webp bmp tif tiff heic avif mp4 m4v mkv mov avi webm ts flv wmv mpg mpeg'.split(' '))
 export const thumbable = (n: string) => thumbs.has(ext(n))
+
+type WeekLocale = Intl.Locale & { getWeekInfo?: () => { firstDay: number }; weekInfo?: { firstDay: number } }
+const locale = new Intl.Locale(navigator.language) as WeekLocale
+const weekStart = ((locale.getWeekInfo?.() ?? locale.weekInfo)?.firstDay ?? 1) % 7
+
+export function days(now = new Date()) {
+  const d = new Date(now)
+  d.setHours(0, 0, 0, 0)
+  const today = d.getTime()
+  d.setDate(d.getDate() - 1)
+  const yesterday = d.getTime()
+  d.setTime(today)
+  d.setDate(d.getDate() - ((now.getDay() - weekStart + 7) % 7))
+  const week = d.getTime()
+  return (ms: number) => (ms >= today ? t.today : ms >= yesterday ? t.yesterday : ms >= week ? t.thisWeek : t.earlier)
+}

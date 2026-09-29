@@ -1,7 +1,7 @@
 import { test as base, expect, type Locator, type Page } from '@playwright/test'
 import { execFileSync, spawn } from 'node:child_process'
 import { createHash } from 'node:crypto'
-import { closeSync, cpSync, createReadStream, existsSync, mkdirSync, mkdtempSync, openSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync, writeSync } from 'node:fs'
+import { closeSync, cpSync, utimesSync, createReadStream, existsSync, mkdirSync, mkdtempSync, openSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync, writeSync } from 'node:fs'
 import { createServer, type AddressInfo } from 'node:net'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -695,6 +695,22 @@ test('an uploaded file shows first in recent and leads back to its folder', asyn
   await page.getByRole('menuitem', { name: t.openFolder }).click()
   await expect(page).toHaveURL(/\/files\/v\/docs\/$/)
   await expect(row(page, 'fresh.txt')).toHaveAttribute('aria-selected', 'true')
+})
+
+test('recent groups files by day and sorting by name drops the groups', async ({ page, server }) => {
+  const old = join(server.vol, 'old.txt')
+  writeFileSync(old, 'o')
+  utimesSync(old, new Date('2020-01-02'), new Date('2020-01-02'))
+  await login(page)
+  const r = await page.request.post('/api/cp', { data: { src: { vol: 'v', path: 'old.txt' }, dst: { vol: 'v', path: 'docs/old.txt' } } })
+  const { job } = await r.json()
+  await expect.poll(async () => (await (await page.request.get(`/api/jobs/${job}`)).json()).state).toBe('done')
+  await page.getByRole('link', { name: t.recent, exact: true }).click()
+  await expect(page.locator('.group-head')).toHaveText([t.today, t.earlier])
+  await expect(page.locator('.row button.name')).toHaveText(['readme.txt', 'old.txt'])
+  await page.locator('button.sort.name').click()
+  await expect(page.locator('.group-head')).toHaveCount(0)
+  await expect(page.locator('.row button.name')).toHaveText(['old.txt', 'readme.txt'])
 })
 
 test('searching everything finds a file in another folder and opens it there, selected', async ({ page }) => {

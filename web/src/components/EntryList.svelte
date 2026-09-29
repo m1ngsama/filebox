@@ -37,6 +37,7 @@
     loading = false,
     id = (e) => e.name,
     loc,
+    group,
     reveal,
     dnd,
   }: {
@@ -55,6 +56,7 @@
     loading?: boolean
     id?: (e: Entry) => string
     loc?: (e: Entry) => Loc
+    group?: (e: Entry) => string
     reveal?: string
     dnd?: { carry: (e: Entry) => Carried; target: (e: Entry) => Target }
   } = $props()
@@ -78,8 +80,21 @@
   let held = $state(false)
 
   const cols = $derived(grid ? Math.max(1, Math.floor((width - 16) / 172)) : 1)
-  const rows = $derived(Math.ceil(entries.length / cols))
-  const rowOf = (i: number) => Math.floor(i / cols)
+  const layout = $derived.by(() => {
+    if (!group || grid) return null
+    const items: (string | number)[] = []
+    const rowOf = new Int32Array(entries.length)
+    let last: string | undefined
+    entries.forEach((e, i) => {
+      const g = group(e)
+      if (g !== last) items.push((last = g))
+      rowOf[i] = items.length
+      items.push(i)
+    })
+    return { items, rowOf }
+  })
+  const rows = $derived(layout ? layout.items.length : Math.ceil(entries.length / cols))
+  const rowOf = (i: number) => (layout ? layout.rowOf[i] : Math.floor(i / cols))
   const tab = $derived(Math.min(cur, entries.length - 1))
   const all = $derived(!!selected && entries.length > 0 && entries.every((e) => selected.has(id(e))))
 
@@ -92,10 +107,14 @@
 
   $effect(() => {
     const list = entries
+    const items = layout?.items
+    const h = grid ? 212 : narrow.current ? 56 : 48
     const opts = {
       count: rows,
-      estimateSize: () => (grid ? 212 : narrow.current ? 56 : 48),
-      getItemKey: grid ? (i: number) => i : (i: number) => (list[i] ? id(list[i]) : i),
+      estimateSize: (i: number) => (typeof items?.[i] === 'string' ? 36 : h),
+      getItemKey: grid ? (i: number) => i
+        : items ? (i: number) => (typeof items[i] === 'string' ? `\0${items[i]}` : id(list[items[i] as number]))
+        : (i: number) => (list[i] ? id(list[i]) : i),
     }
     untrack(() => {
       $v.setOptions(opts)
@@ -337,8 +356,12 @@
                   </div>
                 {/each}
               </div>
+            {:else if typeof layout?.items[r.index] === 'string'}
+              <div class="group-head" role="row" aria-rowindex={r.index + 1} style:transform={`translateY(${r.start}px)`}>
+                <span role="columnheader">{layout?.items[r.index]}</span>
+              </div>
             {:else}
-              {@const n = r.index}
+              {@const n = layout ? (layout.items[r.index] as number) : r.index}
               {@const e = entries[n]}
               {@const s = src(e)}
               <div

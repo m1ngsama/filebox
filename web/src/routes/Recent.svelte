@@ -8,7 +8,7 @@
   import Preview from '../components/Preview.svelte'
   import { api, filesURL, rawURL, thumbURL, type Entry, type RecentFile } from '../lib/api'
   import { navigate } from '../lib/router.svelte'
-  import { thumbable, rawThumb, arrange, parent, type Sort } from '../lib/format'
+  import { thumbable, rawThumb, arrange, parent, days, type Sort } from '../lib/format'
   import { t } from '../lib/i18n'
 
   let files = $state.raw<RecentFile[]>([])
@@ -20,6 +20,7 @@
   let preview = $state.raw<Entry | null>(null)
 
   const shown = $derived(arrange(files, '', sort, desc))
+  const day = $derived(files && days())
   const loc = (e: Entry) => e as RecentFile
 
   $effect(() => {
@@ -78,6 +79,7 @@
     empty={recentEmpty}
     id={(e) => `${loc(e).vol}:${loc(e).path}`}
     loc={loc}
+    group={sort === 'mtime' ? (e) => day(e.mtime) : undefined}
   />
 </section>
 
