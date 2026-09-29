@@ -118,10 +118,8 @@ export const t = {
   plainText: '文件嵌套太深，按纯文本显示。',
   zoom: '缩放',
   info: '信息',
-  noInfo: '这个文件没有更多信息。',
   meta: {
     dimensions: '尺寸',
-    duration: '时长',
     camera: '相机',
     lens: '镜头',
     focal: '焦距',

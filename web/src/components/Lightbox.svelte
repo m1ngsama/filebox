@@ -9,7 +9,7 @@
 
   let { entry = $bindable(), images, url, onclose }: { entry: Entry; images: Entry[]; url: Src; onclose: () => void } = $props()
 
-  type Meta = Partial<Record<keyof typeof t.meta, string>> & { width?: number; height?: number; duration?: number }
+  type Meta = Partial<Record<keyof typeof t.meta, string>> & { width?: number; height?: number }
   let info = $state(false)
   let meta = $state<Meta | null>(null)
   let host = $state<HTMLElement>()

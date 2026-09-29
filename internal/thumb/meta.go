@@ -7,8 +7,6 @@ import (
 	"math"
 	"net/http"
 	"os"
-	"os/exec"
-	"regexp"
 	"strconv"
 	"strings"
 	"time"
@@ -17,26 +15,21 @@ import (
 )
 
 type Meta struct {
-	Width    int     `json:"width,omitempty"`
-	Height   int     `json:"height,omitempty"`
-	Duration float64 `json:"duration,omitempty"`
-	Camera   string  `json:"camera,omitempty"`
-	Lens     string  `json:"lens,omitempty"`
-	Focal    string  `json:"focal,omitempty"`
-	Aperture string  `json:"aperture,omitempty"`
-	Shutter  string  `json:"shutter,omitempty"`
-	ISO      string  `json:"iso,omitempty"`
-	Taken    string  `json:"taken,omitempty"`
-	GPS      string  `json:"gps,omitempty"`
+	Width    int    `json:"width,omitempty"`
+	Height   int    `json:"height,omitempty"`
+	Camera   string `json:"camera,omitempty"`
+	Lens     string `json:"lens,omitempty"`
+	Focal    string `json:"focal,omitempty"`
+	Aperture string `json:"aperture,omitempty"`
+	Shutter  string `json:"shutter,omitempty"`
+	ISO      string `json:"iso,omitempty"`
+	Taken    string `json:"taken,omitempty"`
+	GPS      string `json:"gps,omitempty"`
 }
 
 type probed struct {
 	Frames  []dims `json:"frames"`
 	Streams []dims `json:"streams"`
-	Format  struct {
-		Duration string            `json:"duration"`
-		Tags     map[string]string `json:"tags"`
-	} `json:"format"`
 }
 
 type dims struct {
@@ -68,19 +61,26 @@ func (s *Service) ServeMeta(w http.ResponseWriter, r *http.Request, root *os.Roo
 	if kind := Kind(rel); kind != "" && kind != "pdf" && s.FFprobe != "" {
 		ctx, cancel := context.WithTimeout(r.Context(), 20*time.Second)
 		defer cancel()
+		select {
+		case s.probes <- struct{}{}:
+		case <-ctx.Done():
+			httpx.Fail(w, 503, "busy")
+			return
+		}
 		m = s.probe(ctx, f, kind != "video")
+		<-s.probes
 	}
 	httpx.JSON(w, 200, m)
 }
 
 func (s *Service) probe(ctx context.Context, f *os.File, image bool) Meta {
-	entries := "stream=width,height:format=duration:format_tags"
+	entries := "stream=width,height"
 	args := []string{"-v", "error", "-protocol_whitelist", "file", "-select_streams", "v:0"}
 	if image {
 		entries += ":frame=width,height:frame_tags"
 		args = append(args, "-read_intervals", "%+#1")
 	}
-	cmd := exec.CommandContext(ctx, s.FFprobe, append(args, "-show_entries", entries, "-of", "json", "/dev/fd/3")...)
+	cmd := s.command(ctx, s.FFprobe, append(args, "-show_entries", entries, "-of", "json", "/dev/fd/3")...)
 	cmd.ExtraFiles = []*os.File{f}
 	out, err := cmd.Output()
 	var p probed
@@ -97,20 +97,9 @@ func (p probed) meta() Meta {
 			m.Width, m.Height = d.Width, d.Height
 		}
 	}
-	m.Duration, _ = strconv.ParseFloat(p.Format.Duration, 64)
 	if len(p.Frames) == 0 || len(p.Frames[0].Tags) == 0 {
-		t := norm(p.Format.Tags)
-		if c, err := time.Parse(time.RFC3339Nano, t["creation_time"]); err == nil {
-			m.Taken = c.UTC().Format("2006-01-02 15:04:05") + " UTC"
-		}
-		m.GPS = iso6709(cmpOr(t["com.apple.quicktime.location.ISO6709"], t["location"]))
-		m.Camera = camera(t["com.apple.quicktime.make"], t["com.apple.quicktime.model"])
-		if m.Duration < 0.01 {
-			m.Duration = 0
-		}
 		return m
 	}
-	m.Duration = 0
 	t := norm(p.Frames[0].Tags)
 	m.Camera = camera(t["Make"], t["Model"])
 	m.Lens = cmpOr(t["LensModel"], t["0xA434"])
@@ -203,16 +192,4 @@ func dms(s string, neg bool) (float64, bool) {
 		v = -v
 	}
 	return v, true
-}
-
-var iso6709re = regexp.MustCompile(`^([+-]\d+(?:\.\d+)?)([+-]\d+(?:\.\d+)?)`)
-
-func iso6709(s string) string {
-	m := iso6709re.FindStringSubmatch(s)
-	if m == nil {
-		return ""
-	}
-	lat, _ := strconv.ParseFloat(m[1], 64)
-	lon, _ := strconv.ParseFloat(m[2], 64)
-	return fmt.Sprintf("%.6f, %.6f", lat, lon)
 }

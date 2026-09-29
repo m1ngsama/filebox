@@ -59,6 +59,7 @@ type Service struct {
 	heic     bool
 
 	sem      chan struct{}
+	probes   chan struct{}
 	mu       sync.Mutex
 	inflight map[string]chan struct{}
 	failed   map[string]struct{}
@@ -70,7 +71,7 @@ func New(ffmpeg, dir string) *Service {
 			ffmpeg = p
 		}
 	}
-	s := &Service{FFmpeg: ffmpeg, Dir: dir, format: webp, sem: make(chan struct{}, 2),
+	s := &Service{FFmpeg: ffmpeg, Dir: dir, format: webp, sem: make(chan struct{}, 2), probes: make(chan struct{}, 2),
 		inflight: map[string]chan struct{}{}, failed: map[string]struct{}{}}
 	s.nice, _ = exec.LookPath("nice")
 	if ffmpeg != "" {
