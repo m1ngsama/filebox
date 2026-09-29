@@ -3,6 +3,7 @@ package app
 import (
 	"encoding/json"
 	"os"
+	"path"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -326,5 +327,48 @@ func TestShareThumbStaysInShare(t *testing.T) {
 	file := mkShare(t, f, `{"vol":"v","path":"pub/ok.jpg","mode":"read"}`)
 	if c, b, _ := anon(f, "GET", "/s/"+file+"/thumb/", ""); c != 200 || b != "shared" {
 		t.Fatalf("file share thumb %d %q", c, b)
+	}
+}
+
+func TestShareUploadStaysInShare(t *testing.T) {
+	f := newTestApp(t)
+	f.write(t, "pub/keep.txt", "k")
+	os.Mkdir(filepath.Join(f.Dir, "private"), 0o755)
+	os.Symlink("../private", filepath.Join(f.Dir, "pub/inbox"))
+	for _, mode := range []string{"upload", "drop"} {
+		tok := mkShare(t, f, `{"vol":"v","path":"pub","mode":"`+mode+`"}`)
+		up := "/s/" + tok + "/upload/"
+		create := func(rel string) (int, string) {
+			w := f.do("POST", up, body(""), "X-No-Auth", "1", "Tus-Resumable", "1.0.0", "Upload-Length", "1",
+				"Upload-Metadata", "filename "+b64(path.Base(rel))+",relativePath "+b64(rel))
+			return w.Code, w.Header().Get("Location")
+		}
+		patch := func(loc string) int {
+			return f.do("PATCH", loc, strings.NewReader("x"), "X-No-Auth", "1", "Tus-Resumable", "1.0.0",
+				"Upload-Offset", "0", "Content-Type", "application/offset+octet-stream").Code
+		}
+		if c, _ := create("inbox/x.txt"); c != 400 {
+			t.Fatalf("%s: upload through a link out of the share %d", mode, c)
+		}
+		if c, loc := create("sub/ok-" + mode + ".txt"); c != 201 || patch(loc) != 204 {
+			t.Fatalf("%s: normal upload %d", mode, c)
+		}
+		if b, _ := os.ReadFile(filepath.Join(f.Dir, "pub/sub/ok-"+mode+".txt")); string(b) != "x" {
+			t.Fatalf("%s: normal upload landed wrong: %q", mode, b)
+		}
+		os.Mkdir(filepath.Join(f.Dir, "pub/later"), 0o755)
+		c, loc := create("later/y-" + mode + ".txt")
+		if c != 201 {
+			t.Fatalf("%s: create %d", mode, c)
+		}
+		os.Remove(filepath.Join(f.Dir, "pub/later"))
+		os.Symlink("../private", filepath.Join(f.Dir, "pub/later"))
+		if c := patch(loc); c == 204 {
+			t.Fatalf("%s: finish wrote through a link swapped in after create", mode)
+		}
+		os.Remove(filepath.Join(f.Dir, "pub/later"))
+	}
+	if es, _ := os.ReadDir(filepath.Join(f.Dir, "private")); len(es) != 0 {
+		t.Fatalf("files written outside the share: %v", es)
 	}
 }

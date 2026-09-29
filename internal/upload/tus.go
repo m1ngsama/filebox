@@ -33,6 +33,7 @@ import (
 type Target struct {
 	Vol       *vol.Volume
 	Dir, Name string
+	Base      string
 	Replace   bool
 }
 
@@ -61,7 +62,54 @@ func TargetFor(v *vol.Volume, dir string, meta map[string]string) (Target, error
 	return Target{Vol: v, Dir: dir, Name: name}, nil
 }
 
+func Within(v *vol.Volume, base string, meta map[string]string) (Target, error) {
+	t, err := TargetFor(v, base, meta)
+	if err != nil {
+		return t, err
+	}
+	t.Base = base
+	return t, t.confine(false)
+}
+
+func (t Target) confine(mkdir bool) error {
+	if t.Base == "" {
+		if mkdir {
+			return t.Vol.Root.MkdirAll(t.Dir, 0o755)
+		}
+		return nil
+	}
+	sr, err := t.Vol.Root.OpenRoot(t.Base)
+	if err != nil {
+		return err
+	}
+	defer sr.Close()
+	rel := t.Dir
+	if t.Base != "." {
+		rel = "."
+		if t.Dir != t.Base {
+			rel = strings.TrimPrefix(t.Dir, t.Base+"/")
+		}
+	}
+	if mkdir {
+		if err := sr.MkdirAll(rel, 0o755); err != nil {
+			return vol.ErrBadPath
+		}
+	}
+	in, err := sr.Stat(rel)
+	if !mkdir && errors.Is(err, fs.ErrNotExist) {
+		return nil
+	}
+	if err != nil {
+		return vol.ErrBadPath
+	}
+	if out, err := t.Vol.Root.Stat(t.Dir); err != nil || !os.SameFile(in, out) {
+		return vol.ErrBadPath
+	}
+	return nil
+}
+
 const (
+	keyBase    = "base"
 	keyOwner   = "owner"
 	keyDir     = "dir"
 	keyName    = "filename"
@@ -262,6 +310,9 @@ func create(key string, hook handler.HookEvent) (handler.HTTPResponse, handler.F
 	if c.t.Replace {
 		md[keyReplace] = "1"
 	}
+	if c.t.Base != "" {
+		md[keyBase] = c.t.Base
+	}
 	return handler.HTTPResponse{}, handler.FileInfoChanges{ID: key + "-" + rand.Text(), MetaData: md}, nil
 }
 
@@ -299,7 +350,7 @@ func (s *Server) finish(u *volume, info handler.FileInfo) (string, error) {
 	s.finalize.Lock()
 	defer s.finalize.Unlock()
 	dir := info.MetaData[keyDir]
-	err := u.v.Root.MkdirAll(dir, 0o755)
+	err := Target{Vol: u.v, Dir: dir, Base: info.MetaData[keyBase]}.confine(true)
 	name := info.MetaData[keyName]
 	dst := path.Join(dir, name)
 	trashed := ""

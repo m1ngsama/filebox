@@ -353,7 +353,7 @@ func (s *Service) upload(w http.ResponseWriter, r *http.Request) {
 	s.Uploads.Handler(prefix, upload.Policy{
 		Owner: func(*http.Request) (string, bool) { return owner, true },
 		Resolve: func(r *http.Request, meta map[string]string) (upload.Target, error) {
-			return upload.TargetFor(o.v, o.sh.Path, meta)
+			return upload.Within(o.v, o.sh.Path, meta)
 		},
 	}).ServeHTTP(w, r)
 }
