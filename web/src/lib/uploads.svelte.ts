@@ -1,7 +1,7 @@
 import type * as tus from 'tus-js-client'
 import { t } from './i18n'
 import { errorText, session } from './api'
-import { toast } from './toast.svelte'
+import { toast, type Toast } from './toast.svelte'
 
 export type Item = {
   id: number
@@ -16,7 +16,9 @@ export type Item = {
 }
 
 type Job = { item: Item; file: File; endpoint: string; meta: Record<string, string>; sent: number; ok: boolean; err: boolean }
-type Group = { jobs: Job[]; ctl: AbortController; refresh: () => void }
+export type Replaced = { vol: string; path: string; id: string }
+type Undo = (r: Replaced[]) => Toast['action']
+type Group = { jobs: Job[]; ctl: AbortController; refresh: () => void; undo?: Undo }
 
 const LIMIT = 3
 const KEEP_FAILED = 200
@@ -29,11 +31,13 @@ const refreshers = new Set<() => void>()
 let running = 0
 let seq = 0
 let uploaded = 0
+let replaced: Replaced[] = []
+let undoer: Undo | undefined
 let samples: [number, number][] = []
 let ticker = 0
 let debounce = 0
 
-export function enqueue(files: { file: File; rel?: string }[], endpoint: string, meta: Record<string, string>, refresh: () => void) {
+export function enqueue(files: { file: File; rel?: string }[], endpoint: string, meta: Record<string, string>, refresh: () => void, undo?: Undo) {
   const byTop = new Map<string, Item>()
   for (const { file, rel } of files) {
     const top = rel?.includes('/') ? rel.slice(0, rel.indexOf('/')) : ''
@@ -41,7 +45,7 @@ export function enqueue(files: { file: File; rel?: string }[], endpoint: string,
     if (!item) {
       uploads.push({ id: ++seq, name: top || file.name, dir: !!top, total: 0, sent: 0, files: 0, ok: 0, state: 'queued' })
       item = uploads[uploads.length - 1]
-      groups.set(item.id, { jobs: [], ctl: new AbortController(), refresh })
+      groups.set(item.id, { jobs: [], ctl: new AbortController(), refresh, undo })
       if (top) byTop.set(top, item)
     }
     item.total += file.size
@@ -78,7 +82,7 @@ function progress(job: Job, sent: number) {
 async function run(job: Job, signal: AbortSignal) {
   const { file, endpoint, meta } = job
   const { Upload } = await import('tus-js-client')
-  return new Promise<void>((resolve, reject) => {
+  return new Promise<string | null>((resolve, reject) => {
     const metadata = Object.fromEntries(
       Object.entries({ ...meta, filename: file.name }).filter(([, v]) => v !== undefined && v !== ''),
     )
@@ -92,7 +96,7 @@ async function run(job: Job, signal: AbortSignal) {
       fingerprint: () =>
         Promise.resolve(['tus', endpoint, meta.vol, meta.dir, meta.relativePath ?? '', meta.overwrite ?? '', file.name, file.size, file.lastModified].join('|')),
       onProgress: (sent) => progress(job, sent),
-      onSuccess: () => resolve(),
+      onSuccess: ({ lastResponse }) => resolve(lastResponse.getHeader('Upload-Replaced') ?? null),
       onError: (e) => {
         if (endpoint === '/upload/' && (e as tus.DetailedError).originalResponse?.getStatus() === 401) session.lost()
         reject(new Error(errorMessage(e)))
@@ -146,7 +150,11 @@ async function work() {
     }
     job.item.state = 'uploading'
     try {
-      await run(job, g.ctl.signal)
+      const trashed = await run(job, g.ctl.signal)
+      if (trashed && g.undo) {
+        replaced.push({ vol: job.meta.vol, path: [job.meta.dir, job.meta.relativePath || job.file.name].join('/').replace(/^\/+/, ''), id: trashed })
+        undoer = g.undo
+      }
       progress(job, job.file.size)
       job.ok = true
       job.item.ok++
@@ -204,8 +212,11 @@ function idle() {
   const failed = uploads.filter((u) => u.state === 'error')
   for (const u of failed.slice(0, Math.max(0, failed.length - KEEP_FAILED))) forget(u)
   Object.assign(totals, { files: 0, ok: 0, bytes: 0, sent: 0, speed: 0 })
-  if (uploaded) toast(t.uploaded(uploaded))
+  if (uploaded && replaced.length) toast(t.uploadedReplaced(uploaded, replaced.length), { action: undoer?.(replaced) })
+  else if (uploaded) toast(t.uploaded(uploaded))
   uploaded = 0
+  replaced = []
+  undoer = undefined
 }
 
 function forget(item: Item) {

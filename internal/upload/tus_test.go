@@ -515,9 +515,16 @@ func TestTusReplace(t *testing.T) {
 	if b, _ := os.ReadFile(filepath.Join(dir, "a.txt")); string(b) != "old" {
 		t.Fatalf("replaced before the upload finished: %q", b)
 	}
-	e.patch(loc, 2, "w!")
+	w := e.patch(loc, 2, "w!")
 	if b, _ := os.ReadFile(filepath.Join(dir, "a.txt")); string(b) != "new!" {
 		t.Fatalf("got %q", b)
+	}
+	id := w.Header.Get("Upload-Replaced")
+	if b, _ := os.ReadFile(filepath.Join(dir, vol.TrashDir, id, "a.txt")); id == "" || string(b) != "old" {
+		t.Fatalf("old copy not in trash: %q %q", id, b)
+	}
+	if b, _ := os.ReadFile(filepath.Join(dir, vol.TrashDir, id, ".origin")); string(b) != "a.txt" {
+		t.Fatalf("origin %q", b)
 	}
 	if _, err := os.Stat(filepath.Join(dir, "a (1).txt")); err == nil {
 		t.Fatal("replace also kept a copy")

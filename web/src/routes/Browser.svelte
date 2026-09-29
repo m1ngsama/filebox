@@ -29,7 +29,7 @@
   import { api, filesURL, rawURL, thumbURL, zipURL, saveURL, type Entry, type Move } from '../lib/api'
   import { toast, fail, runLatest } from '../lib/toast.svelte'
   import { navigate, link, route } from '../lib/router.svelte'
-  import { enqueue } from '../lib/uploads.svelte'
+  import { enqueue, type Replaced } from '../lib/uploads.svelte'
   import { thumbable, rawThumb, arrange, parent, base, flip, sorts, type Sort } from '../lib/format'
   import { t } from '../lib/i18n'
   import { load, save } from '../lib/storage'
@@ -173,7 +173,7 @@
       .map((x) => (renamed.has(top(x)) ? { ...x, rel: renamed.get(top(x)) + x.rel.slice(x.rel.indexOf('/')) } : x))
     const meta = { vol: v, dir: dir || '/' }
     const over = items.filter((x) => choices.get(top(x)) === 'replace')
-    if (over.length) enqueue(over, '/upload/', { ...meta, overwrite: '1' }, refresh)
+    if (over.length) enqueue(over, '/upload/', { ...meta, overwrite: '1' }, refresh, (rs) => undo(() => unreplace(rs)))
     const rest = items.filter((x) => choices.get(top(x)) !== 'replace')
     if (rest.length) enqueue(rest, '/upload/', meta, refresh)
   }
@@ -257,6 +257,18 @@
   async function restore(v: string, items: { path: string; id: string }[]) {
     const res = await Promise.allSettled(items.map((x) => api.restore(v, x.id)))
     return items.flatMap((x, i) => (res[i].status === 'rejected' ? [{ name: base(x.path), error: res[i].reason as Error }] : []))
+  }
+
+  async function unreplace(rs: Replaced[]) {
+    const bad: Failed[] = []
+    for (const r of rs) {
+      const gone = await api.rm(r.vol, [r.path]).then(
+        (x) => x.failed.map((f) => ({ name: base(r.path), error: new Error(f.error) })),
+        (error: Error) => [{ name: base(r.path), error }],
+      )
+      bad.push(...(gone.length ? gone : await restore(r.vol, [r])))
+    }
+    return bad
   }
 
   function moved(done: Move[], copy: boolean) {

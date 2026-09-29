@@ -48,9 +48,21 @@ func TestUploadOverwriteIsForUsersOnly(t *testing.T) {
 	os.WriteFile(filepath.Join(f.Dir, "r.txt"), []byte("old"), 0o644)
 	md := "vol " + b64("v") + ",dir " + b64("/") + ",filename " + b64("r.txt") + ",overwrite " + b64("1")
 	w := f.do("POST", "/upload/", nil, "Tus-Resumable", "1.0.0", "Upload-Length", "3", "Upload-Metadata", md)
-	f.do("PATCH", w.Header().Get("Location"), strings.NewReader("new"), "Tus-Resumable", "1.0.0",
+	w = f.do("PATCH", w.Header().Get("Location"), strings.NewReader("new"), "Tus-Resumable", "1.0.0",
 		"Upload-Offset", "0", "Content-Type", "application/offset+octet-stream")
 	if b, _ := os.ReadFile(filepath.Join(f.Dir, "r.txt")); string(b) != "new" {
 		t.Fatalf("got %q", b)
+	}
+	id := w.Header().Get("Upload-Replaced")
+	tr := f.do("GET", "/api/trash?vol=v", nil)
+	if id == "" || !strings.Contains(tr.Body.String(), `"id":"`+id+`"`) || !strings.Contains(tr.Body.String(), `"path":"r.txt"`) {
+		t.Fatalf("replaced file not in trash: %q %s", id, tr.Body)
+	}
+	f.do("POST", "/api/rm", strings.NewReader(`{"vol":"v","paths":["r.txt"]}`))
+	if w := f.do("POST", "/api/trash/restore", strings.NewReader(`{"vol":"v","id":"`+id+`"}`)); w.Code != 204 {
+		t.Fatalf("restore %d %s", w.Code, w.Body)
+	}
+	if b, _ := os.ReadFile(filepath.Join(f.Dir, "r.txt")); string(b) != "old" {
+		t.Fatalf("after undo got %q", b)
 	}
 }
