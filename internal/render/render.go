@@ -8,9 +8,11 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"html"
 	"io"
+	"log/slog"
 	"net/http"
 	"net/url"
 	"os"
@@ -209,7 +211,8 @@ func slot(ctx context.Context, f io.Reader, rel, rawPrefix string) (result, erro
 	}
 	flags, body, ok := bytes.Cut(out, []byte("\n"))
 	if err != nil || !ok {
-		return plain(src, "complex"), nil
+		slog.Warn("render worker failed", "file", rel, "err", err, "stderr", stderr(err))
+		return result{}, errWorker
 	}
 	t, reason, _ := strings.Cut(string(flags), " ")
 	return result{html: body, truncated: t == "1", plain: strings.TrimPrefix(reason, "-")}, nil
@@ -244,6 +247,22 @@ func RunWorker() {
 		os.Exit(1)
 	}
 	os.Exit(0)
+}
+
+var errWorker = errors.New("render: worker failed")
+
+func stderr(err error) string {
+	var ee *exec.ExitError
+	if errors.As(err, &ee) {
+		return string(ee.Stderr)
+	}
+	return ""
+}
+
+func init() {
+	if self == "" {
+		slog.Warn("render: cannot find the filebox executable, markdown and code previews will fail")
+	}
 }
 
 type job struct{ Rel, RawPrefix string }

@@ -236,3 +236,17 @@ func TestBackstopFallbackIsNotCached(t *testing.T) {
 		t.Fatal("a backstop kill was cached")
 	}
 }
+
+func TestWorkerFailureIsAnUncachedError(t *testing.T) {
+	defer func(s, n string) { self, nice = s, n }(self, nice)
+	for _, bad := range []string{filepath.Join(t.TempDir(), "missing"), "/usr/bin/true"} {
+		self, nice = bad, ""
+		if w, _ := serve(t, "a.md", "# hi"); w.Code != 500 {
+			t.Fatalf("%s: %d %s", bad, w.Code, w.Body)
+		}
+	}
+	self, _ = os.Executable()
+	if w, _ := serve(t, "a.md", "# hi"); w.Code != 200 || !strings.Contains(w.Body.String(), "<h1") {
+		t.Fatalf("failure was cached: %d %s", w.Code, w.Body)
+	}
+}
