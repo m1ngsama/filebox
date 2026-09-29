@@ -82,9 +82,10 @@ var (
 )
 
 var (
-	mu     sync.Mutex
-	cache  = map[string]result{}
-	cached int
+	mu       sync.Mutex
+	cache    = map[string]result{}
+	inflight = map[string]chan struct{}{}
+	cached   int
 )
 
 const maxCache = 256 << 20
@@ -119,27 +120,12 @@ func Serve(w http.ResponseWriter, r *http.Request, root *os.Root, rel, rawPrefix
 		w.WriteHeader(http.StatusNotModified)
 		return
 	}
-	mu.Lock()
-	res, ok := cache[key]
-	mu.Unlock()
-	if !ok {
-		var err error
-		if res, err = slot(r.Context(), f, rel, rawPrefix); err != nil {
-			if r.Context().Err() == nil {
-				httpx.Error(w, err)
-			}
-			return
+	res, err := once(r.Context(), key, func() (result, error) { return slot(r.Context(), f, rel, rawPrefix) })
+	if err != nil {
+		if r.Context().Err() == nil {
+			httpx.Error(w, err)
 		}
-		mu.Lock()
-		if cached+len(res.html) > maxCache {
-			clear(cache)
-			cached = 0
-		}
-		if _, dup := cache[key]; !dup {
-			cache[key] = res
-			cached += len(res.html)
-		}
-		mu.Unlock()
+		return
 	}
 	h.Set("Content-Type", "text/html; charset=utf-8")
 	if res.truncated {
@@ -149,6 +135,42 @@ func Serve(w http.ResponseWriter, r *http.Request, root *os.Root, rel, rawPrefix
 		h.Set("X-Plain", res.plain)
 	}
 	w.Write(res.html)
+}
+
+func once(ctx context.Context, key string, run func() (result, error)) (result, error) {
+	for {
+		mu.Lock()
+		if res, ok := cache[key]; ok {
+			mu.Unlock()
+			return res, nil
+		}
+		if ch, ok := inflight[key]; ok {
+			mu.Unlock()
+			select {
+			case <-ch:
+				continue
+			case <-ctx.Done():
+				return result{}, ctx.Err()
+			}
+		}
+		ch := make(chan struct{})
+		inflight[key] = ch
+		mu.Unlock()
+		res, err := run()
+		mu.Lock()
+		delete(inflight, key)
+		close(ch)
+		if err == nil {
+			if cached+len(res.html) > maxCache {
+				clear(cache)
+				cached = 0
+			}
+			cache[key] = res
+			cached += len(res.html)
+		}
+		mu.Unlock()
+		return res, err
+	}
 }
 
 func slot(ctx context.Context, f io.Reader, rel, rawPrefix string) (result, error) {

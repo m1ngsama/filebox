@@ -7,6 +7,8 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 	"unicode/utf8"
@@ -192,5 +194,29 @@ func TestHugeHighlightFallsBackToPlainText(t *testing.T) {
 	res := Render("a.go", src, nil)
 	if res.plain != "large" || !strings.HasPrefix(string(res.html), "<pre>") {
 		t.Fatalf("plain %q, %d bytes", res.plain, len(res.html))
+	}
+}
+
+func TestConcurrentRendersOfOneFileRunOnce(t *testing.T) {
+	var runs atomic.Int32
+	release := make(chan struct{})
+	var wg sync.WaitGroup
+	for range 8 {
+		wg.Go(func() {
+			res, err := once(context.Background(), "same-key-"+t.Name(), func() (result, error) {
+				runs.Add(1)
+				<-release
+				return result{html: []byte("x")}, nil
+			})
+			if err != nil || string(res.html) != "x" {
+				t.Errorf("%v %q", err, res.html)
+			}
+		})
+	}
+	time.Sleep(100 * time.Millisecond)
+	close(release)
+	wg.Wait()
+	if n := runs.Load(); n != 1 {
+		t.Fatalf("rendered %d times", n)
 	}
 }
