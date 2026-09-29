@@ -141,6 +141,7 @@
     if (!selected || (ev.target as Element).closest('button, input, a')) return
     if (touch) return tap(i)
     if (ev.shiftKey && anchor >= 0) {
+      getSelection()?.removeAllRanges()
       for (const e of entries.slice(Math.min(anchor, i), Math.max(anchor, i) + 1)) selected.add(id(e))
       return
     }

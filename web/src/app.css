@@ -141,7 +141,7 @@ button.ghost { border-color: transparent; background: none; }
 .list-head.batch > * { flex: none; }
 .list-head.batch > .icon-btn { margin-left: auto; }
 .select-all, .sel-tools { display: none; }
-.row, .card { -webkit-touch-callout: none; }
+.row, .card, .list-head { user-select: none; -webkit-user-select: none; -webkit-touch-callout: none; }
 .row.pressing, .card.pressing { animation: press 450ms ease-out forwards; }
 @keyframes press { to { background: var(--sel); scale: 0.985; } }
 .list-head input { justify-self: center; }
