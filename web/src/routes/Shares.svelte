@@ -6,6 +6,7 @@
   import ShareRow from '../components/ShareRow.svelte'
   import { api, filesURL, type Share } from '../lib/api'
   import { link } from '../lib/router.svelte'
+  import { loc } from '../lib/format'
   import { t } from '../lib/i18n'
 
   let shares = $state<Share[] | null>(null)
@@ -21,7 +22,6 @@
   }
   load()
 
-  const loc = (s: Share) => `${s.vol}:/${s.path === '.' ? '' : s.path}`
   const where = (s: Share) => {
     if (s.path === '.') return filesURL(s.vol, '')
     const i = s.path.lastIndexOf('/')

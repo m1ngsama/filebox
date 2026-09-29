@@ -1,5 +1,4 @@
 <script lang="ts">
-  import Eye from '@lucide/svelte/icons/eye'
   import Download from '@lucide/svelte/icons/download'
   import Inbox from '@lucide/svelte/icons/inbox'
   import LogIn from '@lucide/svelte/icons/log-in'
@@ -10,10 +9,10 @@
   import RowList from './RowList.svelte'
   import EmptyState from './EmptyState.svelte'
   import { api, type Activity, type Share } from '../lib/api'
-  import { ago, date, size } from '../lib/format'
+  import { ago, date, size, loc } from '../lib/format'
   import { t } from '../lib/i18n'
 
-  const icons = { view: Eye, download: Download, upload: Inbox, login: LogIn, login_failed: ShieldAlert, token_create: KeyRound, token_revoke: KeyRound }
+  const icons = { download: Download, upload: Inbox, login: LogIn, login_failed: ShieldAlert, token_create: KeyRound, token_revoke: KeyRound }
   let events = $state<Activity[] | null>(null)
   let error = $state('')
   let more = $state(false)
@@ -42,8 +41,6 @@
     events = null
     load()
   })
-
-  const loc = (s: Share) => `${s.vol}:/${s.path === '.' ? '' : s.path}`
 </script>
 
 <div class="activity-filters">
@@ -60,9 +57,9 @@
     {@const Icon = icons[e.kind as keyof typeof icons] ?? Link}
     <Icon size={18} class="row-icon" />
     <div class="row-main">
-      <span class="row-title">{t.events[e.kind]?.(e.name) ?? e.kind}{e.kind === 'upload' ? ` · ${size(e.size)}` : ''}</span>
+      <span class="row-title">{t.events[e.kind]?.(e.kind.startsWith('share_') ? e.target : e.name) ?? e.kind}{e.kind === 'upload' ? ` · ${size(e.size)}` : ''}</span>
       <span class="tags">
-        {#if e.share && !e.kind.startsWith('share_')}<span class="tag">{e.share}</span>{/if}
+        {#if e.target && !e.kind.startsWith('share_')}<span class="tag">{e.target}</span>{/if}
         {#if e.visitor}<span class="hint">{e.kind.startsWith('login') ? t.source(e.visitor) : t.visitor(e.visitor)}</span>{/if}
         <span class="hint" title={date(e.at * 1000)}>{ago(e.at * 1000)}</span>
       </span>

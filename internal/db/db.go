@@ -115,17 +115,24 @@ var migrations = []string{
 		share_id INTEGER NOT NULL DEFAULT 0,
 		visitor TEXT NOT NULL DEFAULT '',
 		name TEXT NOT NULL DEFAULT '',
+		target TEXT NOT NULL DEFAULT '',
 		size INTEGER NOT NULL DEFAULT 0
 	);
 	CREATE INDEX events_at ON events(at);
-	CREATE UNIQUE INDEX events_view ON events(share_id, visitor, at / 86400) WHERE kind = 'view';
 	CREATE UNIQUE INDEX events_download ON events(share_id, visitor, name, at / 3600) WHERE kind = 'download';
-`,
+	CREATE UNIQUE INDEX events_login_failed ON events(visitor, at / 3600) WHERE kind = 'login_failed';
+	CREATE TABLE share_views (
+		share_id INTEGER NOT NULL,
+		day INTEGER NOT NULL,
+		n INTEGER NOT NULL,
+		PRIMARY KEY (share_id, day)
+	) WITHOUT ROWID;`,
 }
 
 type DB struct {
 	*sql.DB
 	visitors visitorKey
+	events   *writer
 }
 
 type User struct {
@@ -173,7 +180,13 @@ func Open(path string) (*DB, error) {
 		s.Close()
 		return nil, err
 	}
+	d.events = newWriter(d)
 	return d, nil
+}
+
+func (d *DB) Close() error {
+	d.events.stop()
+	return d.DB.Close()
 }
 
 func (d *DB) migrate() error {
@@ -280,8 +293,10 @@ func (d *DB) TouchToken(id, now, expiresAt int64) error {
 	return err
 }
 
-func (d *DB) DeleteToken(userID, id int64, kind string) error {
-	return one(d.Exec(`DELETE FROM tokens WHERE user_id = ? AND id = ? AND kind = ?`, userID, id, kind))
+func (d *DB) DeleteToken(userID, id int64, kind string) (string, error) {
+	var label string
+	err := d.QueryRow(`DELETE FROM tokens WHERE user_id = ? AND id = ? AND kind = ? RETURNING label`, userID, id, kind).Scan(&label)
+	return label, notFound(err)
 }
 
 func (d *DB) DeleteOtherSessions(userID, keepID int64) (int64, error) {
@@ -345,6 +360,10 @@ func (d *DB) SameShare(userID int64, vol, path, mode string, duration, now int64
 		WHERE user_id = ? AND vol = ? AND path = ? AND mode = ? AND password_hash = '' AND note = '' AND max_upload = 0
 		AND iif(expires_at = 0, 0, expires_at - created_at) = ? AND (expires_at = 0 OR expires_at > ?)
 		ORDER BY id DESC LIMIT 1`, userID, vol, path, mode, duration, now))
+}
+
+func (d *DB) ShareOf(id int64) (Share, error) {
+	return scanShare(d.QueryRow(`SELECT `+shareCols+` FROM shares WHERE id = ?`, id))
 }
 
 func (d *DB) ShareByID(userID, id int64) (Share, error) {

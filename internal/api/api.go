@@ -122,6 +122,7 @@ func (a *API) Register(mux *http.ServeMux) {
 	h("GET /api/sessions", a.sessions)
 	h("DELETE /api/sessions/{id}", a.sessionDel)
 	h("POST /api/sessions/revoke-others", a.sessionsRevokeOthers)
+	h("GET /api/activity", a.activity)
 	mux.HandleFunc("/api/", func(w http.ResponseWriter, r *http.Request) { httpx.Fail(w, 404, "not found") })
 }
 
@@ -532,15 +533,8 @@ func (a *API) tokenDel(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	p, _ := auth.From(r.Context())
-	label := ""
-	if ts, err := a.DB.ListTokens(p.UserID, "app"); err == nil {
-		for _, t := range ts {
-			if t.ID == id {
-				label = t.Label
-			}
-		}
-	}
-	if err := a.DB.DeleteToken(p.UserID, id, "app"); err != nil {
+	label, err := a.DB.DeleteToken(p.UserID, id, "app")
+	if err != nil {
 		httpx.Error(w, err)
 		return
 	}
@@ -570,7 +564,7 @@ func (a *API) sessionDel(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	p, _ := auth.From(r.Context())
-	if err := a.DB.DeleteToken(p.UserID, id, "session"); err != nil {
+	if _, err := a.DB.DeleteToken(p.UserID, id, "session"); err != nil {
 		httpx.Error(w, err)
 		return
 	}
@@ -587,4 +581,38 @@ func (a *API) sessionsRevokeOthers(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	w.WriteHeader(204)
+}
+
+var activityKinds = map[string][]string{
+	db.EventDownload: {db.EventDownload}, db.EventUpload: {db.EventUpload},
+	"login": {db.EventLogin, db.EventLoginFailed},
+	"share": {db.EventShareCreate, db.EventShareEdit, db.EventShareDelete},
+	"token": {db.EventTokenCreate, db.EventTokenRevoke},
+}
+
+func (a *API) activity(w http.ResponseWriter, r *http.Request) {
+	q := r.URL.Query()
+	p, _ := auth.From(r.Context())
+	f := db.EventFilter{UserID: p.UserID, Limit: 51, Kinds: activityKinds[q.Get("kind")]}
+	f.ShareID, _ = strconv.ParseInt(q.Get("share"), 10, 64)
+	f.Before, _ = strconv.ParseInt(q.Get("before"), 10, 64)
+	if q.Get("kind") != "" && f.Kinds == nil {
+		httpx.Fail(w, 400, "bad kind")
+		return
+	}
+	es, err := a.DB.Events(f)
+	if err != nil {
+		httpx.Error(w, err)
+		return
+	}
+	more := len(es) == f.Limit
+	if more {
+		es = es[:len(es)-1]
+	}
+	out := []map[string]any{}
+	for _, e := range es {
+		out = append(out, map[string]any{"id": e.ID, "at": e.At, "kind": e.Kind, "share_id": e.ShareID, "target": e.Target,
+			"visitor": e.Visitor, "name": e.Name, "size": e.Size})
+	}
+	httpx.JSON(w, 200, map[string]any{"events": out, "more": more})
 }

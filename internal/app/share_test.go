@@ -502,9 +502,10 @@ func TestShareActivity(t *testing.T) {
 		"Upload-Offset", "0", "Content-Type", "application/offset+octet-stream")
 	f.do("PATCH", "/api/shares/"+shareID(t, f, tok), body(`{"note":"n"}`))
 	f.do("POST", "/api/login", body(`{"name":"admin","password":"wrong"}`), "X-No-Auth", "1")
+	f.App.DB.Flush()
 	type ev struct {
-		Kind, Name, Share, Visitor string
-		Size                       int64
+		Kind, Name, Target, Visitor string
+		Size                        int64
 	}
 	got := decode[struct {
 		Events []ev
@@ -517,19 +518,24 @@ func TestShareActivity(t *testing.T) {
 			t.Fatalf("raw IP stored: %+v", e)
 		}
 	}
-	want := "login_failed share_edit upload download download view view share_create share_create login"
+	want := "login_failed share_edit upload download download share_create share_create login"
 	if strings.Join(kinds, " ") != want {
 		t.Fatalf("events %v", kinds)
 	}
-	if e := got.Events[2]; e.Name != "r.txt" || e.Size != 2 || e.Share != "v:/in" {
+	if e := got.Events[2]; e.Name != "r.txt" || e.Size != 2 || e.Target != "v:/in" {
 		t.Fatalf("upload event %+v", e)
 	}
 	if e := got.Events[4]; e.Name != "a.txt" || e.Size != 5 || e.Visitor == "" {
 		t.Fatalf("download event %+v", e)
 	}
-	views := decode[struct{ Events []ev }](t, f.do("GET", "/api/activity?kind=view&share="+shareID(t, f, tok), nil)).Events
-	if len(views) != 2 || views[0].Visitor == views[1].Visitor {
-		t.Fatalf("views %+v", views)
+	dls := decode[struct{ Events []ev }](t, f.do("GET", "/api/activity?kind=download&share="+shareID(t, f, tok), nil)).Events
+	if len(dls) != 2 || dls[0].Target != "v:/d" {
+		t.Fatalf("downloads %+v", dls)
+	}
+	var rows int
+	f.App.DB.QueryRow(`SELECT count(*) FROM events WHERE kind = 'view'`).Scan(&rows)
+	if rows != 0 {
+		t.Fatalf("%d view rows", rows)
 	}
 	if w := f.do("GET", "/api/activity?kind=bogus", nil); w.Code != 400 {
 		t.Fatalf("bogus kind %d", w.Code)

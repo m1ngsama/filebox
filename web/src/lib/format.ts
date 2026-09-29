@@ -116,6 +116,8 @@ export function days(now = new Date()) {
   return (ms: number) => (ms >= today ? t.today : ms >= yesterday ? t.yesterday : ms >= week ? t.thisWeek : t.earlier)
 }
 
+export const loc = (s: { vol: string; path: string }) => `${s.vol}:/${s.path === '.' ? '' : s.path}`
+
 export const shareSummary = (s: { mode: 'read' | 'upload' | 'drop'; expires: number; views: number; has_password: boolean }, now = Date.now()) =>
   [
     t.modes[s.mode],

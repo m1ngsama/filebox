@@ -1,6 +1,7 @@
 package db
 
 import (
+	"strconv"
 	"strings"
 	"testing"
 )
@@ -33,48 +34,87 @@ func TestVisitorHash(t *testing.T) {
 	}
 }
 
-func TestEventsViewOncePerDayAndPrune(t *testing.T) {
+func TestEventsBatchedAndPruned(t *testing.T) {
 	d := open(t)
 	uid, _ := d.SetPassword("admin", "h")
+	other, _ := d.SetPassword("bob", "h")
 	s := &Share{Token: "tok", UserID: uid, Vol: "v", Path: "p", Mode: "read", CreatedAt: 1}
 	d.InsertShare(s)
 	day := int64(86400 * 100)
+	for _, at := range []int64{day + 10, day + 20} {
+		d.View(s.ID, "a", at)
+	}
+	d.View(s.ID, "b", day+30)
+	d.View(s.ID, "a", day+86400)
 	for _, e := range []Event{
-		{At: day + 10, ShareID: s.ID, Kind: EventView, Visitor: "a"},
-		{At: day + 20, ShareID: s.ID, Kind: EventView, Visitor: "a"},
-		{At: day + 30, ShareID: s.ID, Kind: EventView, Visitor: "b"},
-		{At: day + 86400, ShareID: s.ID, Kind: EventView, Visitor: "a"},
 		{At: day + 40, ShareID: s.ID, Kind: EventDownload, Visitor: "a", Name: "x.txt", Size: 3},
 		{At: day + 45, ShareID: s.ID, Kind: EventDownload, Visitor: "a", Name: "x.txt", Size: 3},
 		{At: day + 50, UserID: uid, Kind: EventLogin},
-		{At: day + 60, Kind: EventLoginFailed},
+		{At: day + 60, Kind: EventLoginFailed, Visitor: "z"},
+		{At: day + 61, Kind: EventLoginFailed, Visitor: "z"},
 	} {
-		if err := d.Log(e); err != nil {
-			t.Fatal(err)
-		}
+		d.Log(e)
 	}
+	d.Flush()
 	got, _ := d.ShareByToken("tok")
-	if got.Views != 3 {
-		t.Fatalf("views = %d", got.Views)
+	var rows, perDay int
+	d.QueryRow(`SELECT count(*), max(n) FROM share_views WHERE share_id = ?`, s.ID).Scan(&rows, &perDay)
+	if got.Views != 3 || rows != 2 || perDay != 2 {
+		t.Fatalf("views = %d, rows %d, max per day %d", got.Views, rows, perDay)
 	}
 	all, err := d.Events(EventFilter{UserID: uid, Limit: 50})
-	if err != nil || len(all) != 6 || all[0].Kind != EventLoginFailed || all[len(all)-1].Share != "v:/p" {
+	if err != nil || len(all) != 3 || all[0].Kind != EventLoginFailed || all[2].UserID != uid {
 		t.Fatalf("events %+v %v", all, err)
 	}
-	if es, _ := d.Events(EventFilter{UserID: uid + 1, Limit: 50}); len(es) != 1 {
+	if es, _ := d.Events(EventFilter{UserID: other, Limit: 50}); len(es) != 0 {
 		t.Fatalf("another user sees %+v", es)
 	}
-	views, _ := d.Events(EventFilter{UserID: uid, ShareID: s.ID, Kinds: []string{EventView}, Limit: 2})
-	if len(views) != 2 {
-		t.Fatalf("filtered %+v", views)
+	dl, _ := d.Events(EventFilter{UserID: uid, ShareID: s.ID, Kinds: []string{EventDownload}, Limit: 1})
+	if len(dl) != 1 {
+		t.Fatalf("filtered %+v", dl)
 	}
-	if page, _ := d.Events(EventFilter{UserID: uid, Before: views[1].ID, Limit: 50}); len(page) == 0 || page[0].ID >= views[1].ID {
+	if page, _ := d.Events(EventFilter{UserID: uid, Before: all[1].ID, Limit: 50}); len(page) != 1 || page[0].ID != all[2].ID {
 		t.Fatalf("paging %+v", page)
 	}
-	if n, _ := d.PruneEvents(day + 86400); n != 5 {
+	for i := range 5 {
+		d.Log(Event{At: day + 90000 + int64(i), UserID: uid, Kind: EventTokenCreate})
+	}
+	d.Flush()
+	if n, _ := d.PruneEvents(day+86400, 3); n != 5 {
 		t.Fatalf("pruned %d", n)
 	}
-	if left, _ := d.Events(EventFilter{UserID: uid, Limit: 50}); len(left) != 1 || left[0].At != day+86400 {
+	left, _ := d.Events(EventFilter{UserID: uid, Limit: 50})
+	if len(left) != 3 || left[2].At != day+90002 {
 		t.Fatalf("after prune %+v", left)
+	}
+	d.QueryRow(`SELECT count(*) FROM share_views`).Scan(&rows)
+	if rows != 1 {
+		t.Fatalf("share_views after prune %d", rows)
+	}
+}
+
+func TestEventQueueNeverBlocks(t *testing.T) {
+	d := open(t)
+	d.events.stop()
+	for range queueSize + 10 {
+		d.Log(Event{Kind: EventLogin})
+	}
+	if d.events.dropped.Load() != 10 {
+		t.Fatalf("dropped %d", d.events.dropped.Load())
+	}
+	d.Flush()
+}
+
+func TestViewDedupeIsBounded(t *testing.T) {
+	d := open(t)
+	for i := range maxSeen + 5 {
+		d.View(1, strconv.Itoa(i), 86400)
+	}
+	if len(d.events.seen) != maxSeen {
+		t.Fatalf("seen %d", len(d.events.seen))
+	}
+	d.View(1, "x", 2*86400)
+	if len(d.events.seen) != 1 {
+		t.Fatal("seen set not reset on a new day")
 	}
 }

@@ -4,7 +4,6 @@ import (
 	"crypto/rand"
 	"encoding/base64"
 	"io/fs"
-	"log/slog"
 	"net/http"
 	"net/url"
 	"os"
@@ -46,7 +45,6 @@ func (s *Service) Register(mux *http.ServeMux) {
 	mux.HandleFunc("GET /s/{token}/render", s.render)
 	mux.HandleFunc("GET /s/{token}/meta", s.meta)
 	mux.HandleFunc("/s/{token}/upload/{rest...}", s.upload)
-	mux.Handle("GET /api/activity", s.Auth.RequireSession(http.HandlerFunc(s.activity)))
 	s.Uploads.Received = s.received
 }
 
@@ -58,55 +56,26 @@ func label(sh db.Share) string {
 }
 
 func (s *Service) log(r *http.Request, sh db.Share, kind, name string, size int64) {
-	e := db.Event{At: time.Now().Unix(), UserID: sh.UserID, ShareID: sh.ID, Kind: kind, Name: name, Size: size}
+	e := db.Event{At: time.Now().Unix(), UserID: sh.UserID, ShareID: sh.ID, Kind: kind, Name: name, Target: label(sh), Size: size}
 	if r != nil {
 		e.Visitor = s.DB.Visitor(auth.ClientIP(r))
 	}
-	if err := s.DB.Log(e); err != nil {
-		slog.Error("activity log", "kind", kind, "err", err)
-	}
+	s.DB.Log(e)
 }
 
 func (s *Service) received(owner string, rel string, size int64) {
+	if sh, ok := s.owner(owner); ok {
+		s.log(nil, sh, db.EventUpload, path.Base(rel), size)
+	}
+}
+
+func (s *Service) owner(owner string) (db.Share, bool) {
 	id, err := strconv.ParseInt(strings.TrimPrefix(owner, "share:"), 10, 64)
-	if err == nil && strings.HasPrefix(owner, "share:") {
-		s.log(nil, db.Share{ID: id}, db.EventUpload, path.Base(rel), size)
+	if err != nil || !strings.HasPrefix(owner, "share:") {
+		return db.Share{}, false
 	}
-}
-
-var kinds = map[string][]string{
-	db.EventView: {db.EventView}, db.EventDownload: {db.EventDownload}, db.EventUpload: {db.EventUpload},
-	"login": {db.EventLogin, db.EventLoginFailed},
-	"share": {db.EventShareCreate, db.EventShareEdit, db.EventShareDelete},
-	"token": {db.EventTokenCreate, db.EventTokenRevoke},
-}
-
-func (s *Service) activity(w http.ResponseWriter, r *http.Request) {
-	q := r.URL.Query()
-	p, _ := auth.From(r.Context())
-	f := db.EventFilter{UserID: p.UserID, Limit: 50, Kinds: kinds[q.Get("kind")]}
-	f.ShareID, _ = strconv.ParseInt(q.Get("share"), 10, 64)
-	f.Before, _ = strconv.ParseInt(q.Get("before"), 10, 64)
-	if q.Get("kind") != "" && f.Kinds == nil {
-		httpx.Fail(w, 400, "bad kind")
-		return
-	}
-	f.Limit++
-	es, err := s.DB.Events(f)
-	if err != nil {
-		httpx.Error(w, err)
-		return
-	}
-	more := len(es) == f.Limit
-	if more {
-		es = es[:len(es)-1]
-	}
-	out := []map[string]any{}
-	for _, e := range es {
-		out = append(out, map[string]any{"id": e.ID, "at": e.At, "kind": e.Kind, "share_id": e.ShareID, "share": e.Share,
-			"visitor": e.Visitor, "name": e.Name, "size": e.Size})
-	}
-	httpx.JSON(w, 200, map[string]any{"events": out, "more": more})
+	sh, err := s.DB.ShareOf(id)
+	return sh, err == nil
 }
 
 var modes = map[string]bool{"read": true, "upload": true, "drop": true}
@@ -166,7 +135,7 @@ func (s *Service) create(w http.ResponseWriter, r *http.Request) {
 		httpx.Error(w, err)
 		return
 	}
-	s.log(nil, *sh, db.EventShareCreate, label(*sh), 0)
+	s.log(nil, *sh, db.EventShareCreate, "", 0)
 	httpx.JSON(w, 201, map[string]any{"id": sh.ID, "token": sh.Token})
 }
 
@@ -248,7 +217,7 @@ func (s *Service) edit(w http.ResponseWriter, r *http.Request) {
 		httpx.Error(w, err)
 		return
 	}
-	s.log(nil, sh, db.EventShareEdit, label(sh), 0)
+	s.log(nil, sh, db.EventShareEdit, "", 0)
 	w.WriteHeader(204)
 }
 
@@ -267,7 +236,7 @@ func (s *Service) remove(w http.ResponseWriter, r *http.Request) {
 		httpx.Error(w, err)
 		return
 	}
-	s.log(nil, sh, db.EventShareDelete, label(sh), 0)
+	s.log(nil, sh, db.EventShareDelete, "", 0)
 	w.WriteHeader(204)
 }
 
@@ -348,7 +317,7 @@ func (s *Service) info(w http.ResponseWriter, r *http.Request) {
 		httpx.JSON(w, 200, map[string]any{"locked": true, "mode": o.sh.Mode})
 		return
 	}
-	s.log(r, o.sh, db.EventView, "", 0)
+	s.DB.View(o.sh.ID, s.DB.Visitor(auth.ClientIP(r)), time.Now().Unix())
 	out := map[string]any{"name": o.name(), "dir": o.dir, "mode": o.sh.Mode, "locked": false,
 		"note": o.sh.Note, "expires": o.sh.ExpiresAt, "max_upload": o.sh.MaxUpload}
 	if !o.dir {

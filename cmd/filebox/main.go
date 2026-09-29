@@ -117,7 +117,9 @@ func serveCmd(args []string) error {
 		for {
 			up.Sweep(24 * time.Hour)
 			d.PurgeTokens(time.Now().Unix())
-			d.PruneEvents(time.Now().Add(-90 * 24 * time.Hour).Unix())
+			if _, err := d.PruneEvents(time.Now().Add(-90*24*time.Hour).Unix(), db.MaxEvents); err != nil {
+				slog.Error("prune activity", "err", err)
+			}
 			pk.Sweep()
 			if err := ix.Scan(set); err != nil {
 				slog.Error("index scan", "err", err)
@@ -268,7 +270,8 @@ func tokenCmd(args []string) error {
 		if err != nil {
 			return err
 		}
-		return d.DeleteToken(u.ID, id, "app")
+		_, err = d.DeleteToken(u.ID, id, "app")
+		return err
 	default:
 		return errors.New(usage)
 	}

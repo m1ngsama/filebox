@@ -5,14 +5,16 @@ import (
 	"crypto/rand"
 	"crypto/sha256"
 	"encoding/hex"
+	"log/slog"
 	"net/netip"
+	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 )
 
 const (
-	EventView        = "view"
 	EventDownload    = "download"
 	EventUpload      = "upload"
 	EventLogin       = "login"
@@ -22,13 +24,18 @@ const (
 	EventShareDelete = "share_delete"
 	EventTokenCreate = "token_create"
 	EventTokenRevoke = "token_revoke"
+
+	MaxEvents     = 500_000
+	maxSeen       = 1 << 16
+	queueSize     = 4096
+	flushInterval = 2 * time.Second
+	pruneBatch    = 10_000
 )
 
 type Event struct {
-	ID, At, UserID, ShareID int64
-	Kind, Visitor, Name     string
-	Size                    int64
-	Share                   string
+	ID, At, UserID, ShareID     int64
+	Kind, Visitor, Name, Target string
+	Size                        int64
 }
 
 type visitorKey struct {
@@ -63,26 +70,147 @@ func (d *DB) visitor(ip string, day int64) string {
 	return hex.EncodeToString(m.Sum(nil)[:8])
 }
 
-func (d *DB) Log(e Event) error {
-	if e.ShareID != 0 && e.UserID == 0 {
-		d.QueryRow(`SELECT user_id FROM shares WHERE id = ?`, e.ShareID).Scan(&e.UserID)
+type item struct {
+	ev   Event
+	view bool
+	done chan struct{}
+}
+
+type writer struct {
+	d       *DB
+	ch      chan item
+	quit    chan struct{}
+	exited  chan struct{}
+	once    sync.Once
+	dropped atomic.Int64
+	mu      sync.Mutex
+	day     int64
+	seen    map[string]struct{}
+}
+
+func newWriter(d *DB) *writer {
+	w := &writer{d: d, ch: make(chan item, queueSize), quit: make(chan struct{}), exited: make(chan struct{}), seen: map[string]struct{}{}}
+	go w.run()
+	return w
+}
+
+func (w *writer) send(it item) bool {
+	select {
+	case w.ch <- it:
+		return true
+	default:
+		w.dropped.Add(1)
+		return false
 	}
-	tx, err := d.Begin()
+}
+
+func (w *writer) run() {
+	defer close(w.exited)
+	t := time.NewTicker(flushInterval)
+	defer t.Stop()
+	var batch []item
+	for {
+		select {
+		case it := <-w.ch:
+			batch = append(batch, it)
+			if it.done == nil && len(batch) < 512 {
+				continue
+			}
+		case <-t.C:
+		case <-w.quit:
+			for len(w.ch) > 0 {
+				batch = append(batch, <-w.ch)
+			}
+			w.write(batch)
+			return
+		}
+		w.write(batch)
+		batch = batch[:0]
+	}
+}
+
+func (w *writer) write(batch []item) {
+	if n := w.dropped.Swap(0); n > 0 {
+		slog.Warn("activity log queue full, events dropped", "count", n)
+	}
+	var err error
+	if len(batch) > 0 {
+		err = w.insert(batch)
+	}
+	if err != nil {
+		slog.Error("activity log", "events", len(batch), "err", err)
+	}
+	for _, it := range batch {
+		if it.done != nil {
+			close(it.done)
+		}
+	}
+}
+
+func (w *writer) insert(batch []item) error {
+	tx, err := w.d.Begin()
 	if err != nil {
 		return err
 	}
 	defer tx.Rollback()
-	n, err := affected(tx.Exec(`INSERT OR IGNORE INTO events (at, user_id, kind, share_id, visitor, name, size) VALUES (?, ?, ?, ?, ?, ?, ?)`,
-		e.At, e.UserID, e.Kind, e.ShareID, e.Visitor, e.Name, e.Size))
-	if err != nil {
-		return err
-	}
-	if n > 0 && e.Kind == EventView {
-		if _, err := tx.Exec(`UPDATE shares SET views = views + 1 WHERE id = ?`, e.ShareID); err != nil {
-			return err
+	for _, it := range batch {
+		e := it.ev
+		switch {
+		case it.done != nil:
+			continue
+		case it.view:
+			if _, err := tx.Exec(`INSERT INTO share_views (share_id, day, n) VALUES (?, ?, 1)
+				ON CONFLICT DO UPDATE SET n = n + 1`, e.ShareID, e.At/86400); err != nil {
+				return err
+			}
+			if _, err := tx.Exec(`UPDATE shares SET views = views + 1 WHERE id = ?`, e.ShareID); err != nil {
+				return err
+			}
+		default:
+			if _, err := tx.Exec(`INSERT OR IGNORE INTO events (at, user_id, kind, share_id, visitor, name, target, size)
+				VALUES (?1, iif(?2 = 0, coalesce((SELECT user_id FROM shares WHERE id = ?4), 0), ?2), ?3, ?4, ?5, ?6, ?7, ?8)`,
+				e.At, e.UserID, e.Kind, e.ShareID, e.Visitor, e.Name, e.Target, e.Size); err != nil {
+				return err
+			}
 		}
 	}
 	return tx.Commit()
+}
+
+func (w *writer) stop() {
+	w.once.Do(func() {
+		close(w.quit)
+		<-w.exited
+	})
+}
+
+func (d *DB) Log(e Event) { d.events.send(item{ev: e}) }
+
+func (d *DB) View(shareID int64, visitor string, now int64) {
+	w := d.events
+	key := strconv.FormatInt(shareID, 10) + ":" + visitor
+	w.mu.Lock()
+	if day := now / 86400; day != w.day {
+		w.day, w.seen = day, map[string]struct{}{}
+	}
+	_, dup := w.seen[key]
+	full := len(w.seen) >= maxSeen
+	if !dup && !full {
+		w.seen[key] = struct{}{}
+	}
+	w.mu.Unlock()
+	if !dup && !full {
+		w.send(item{ev: Event{At: now, ShareID: shareID}, view: true})
+	}
+}
+
+func (d *DB) Flush() {
+	done := make(chan struct{})
+	select {
+	case d.events.ch <- item{done: done}:
+		<-done
+	case <-d.events.exited:
+	}
 }
 
 type EventFilter struct {
@@ -92,25 +220,24 @@ type EventFilter struct {
 }
 
 func (d *DB) Events(f EventFilter) ([]Event, error) {
-	q := `SELECT e.id, e.at, e.user_id, e.share_id, e.kind, e.visitor, e.name, e.size,
-		coalesce(s.vol || ':/' || iif(s.path = '.', '', s.path), '')
-		FROM events e LEFT JOIN shares s ON s.id = e.share_id WHERE e.user_id IN (?, 0)`
+	q := `SELECT id, at, user_id, share_id, kind, visitor, name, target, size FROM events
+		WHERE (user_id = ?1 OR (user_id = 0 AND ?1 = (SELECT min(id) FROM users)))`
 	args := []any{f.UserID}
 	if f.ShareID != 0 {
-		q += ` AND e.share_id = ?`
+		q += ` AND share_id = ?`
 		args = append(args, f.ShareID)
 	}
 	if len(f.Kinds) > 0 {
-		q += ` AND e.kind IN (?` + strings.Repeat(`, ?`, len(f.Kinds)-1) + `)`
+		q += ` AND kind IN (?` + strings.Repeat(`, ?`, len(f.Kinds)-1) + `)`
 		for _, k := range f.Kinds {
 			args = append(args, k)
 		}
 	}
 	if f.Before > 0 {
-		q += ` AND e.id < ?`
+		q += ` AND id < ?`
 		args = append(args, f.Before)
 	}
-	q += ` ORDER BY e.id DESC LIMIT ?`
+	q += ` ORDER BY id DESC LIMIT ?`
 	args = append(args, f.Limit)
 	rows, err := d.Query(q, args...)
 	if err != nil {
@@ -120,7 +247,7 @@ func (d *DB) Events(f EventFilter) ([]Event, error) {
 	var out []Event
 	for rows.Next() {
 		var e Event
-		if err := rows.Scan(&e.ID, &e.At, &e.UserID, &e.ShareID, &e.Kind, &e.Visitor, &e.Name, &e.Size, &e.Share); err != nil {
+		if err := rows.Scan(&e.ID, &e.At, &e.UserID, &e.ShareID, &e.Kind, &e.Visitor, &e.Name, &e.Target, &e.Size); err != nil {
 			return nil, err
 		}
 		out = append(out, e)
@@ -128,6 +255,33 @@ func (d *DB) Events(f EventFilter) ([]Event, error) {
 	return out, rows.Err()
 }
 
-func (d *DB) PruneEvents(before int64) (int64, error) {
-	return affected(d.Exec(`DELETE FROM events WHERE at < ?`, before))
+func (d *DB) PruneEvents(before int64, keep int) (int64, error) {
+	var total int64
+	del := func(q string, args ...any) error {
+		for {
+			n, err := affected(d.Exec(q, args...))
+			total += n
+			if err != nil || n < pruneBatch {
+				return err
+			}
+		}
+	}
+	if err := del(`DELETE FROM events WHERE id IN (SELECT id FROM events WHERE at < ? LIMIT ?)`, before, pruneBatch); err != nil {
+		return total, err
+	}
+	if _, err := d.Exec(`DELETE FROM share_views WHERE day < ?`, before/86400); err != nil {
+		return total, err
+	}
+	var n int64
+	if err := d.QueryRow(`SELECT count(*) FROM events`).Scan(&n); err != nil {
+		return total, err
+	}
+	for over := n - int64(keep); over > 0; over -= pruneBatch {
+		m, err := affected(d.Exec(`DELETE FROM events WHERE id IN (SELECT id FROM events ORDER BY id LIMIT ?)`, min(over, pruneBatch)))
+		total += m
+		if err != nil {
+			return total, err
+		}
+	}
+	return total, nil
 }
