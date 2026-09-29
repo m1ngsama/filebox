@@ -98,6 +98,7 @@ export const t = {
   eta: (s: number) => `剩余约 ${s < 60 ? `${Math.ceil(s)} 秒` : s < 3600 ? `${Math.ceil(s / 60)} 分钟` : `${Math.round(s / 360) / 10} 小时`}`,
   uploadsFailed: (n: number) => `${n} 项没有上传完成`,
   uploadDone: '已完成',
+  moreUploads: (n: number) => `还有 ${n} 项`,
   retryItem: (n: string) => `重试 ${n}`,
   cancelItem: (n: string) => `取消上传 ${n}`,
   conflictTitle: '已有同名项目',

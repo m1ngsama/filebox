@@ -319,6 +319,7 @@ kbd { display: inline-block; min-width: 24px; padding: 1px 6px; border: 1px soli
 .uploads .meta { color: var(--danger); font-size: var(--text-xs); overflow-wrap: anywhere; }
 .uploads .up-ok { color: var(--accent); }
 .uploads li.error .name { color: var(--fg); }
+.uploads li.more-rows { display: block; min-height: 0; padding: var(--space-2); color: var(--muted); font-size: var(--text-xs); }
 .uploads .hint { margin: 0; padding: var(--space-2) var(--space-3); border-top: 1px solid var(--line); font-size: var(--text-xs); }
 
 .drop-over, .crumbs a.drop-over { background: var(--sel); color: var(--fg); box-shadow: inset 0 0 0 2px var(--accent); }

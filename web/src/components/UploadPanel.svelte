@@ -16,7 +16,10 @@
 
   const collapsed = $derived(open === null ? narrow.current : !open)
   const active = $derived(totals.files > totals.ok)
+  const ROWS = 50
   const failed = $derived(uploads.filter((u) => u.state === 'error').length)
+  const resumable = $derived(uploads.some((u) => u.state === 'error' && u.error !== t.cancelled))
+  const rows = $derived(uploads.length <= ROWS ? uploads : uploads.filter((u) => u.state !== 'done').slice(0, ROWS))
   const left = $derived(totals.speed > 0 ? (totals.bytes - totals.sent) / totals.speed : 0)
   const title = $derived(
     active
@@ -37,7 +40,7 @@
     {#if active}<progress class="up-total" max={totals.bytes || 1} value={totals.sent}></progress>{/if}
     {#if !collapsed}
       <ul>
-        {#each uploads as u (u.id)}
+        {#each rows as u (u.id)}
           <li class={u.state}>
             <FileIcon name={u.name} dir={u.dir} size={20} />
             <span class="name" title={u.name}>{u.name}</span>
@@ -56,8 +59,9 @@
             {/if}
           </li>
         {/each}
+        {#if rows.length < uploads.length}<li class="more-rows">{t.moreUploads(uploads.length - rows.length)}</li>{/if}
       </ul>
-      {#if failed}<p class="hint">{t.resumeHint}</p>{/if}
+      {#if resumable}<p class="hint">{t.resumeHint}</p>{/if}
     {/if}
   </aside>
 {/if}

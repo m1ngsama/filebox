@@ -913,11 +913,12 @@ test('uploads run three at a time under a header with totals and leave the list 
   const held: (() => void)[] = []
   let inflight = 0
   let peak = 0
+  let open = false
   await page.route('**/upload/*', async (route) => {
     if (route.request().method() !== 'PATCH') return route.continue()
     inflight++
     peak = Math.max(peak, inflight)
-    await new Promise<void>((r) => held.push(r))
+    if (!open) await new Promise<void>((r) => held.push(r))
     await route.continue()
     inflight--
   })
@@ -926,23 +927,21 @@ test('uploads run three at a time under a header with totals and leave the list 
   const panel = page.locator('.uploads')
   await expect(panel.locator('li')).toHaveCount(5)
   await expect.poll(() => held.length).toBe(3)
-  await page.waitForTimeout(300)
-  expect(held.length).toBe(3)
   await expect(panel.locator('header')).toContainText(t.uploading(0, 5))
   await expect(panel.locator('li.queued')).toHaveCount(2)
+  expect(held.length).toBe(3)
   await panel.getByRole('button', { name: t.cancelItem('p4.txt') }).click()
   await expect(panel.locator('li.error')).toContainText(t.cancelled)
   await expect(panel.locator('header')).toContainText(t.uploading(0, 4))
   await page.getByRole('button', { name: t.uploading(0, 4) }).click()
   await expect(panel.locator('li')).toHaveCount(0)
   await page.getByRole('button', { name: t.uploading(0, 4) }).click()
-  while (held.length || inflight) {
-    held.splice(0).forEach((r) => r())
-    await page.waitForTimeout(50)
-  }
+  open = true
+  held.splice(0).forEach((r) => r())
   await expect(page.locator('.toast', { hasText: t.uploaded(4) })).toHaveCount(1)
   await expect(panel.locator('li')).toHaveCount(1)
   await expect(panel.locator('header')).toContainText(t.uploadsFailed(1))
+  await expect(panel.getByText(t.resumeHint)).toHaveCount(0)
   expect(peak).toBe(3)
   for (let i = 0; i < 4; i++) await expect(row(page, `p${i}.txt`)).toBeVisible()
   await page.unrouteAll()
@@ -950,6 +949,16 @@ test('uploads run three at a time under a header with totals and leave the list 
   await expect(page.locator('.toast', { hasText: t.uploaded(1) })).toHaveCount(1)
   await expect(panel).toHaveCount(0)
   expect(readFileSync(join(server.vol, 'p4.txt'), 'utf8')).toBe('p4')
+})
+
+test('a large batch renders a bounded number of rows', async ({ page }) => {
+  await login(page)
+  await page.route('**/upload/*', (route) => (route.request().method() === 'PATCH' ? undefined : route.continue()))
+  await fileInput(page).setInputFiles(Array.from({ length: 60 }, (_, i) => ({ name: `r${i}.txt`, mimeType: 'text/plain', buffer: Buffer.from('r') })))
+  const panel = page.locator('.uploads')
+  await expect(panel.locator('li.more-rows')).toHaveText(t.moreUploads(10))
+  await expect(panel.locator('li:not(.more-rows)')).toHaveCount(50)
+  await expect(panel.locator('header')).toContainText(t.uploading(0, 60))
 })
 
 test('a name clash asks to replace, keep both or skip', async ({ page, server }) => {
