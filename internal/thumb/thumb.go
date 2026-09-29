@@ -154,12 +154,16 @@ func (s *Service) markFailed(key string) {
 }
 
 func (s *Service) Serve(w http.ResponseWriter, r *http.Request, v *vol.Volume, rel string) {
+	s.ServeFrom(w, r, v.Root, rel, v.Name, rel)
+}
+
+func (s *Service) ServeFrom(w http.ResponseWriter, r *http.Request, root *os.Root, open, volName, rel string) {
 	kind := Kind(rel)
 	if s.FFmpeg == "" || kind == "" {
 		httpx.Fail(w, 404, "no thumbnail")
 		return
 	}
-	f, err := v.Root.Open(rel)
+	f, err := root.Open(open)
 	if err != nil {
 		httpx.Fail(w, 404, "no thumbnail")
 		return
@@ -170,7 +174,7 @@ func (s *Service) Serve(w http.ResponseWriter, r *http.Request, v *vol.Volume, r
 		httpx.Fail(w, 404, "no thumbnail")
 		return
 	}
-	key := cacheKey(v.Name, rel, fi.Size(), fi.ModTime().UnixNano())
+	key := cacheKey(volName, rel, fi.Size(), fi.ModTime().UnixNano())
 	out := filepath.Join(s.Dir, key[:2], key+"."+s.format.ext)
 	if !fileExists(out) {
 		if s.isFailed(key) {

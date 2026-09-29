@@ -186,20 +186,6 @@ func (o opened) root(p string) (*os.Root, string, func(), error) {
 	return r, rel, func() { r.Close() }, nil
 }
 
-func (o opened) sub(p string) (string, error) {
-	rel, err := vol.Clean(p)
-	if err != nil {
-		return "", err
-	}
-	if rel == "." {
-		return o.sh.Path, nil
-	}
-	if !o.dir {
-		return "", fs.ErrNotExist
-	}
-	return path.Join(o.sh.Path, rel), nil
-}
-
 func (s *Service) info(w http.ResponseWriter, r *http.Request) {
 	o, ok := s.open(w, r)
 	if !ok {
@@ -336,12 +322,17 @@ func (s *Service) thumb(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	rel, err := o.sub(r.PathValue("path"))
+	root, rel, done, err := o.root(r.PathValue("path"))
 	if err != nil {
 		httpx.Error(w, err)
 		return
 	}
-	s.Thumbs.Serve(w, r, o.v, rel)
+	defer done()
+	key := rel
+	if o.dir {
+		key = path.Join(o.sh.Path, rel)
+	}
+	s.Thumbs.ServeFrom(w, r, root, rel, o.v.Name, key)
 }
 
 func (s *Service) upload(w http.ResponseWriter, r *http.Request) {

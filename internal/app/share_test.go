@@ -301,3 +301,30 @@ func TestShareUnlockAndLoginLimitsSeparate(t *testing.T) {
 		t.Fatalf("share unlock after bad logins %d", c)
 	}
 }
+
+func TestShareThumbStaysInShare(t *testing.T) {
+	f := newTestApp(t)
+	fake := filepath.Join(t.TempDir(), "ffmpeg")
+	os.WriteFile(fake, []byte("#!/bin/sh\nfor a; do last=$a; done\ncat <&3 > \"$last\"\n"), 0o755)
+	f.App.Thumbs.FFmpeg = fake
+	f.write(t, "pub/ok.jpg", "shared")
+	f.write(t, "secret.jpg", "private")
+	os.Symlink("../secret.jpg", filepath.Join(f.Dir, "pub/link.jpg"))
+	tok := mkShare(t, f, `{"vol":"v","path":"pub","mode":"read"}`)
+	if c, b, _ := anon(f, "GET", "/s/"+tok+"/thumb/ok.jpg", ""); c != 200 || b != "shared" {
+		t.Fatalf("thumb inside the share %d %q", c, b)
+	}
+	if c, _, _ := anon(f, "GET", "/s/"+tok+"/raw/link.jpg", ""); c == 200 {
+		t.Fatal("raw followed a link out of the share")
+	}
+	if c, b, _ := anon(f, "GET", "/s/"+tok+"/thumb/link.jpg", ""); c == 200 || strings.Contains(b, "private") {
+		t.Fatalf("thumb followed a link out of the share: %d %q", c, b)
+	}
+	if w := f.do("GET", "/thumb/v/pub/link.jpg", nil); w.Code != 200 || w.Body.String() != "private" {
+		t.Fatalf("owner thumb of a link inside the volume %d", w.Code)
+	}
+	file := mkShare(t, f, `{"vol":"v","path":"pub/ok.jpg","mode":"read"}`)
+	if c, b, _ := anon(f, "GET", "/s/"+file+"/thumb/", ""); c != 200 || b != "shared" {
+		t.Fatalf("file share thumb %d %q", c, b)
+	}
+}
