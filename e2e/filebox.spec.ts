@@ -702,7 +702,7 @@ test.describe('with an English browser', () => {
   test('dates stay in the UI language', async ({ page }) => {
     await login(page)
     await page.goto('/settings')
-    await expect(page.getByRole('list', { name: t.sessions }).getByText(new RegExp(`^${t.lastUsed('(现在|\\d+秒钟前)')}$`))).toBeVisible()
+    await expect(page.getByRole('list', { name: t.sessions }).getByText(new RegExp(`^${t.lastUsed(t.justNow)}$`))).toBeVisible()
   })
 })
 
@@ -789,7 +789,7 @@ test.describe('on a phone', () => {
     await expect(page.locator('.bar .title')).toHaveText('many')
     await expect(page.getByRole('link', { name: t.upTo('v') })).toBeVisible()
     await expect(page.locator('.crumbs')).toBeHidden()
-    await expect(row(page, 'm-01.txt')).toContainText('2 B · ')
+    await expect(row(page, 'm-01.txt')).toContainText(`2 B · ${t.justNow}`)
     await expect(row(page, 'm-01.txt').locator('input[type=checkbox]')).toBeHidden()
     expect((await row(page, 'm-01.txt').boundingBox())!.height).toBe(56)
 

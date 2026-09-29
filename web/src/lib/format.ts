@@ -48,10 +48,11 @@ const dtf = new Intl.DateTimeFormat(lang, { dateStyle: 'short', timeStyle: 'shor
 export const date = (ms: number) => dtf.format(ms)
 
 const rtf = new Intl.RelativeTimeFormat(lang, { numeric: 'auto' })
-const steps: [Intl.RelativeTimeFormatUnit, number][] = [['second', 60], ['minute', 60], ['hour', 24], ['day', 30], ['month', 12], ['year', Infinity]]
+const steps: [Intl.RelativeTimeFormatUnit, number][] = [['minute', 60], ['hour', 24], ['day', 30], ['month', 12], ['year', Infinity]]
 
 export function ago(ms: number) {
-  let v = (ms - Date.now()) / 1000
+  let v = (ms - Date.now()) / 60000
+  if (Math.abs(v) < 1) return t.justNow
   for (const [unit, n] of steps) {
     if (Math.abs(v) < n) return rtf.format(Math.round(v), unit)
     v /= n
