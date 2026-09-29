@@ -86,6 +86,17 @@ func TestShareZip(t *testing.T) {
 	if b := f.do("GET", "/api/shares", nil).Body.String(); !strings.Contains(b, `"hits":2`) {
 		t.Fatalf("hits after two zips and two misses: %s", b)
 	}
+	if os.Getuid() != 0 {
+		f.write(t, "pub/locked/x.txt", "x")
+		os.Chmod(filepath.Join(f.Dir, "pub/locked/x.txt"), 0)
+		if c, _, _ := anon(f, "GET", "/s/"+tok+"/zip?p=locked", ""); c != 403 {
+			t.Fatalf("unreadable folder %d", c)
+		}
+		if b := f.do("GET", "/api/shares", nil).Body.String(); !strings.Contains(b, `"hits":2`) {
+			t.Fatalf("a failed zip counted a hit: %s", b)
+		}
+		os.RemoveAll(filepath.Join(f.Dir, "pub/locked"))
+	}
 	os.Symlink("../secret.txt", filepath.Join(f.Dir, "pub/link.txt"))
 	w = f.do("GET", "/s/"+tok+"/zip", nil, "X-No-Auth", "1")
 	if got := zipNames(t, w.Body.Bytes()); slices.Contains(got, "pub/link.txt") {

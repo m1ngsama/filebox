@@ -81,16 +81,17 @@ func Zip(w http.ResponseWriter, r *http.Request, root *os.Root, rels []string, t
 	}
 	switch {
 	case err == nil:
+		return true
 	case r.Context().Err() != nil:
+		return out.n > 0
 	case out.n == 0:
 		h.Del("Content-Disposition")
 		h.Del("Cache-Control")
 		httpx.Error(w, err)
-	default:
-		slog.Warn("zip aborted", "err", err)
-		panic(http.ErrAbortHandler)
+		return false
 	}
-	return true
+	slog.Warn("zip aborted", "err", err)
+	panic(http.ErrAbortHandler)
 }
 
 type counter struct {
