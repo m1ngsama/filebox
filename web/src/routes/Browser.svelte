@@ -427,7 +427,7 @@
   const hasFiles = (e: DragEvent) => !!e.dataTransfer?.types.includes('Files')
 </script>
 
-<svelte:window onkeydowncapture={keydown} ondragover={(e) => e.preventDefault()} ondrop={(e) => e.preventDefault()} />
+<svelte:window onkeydowncapture={keydown} onfocus={() => loadStars(true)} ondragover={(e) => e.preventDefault()} ondrop={(e) => e.preventDefault()} />
 
 {#snippet batch()}
   <button class="ghost" onclick={() => download([...selected])}>

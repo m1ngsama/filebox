@@ -3,9 +3,9 @@
   import StarOff from '@lucide/svelte/icons/star-off'
   import EmptyState from '../components/EmptyState.svelte'
   import EntryList, { type Action } from '../components/EntryList.svelte'
-  import { api, filesURL, rawURL, thumbURL, type Entry, type Favorite } from '../lib/api'
+  import { filesURL, rawURL, thumbURL, type Entry, type Favorite } from '../lib/api'
   import { navigate } from '../lib/router.svelte'
-  import { star } from '../lib/favorites.svelte'
+  import { star, loadStars } from '../lib/favorites.svelte'
   import { fail } from '../lib/toast.svelte'
   import { thumbable, rawThumb, arrange, type Sort } from '../lib/format'
   import { t } from '../lib/i18n'
@@ -21,9 +21,9 @@
   const fav = (e: Entry) => e as Favorite
 
   $effect(() => {
-    api.favorites().then(
-      (r) => {
-        items = r.entries
+    loadStars(true).then(
+      (list) => {
+        items = list
         loaded = true
       },
       (e: Error) => (error = e.message),

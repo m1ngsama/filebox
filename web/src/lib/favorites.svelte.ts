@@ -1,22 +1,23 @@
 import { SvelteSet } from 'svelte/reactivity'
-import { api } from './api'
+import { api, type Favorite } from './api'
 import { toast } from './toast.svelte'
 import { t } from './i18n'
 import { base } from './format'
 
 const stars = new SvelteSet<string>()
 const key = (vol: string, path: string) => `${vol}\0${path}`
-let pending: Promise<void> | undefined
+let pending: Promise<Favorite[]> | undefined
 
 export function loadStars(fresh = false) {
-  if (fresh || !pending)
-    pending = api.favorites().then(
-      (r) => {
-        stars.clear()
-        for (const f of r.entries) stars.add(key(f.vol, f.path))
-      },
-      () => void (pending = undefined),
-    )
+  if (fresh || !pending) {
+    const p = api.favorites().then((r) => {
+      stars.clear()
+      for (const f of r.entries) stars.add(key(f.vol, f.path))
+      return r.entries
+    })
+    p.catch(() => pending === p && (pending = undefined))
+    pending = p
+  }
   return pending
 }
 
