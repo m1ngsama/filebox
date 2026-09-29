@@ -7,6 +7,8 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -183,7 +185,7 @@ func TestRenameRewritesRowsWithoutWalking(t *testing.T) {
 	e := setup(t)
 	v, _ := e.vols.Get("v")
 	const n = 20000
-	b := &batch{db: e.x.db, vol: "v"}
+	b := &batch{db: e.x.db, w: &e.x.w, vol: "v"}
 	b.add(row{path: "a", dir: true})
 	b.add(row{path: "a/b", dir: true})
 	for i := range n {
@@ -254,5 +256,51 @@ func TestMovedToRoot(t *testing.T) {
 		if got != c.want {
 			t.Errorf("moved(%q, %q) of %q = %q, want %q", c.from, c.to, c.path, got, c.want)
 		}
+	}
+}
+
+func TestConcurrentFlushes(t *testing.T) {
+	e := setup(t)
+	var wg sync.WaitGroup
+	var failed atomic.Int32
+	for g := range 4 {
+		wg.Go(func() {
+			for i := range 50 {
+				b := &batch{db: e.x.db, w: &e.x.w, vol: "v"}
+				for j := range 200 {
+					b.rows = append(b.rows, row{path: fmt.Sprintf("g%d/b%02d/f%03d", g, i, j), mtime: 1})
+				}
+				if err := b.flush(); err != nil {
+					failed.Add(1)
+					t.Log(err)
+				}
+			}
+		})
+	}
+	stop := make(chan struct{})
+	wg.Go(func() {
+		for on := true; ; on = !on {
+			select {
+			case <-stop:
+				return
+			default:
+			}
+			if err := e.x.Star("v", []string{"x"}, on); err != nil {
+				failed.Add(1)
+				t.Log(err)
+			}
+		}
+	})
+	time.Sleep(10 * time.Millisecond)
+	for len(e.paths(t)) < 40000 && failed.Load() == 0 {
+		time.Sleep(10 * time.Millisecond)
+	}
+	close(stop)
+	wg.Wait()
+	var files, fts int
+	e.x.db.QueryRow(`SELECT count(*) FROM files`).Scan(&files)
+	e.x.db.QueryRow(`SELECT count(*) FROM files_fts WHERE files_fts MATCH '"/f0" OR "/f1"'`).Scan(&fts)
+	if n := failed.Load(); n != 0 || files != 40000 || fts != 40000 {
+		t.Fatalf("%d failures, %d files, %d fts rows", n, files, fts)
 	}
 }

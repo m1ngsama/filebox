@@ -136,7 +136,7 @@ type Share struct {
 }
 
 func Open(path string) (*DB, error) {
-	q := url.Values{"_pragma": {"journal_mode(WAL)", "busy_timeout(5000)", "foreign_keys(1)", "synchronous(NORMAL)"}}
+	q := url.Values{"_pragma": {"journal_mode(WAL)", "busy_timeout(5000)", "foreign_keys(1)", "synchronous(NORMAL)"}, "_txlock": {"immediate"}}
 	dsn := url.URL{Scheme: "file", OmitHost: true, Path: path, RawQuery: q.Encode()}
 	s, err := sql.Open("sqlite", dsn.String())
 	if err != nil {

@@ -30,6 +30,8 @@ func (x *Index) Favorites() ([]Favorite, error) {
 }
 
 func (x *Index) Star(v string, paths []string, on bool) error {
+	x.w.Lock()
+	defer x.w.Unlock()
 	tx, err := x.db.Begin()
 	if err != nil {
 		return err
@@ -57,7 +59,7 @@ func (x *Index) CarryFavorites(src *vol.Volume, srel string, dst *vol.Volume, dr
 		return
 	}
 	expr, args := moved(srel, drel)
-	_, err := x.db.Exec(`UPDATE OR REPLACE favorites SET vol = ?, path = `+expr+` WHERE `+subtree,
+	err := x.exec(x.db, `UPDATE OR REPLACE favorites SET vol = ?, path = `+expr+` WHERE `+subtree,
 		append(append([]any{dst.Name}, args...), under(src.Name, srel)...)...)
 	if err != nil {
 		slog.Warn("carry favorites", "from", src.Name+":"+srel, "to", dst.Name+":"+drel, "err", err)

@@ -60,6 +60,7 @@ type pending struct {
 
 type Index struct {
 	db      *db.DB
+	w       sync.Mutex
 	mu      sync.Mutex
 	touched map[pending]struct{}
 	ready   atomic.Bool
@@ -99,6 +100,8 @@ func (x *Index) Rename(v *vol.Volume, from, to string) {
 }
 
 func (x *Index) rename(vol, from, to string) error {
+	x.w.Lock()
+	defer x.w.Unlock()
 	tx, err := x.db.Begin()
 	if err != nil {
 		return err
@@ -192,7 +195,7 @@ func (x *Index) scan(vols *vol.Set) (int, error) {
 		if _, err := c.ExecContext(ctx, `DELETE FROM temp.seen`); err != nil {
 			return n, err
 		}
-		b := &batch{db: c, vol: v.Name, seen: true}
+		b := &batch{db: c, w: &x.w, vol: v.Name, seen: true}
 		var unreadable []string
 		err := walk(v, ".", func(r row) error {
 			if !r.dir {
@@ -209,7 +212,7 @@ func (x *Index) scan(vols *vol.Set) (int, error) {
 			}
 		}
 		if err == nil {
-			_, err = c.ExecContext(ctx, `DELETE FROM files WHERE vol = ? AND path NOT IN (SELECT path FROM temp.seen)`, v.Name)
+			err = x.exec(c, `DELETE FROM files WHERE vol = ? AND path NOT IN (SELECT path FROM temp.seen)`, v.Name)
 		}
 		x.mu.Lock()
 		var touched []string
@@ -225,7 +228,7 @@ func (x *Index) scan(vols *vol.Set) (int, error) {
 			}
 		}
 		if err == nil {
-			_, err = c.ExecContext(ctx, `DELETE FROM dav_props WHERE vol = ? AND path != '.' AND path NOT IN (SELECT path FROM temp.seen)`, v.Name)
+			err = x.exec(c, `DELETE FROM dav_props WHERE vol = ? AND path != '.' AND path NOT IN (SELECT path FROM temp.seen)`, v.Name)
 		}
 		if err != nil {
 			return n, fmt.Errorf("index volume %s: %w", v.Name, err)
@@ -234,7 +237,7 @@ func (x *Index) scan(vols *vol.Set) (int, error) {
 	names, _ := json.Marshal(vols.Names())
 	for _, t := range []string{"files", "dav_props"} {
 		if err == nil {
-			_, err = c.ExecContext(ctx, `DELETE FROM `+t+` WHERE vol NOT IN (SELECT value FROM json_each(?))`, string(names))
+			err = x.exec(c, `DELETE FROM `+t+` WHERE vol NOT IN (SELECT value FROM json_each(?))`, string(names))
 		}
 	}
 	return n, err
@@ -244,16 +247,15 @@ func (x *Index) sync(v *vol.Volume, rel string) error {
 	fi, err := v.Root.Lstat(rel)
 	if errors.Is(err, fs.ErrNotExist) {
 		for _, t := range []string{"dav_props", "favorites"} {
-			if _, err := x.db.Exec(`DELETE FROM `+t+` WHERE `+subtree, under(v.Name, rel)...); err != nil {
+			if err := x.exec(x.db, `DELETE FROM `+t+` WHERE `+subtree, under(v.Name, rel)...); err != nil {
 				return err
 			}
 		}
 	}
 	if err != nil || (!fi.IsDir() && !fi.Mode().IsRegular()) {
-		_, err := x.db.Exec(`DELETE FROM files WHERE `+subtree, under(v.Name, rel)...)
-		return err
+		return x.exec(x.db, `DELETE FROM files WHERE `+subtree, under(v.Name, rel)...)
 	}
-	b := &batch{db: x.db, vol: v.Name}
+	b := &batch{db: x.db, w: &x.w, vol: v.Name}
 	if err := walk(v, rel, b.add, nil); err != nil {
 		return err
 	}
@@ -303,9 +305,21 @@ type batch struct {
 	db interface {
 		BeginTx(context.Context, *sql.TxOptions) (*sql.Tx, error)
 	}
+	w    *sync.Mutex
 	vol  string
 	seen bool
 	rows []row
+}
+
+type execer interface {
+	ExecContext(context.Context, string, ...any) (sql.Result, error)
+}
+
+func (x *Index) exec(e execer, q string, args ...any) error {
+	x.w.Lock()
+	defer x.w.Unlock()
+	_, err := e.ExecContext(context.Background(), q, args...)
+	return err
 }
 
 func (b *batch) add(r row) error {
@@ -320,6 +334,8 @@ func (b *batch) flush() error {
 	if len(b.rows) == 0 {
 		return nil
 	}
+	b.w.Lock()
+	defer b.w.Unlock()
 	tx, err := b.db.BeginTx(context.Background(), nil)
 	if err != nil {
 		return err

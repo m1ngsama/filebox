@@ -124,7 +124,7 @@ func TestSearchScope(t *testing.T) {
 	e.write(t, ".trash/1-x/report.txt", "x", now)
 	e.write(t, ".filebox/uploads/report", "x", now)
 	e.scan(t)
-	for _, b := range []*batch{{db: e.x.db, vol: "v", rows: []row{{path: ".trash/leak/report.txt", mtime: 1}}}, {db: e.x.db, vol: "w", rows: []row{{path: "report.doc", mtime: 1}}}} {
+	for _, b := range []*batch{{db: e.x.db, w: &e.x.w, vol: "v", rows: []row{{path: ".trash/leak/report.txt", mtime: 1}}}, {db: e.x.db, w: &e.x.w, vol: "w", rows: []row{{path: "report.doc", mtime: 1}}}} {
 		if err := b.flush(); err != nil {
 			t.Fatal(err)
 		}
@@ -152,7 +152,7 @@ func TestSearchScope(t *testing.T) {
 
 func BenchmarkSearch(b *testing.B) {
 	e := setup(&testing.T{})
-	bt := &batch{db: e.x.db, vol: "v"}
+	bt := &batch{db: e.x.db, w: &e.x.w, vol: "v"}
 	words := []string{"holiday", "report", "invoice", "photo", "scan", "draft", "final", "backup", "music", "video"}
 	for i := range 100_000 {
 		bt.add(row{path: fmt.Sprintf("dir%03d/sub%02d/%s-%06d.%s", i%500, i%37, words[i%len(words)], i, []string{"jpg", "txt", "pdf", "mp4"}[i%4]), size: int64(i), mtime: int64(i)})

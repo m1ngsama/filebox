@@ -45,6 +45,8 @@ func (x *Index) PatchProps(v *vol.Volume, rel string, ops []Prop) error {
 			return ErrPropTooLarge
 		}
 	}
+	x.w.Lock()
+	defer x.w.Unlock()
 	tx, err := x.db.Begin()
 	if err != nil {
 		return err
@@ -86,6 +88,8 @@ func (x *Index) copyProps(src *vol.Volume, srel string, dst *vol.Volume, drel st
 	if tree {
 		fromWhere, toWhere, from, to = subtree, subtree, under(src.Name, srel), under(dst.Name, drel)
 	}
+	x.w.Lock()
+	defer x.w.Unlock()
 	tx, err := x.db.Begin()
 	if err != nil {
 		return err
