@@ -42,3 +42,15 @@ func TestUploadRoute(t *testing.T) {
 		t.Fatalf("read-only token upload %d", w.Code)
 	}
 }
+
+func TestUploadOverwriteIsForUsersOnly(t *testing.T) {
+	f := newTestApp(t)
+	os.WriteFile(filepath.Join(f.Dir, "r.txt"), []byte("old"), 0o644)
+	md := "vol " + b64("v") + ",dir " + b64("/") + ",filename " + b64("r.txt") + ",overwrite " + b64("1")
+	w := f.do("POST", "/upload/", nil, "Tus-Resumable", "1.0.0", "Upload-Length", "3", "Upload-Metadata", md)
+	f.do("PATCH", w.Header().Get("Location"), strings.NewReader("new"), "Tus-Resumable", "1.0.0",
+		"Upload-Offset", "0", "Content-Type", "application/offset+octet-stream")
+	if b, _ := os.ReadFile(filepath.Join(f.Dir, "r.txt")); string(b) != "new" {
+		t.Fatalf("got %q", b)
+	}
+}

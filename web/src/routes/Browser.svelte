@@ -36,6 +36,7 @@
   import NavToggle from '../components/NavToggle.svelte'
   import EmptyState from '../components/EmptyState.svelte'
   import EntryList, { type Action } from '../components/EntryList.svelte'
+  import type { Choice } from '../components/ConflictDialog.svelte'
 
   let { vol, path, vols }: { vol: string; path: string; vols: string[] } = $props()
 
@@ -60,6 +61,7 @@
   let filterEl = $state<HTMLInputElement>()
   let opener = $state<HTMLButtonElement>()
   let barH = $state(0)
+  let conflict = $state<{ name: string; rest: number; resolve: (r: [Choice, boolean] | null) => void } | null>(null)
   const selected = new SvelteSet<string>()
   let files = $state<HTMLInputElement>()
   let folder = $state<HTMLInputElement>()
@@ -140,10 +142,43 @@
     }
   }
 
-  function upload(list: FileList | null | undefined, asFolder = false) {
+  const ask = (name: string, rest: number) => new Promise<[Choice, boolean] | null>((resolve) => (conflict = { name, rest, resolve }))
+
+  async function upload(list: FileList | null | undefined, asFolder = false) {
     if (!list?.length) return
-    const items = [...list].map((file) => ({ file, rel: asFolder ? file.webkitRelativePath : '' }))
-    enqueue(items, '/upload/', { vol, dir: path || '/' }, refresh)
+    const v = vol
+    const dir = path
+    let items = [...list].map((file) => ({ file, rel: asFolder ? file.webkitRelativePath : '' }))
+    const top = (x: { file: File; rel: string }) => (x.rel ? x.rel.slice(0, x.rel.indexOf('/')) : x.file.name)
+    const taken = new Set((await api.ls(v, dir).catch(() => ({ entries }))).entries.map((e) => e.name))
+    const clash = [...new Set(items.map(top))].filter((n) => taken.has(n))
+    const choices = new Map<string, Choice>()
+    let every: Choice | null = null
+    for (const [i, n] of clash.entries()) {
+      if (!every) {
+        const r = await ask(n, clash.length - i - 1)
+        conflict = null
+        if (!r) return
+        if (r[1]) every = r[0]
+        choices.set(n, r[0])
+      } else choices.set(n, every)
+    }
+    const renamed = new Map<string, string>()
+    for (const [n, c] of choices) {
+      if (c !== 'keep' || !asFolder) continue
+      let k = 1
+      while (taken.has(`${n} (${k})`)) k++
+      renamed.set(n, `${n} (${k})`)
+      taken.add(`${n} (${k})`)
+    }
+    items = items
+      .filter((x) => choices.get(top(x)) !== 'skip')
+      .map((x) => (renamed.has(top(x)) ? { ...x, rel: renamed.get(top(x)) + x.rel.slice(x.rel.indexOf('/')) } : x))
+    const meta = { vol: v, dir: dir || '/' }
+    const over = items.filter((x) => choices.get(top(x)) === 'replace')
+    if (over.length) enqueue(over, '/upload/', { ...meta, overwrite: '1' }, refresh)
+    const rest = items.filter((x) => choices.get(top(x)) !== 'replace')
+    if (rest.length) enqueue(rest, '/upload/', meta, refresh)
   }
 
   const creators = [
@@ -421,6 +456,13 @@
 
 <input bind:this={files} type="file" multiple hidden onchange={(e) => upload(e.currentTarget.files)} />
 <input bind:this={folder} type="file" webkitdirectory hidden onchange={(e) => upload(e.currentTarget.files, true)} />
+
+{#if conflict}
+  {@const c = conflict}
+  {#await import('../components/ConflictDialog.svelte') then { default: ConflictDialog }}
+    <ConflictDialog name={c.name} rest={c.rest} onchoose={(choice, all) => c.resolve([choice, all])} onclose={() => c.resolve(null)} />
+  {/await}
+{/if}
 
 {#if help}
   {#await import('../components/ShortcutsDialog.svelte') then { default: ShortcutsDialog }}

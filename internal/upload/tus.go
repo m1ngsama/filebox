@@ -32,6 +32,7 @@ import (
 type Target struct {
 	Vol       *vol.Volume
 	Dir, Name string
+	Replace   bool
 }
 
 type Policy struct {
@@ -60,9 +61,10 @@ func TargetFor(v *vol.Volume, dir string, meta map[string]string) (Target, error
 }
 
 const (
-	keyOwner = "owner"
-	keyDir   = "dir"
-	keyName  = "filename"
+	keyOwner   = "owner"
+	keyDir     = "dir"
+	keyName    = "filename"
+	keyReplace = "replace"
 )
 
 var (
@@ -251,10 +253,11 @@ func create(key string, hook handler.HookEvent) (handler.HTTPResponse, handler.F
 	if free, err := c.t.Vol.Free(); err != nil || uint64(hook.Upload.Size) > free {
 		return handler.HTTPResponse{}, none, errNoSpace
 	}
-	return handler.HTTPResponse{}, handler.FileInfoChanges{
-		ID:       key + "-" + rand.Text(),
-		MetaData: handler.MetaData{keyOwner: c.owner, keyDir: c.t.Dir, keyName: c.t.Name},
-	}, nil
+	md := handler.MetaData{keyOwner: c.owner, keyDir: c.t.Dir, keyName: c.t.Name}
+	if c.t.Replace {
+		md[keyReplace] = "1"
+	}
+	return handler.HTTPResponse{}, handler.FileInfoChanges{ID: key + "-" + rand.Text(), MetaData: md}, nil
 }
 
 func complete(ctx context.Context, u *volume, id string) (handler.FileInfo, bool) {
@@ -284,9 +287,9 @@ func (s *Server) finish(u *volume, info handler.FileInfo) error {
 	defer s.finalize.Unlock()
 	dir := info.MetaData[keyDir]
 	err := u.v.Root.MkdirAll(dir, 0o755)
-	var name string
-	if err == nil {
-		name, err = unique(u.v.Root, dir, info.MetaData[keyName])
+	name := info.MetaData[keyName]
+	if err == nil && !replaceable(u.v.Root, path.Join(dir, name), info.MetaData[keyReplace] == "1") {
+		name, err = unique(u.v.Root, dir, name)
 	}
 	if err == nil {
 		err = u.v.Root.Rename(path.Join(vol.UploadsDir, info.ID), path.Join(dir, name))
@@ -298,6 +301,14 @@ func (s *Server) finish(u *volume, info handler.FileInfo) error {
 	u.v.Root.Remove(path.Join(vol.UploadsDir, info.ID+".info"))
 	s.Index.Touch(u.v, path.Join(dir, name))
 	return nil
+}
+
+func replaceable(root *os.Root, rel string, replace bool) bool {
+	if !replace {
+		return false
+	}
+	fi, err := root.Lstat(rel)
+	return err == nil && fi.Mode().IsRegular()
 }
 
 func unique(root *os.Root, dir, name string) (string, error) {

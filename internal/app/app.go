@@ -80,7 +80,9 @@ func (a *App) userUploads() upload.Policy {
 			if err != nil {
 				return upload.Target{}, err
 			}
-			return upload.TargetFor(v, dir, meta)
+			t, err := upload.TargetFor(v, dir, meta)
+			t.Replace = meta["overwrite"] == "1"
+			return t, err
 		},
 	}
 }

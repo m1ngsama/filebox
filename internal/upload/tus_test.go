@@ -480,3 +480,56 @@ func TestTusIDSurvivesVolumeReorder(t *testing.T) {
 		t.Fatalf("content %q", got)
 	}
 }
+
+func TestTusReplace(t *testing.T) {
+	dir := t.TempDir()
+	vols, _ := vol.Parse([]string{"v=" + dir})
+	t.Cleanup(func() { vols.Close() })
+	s, err := New(vols)
+	if err != nil {
+		t.Fatal(err)
+	}
+	v, _ := vols.Get("v")
+	ts := httptest.NewServer(s.Handler("/up/", Policy{
+		Owner: func(*http.Request) (string, bool) { return "alice", true },
+		Resolve: func(r *http.Request, meta map[string]string) (Target, error) {
+			t, err := TargetFor(v, ".", meta)
+			t.Replace = meta["overwrite"] == "1"
+			return t, err
+		},
+	}))
+	t.Cleanup(ts.Close)
+	e := &env{srv: s, url: ts.URL, dir: dir}
+	os.WriteFile(filepath.Join(dir, "a.txt"), []byte("old"), 0o644)
+	os.Mkdir(filepath.Join(dir, "d.txt"), 0o755)
+	os.Symlink("a.txt", filepath.Join(dir, "l.txt"))
+	up := func(name, body string) string {
+		w := e.do("POST", "/up/", "", "Upload-Length", strconv.Itoa(len(body)), "Upload-Metadata", meta("filename", name, "overwrite", "1"))
+		if w.StatusCode != 201 {
+			t.Fatalf("create %d", w.StatusCode)
+		}
+		return w.Header.Get("Location")
+	}
+	loc := up("a.txt", "new!")
+	e.patch(loc, 0, "ne")
+	if b, _ := os.ReadFile(filepath.Join(dir, "a.txt")); string(b) != "old" {
+		t.Fatalf("replaced before the upload finished: %q", b)
+	}
+	e.patch(loc, 2, "w!")
+	if b, _ := os.ReadFile(filepath.Join(dir, "a.txt")); string(b) != "new!" {
+		t.Fatalf("got %q", b)
+	}
+	if _, err := os.Stat(filepath.Join(dir, "a (1).txt")); err == nil {
+		t.Fatal("replace also kept a copy")
+	}
+	e.patch(up("d.txt", "x"), 0, "x")
+	e.patch(up("l.txt", "y"), 0, "y")
+	for n, want := range map[string]string{"d (1).txt": "x", "l (1).txt": "y", "a.txt": "new!"} {
+		if b, _ := os.ReadFile(filepath.Join(dir, n)); string(b) != want {
+			t.Errorf("%s = %q, want %q", n, b, want)
+		}
+	}
+	if fi, _ := os.Lstat(filepath.Join(dir, "l.txt")); fi.Mode()&os.ModeSymlink == 0 {
+		t.Error("symlink replaced")
+	}
+}

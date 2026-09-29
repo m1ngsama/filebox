@@ -111,12 +111,15 @@ func TestShareDrop(t *testing.T) {
 		}
 	}
 	c, _, _ := anon(f, "POST", "/s/"+tok+"/upload/", "", "Tus-Resumable", "1.0.0", "Upload-Length", "0",
-		"Upload-Metadata", "filename "+b64("existing.txt"))
+		"Upload-Metadata", "filename "+b64("existing.txt")+",overwrite "+b64("1"))
 	if c != 201 {
 		t.Fatalf("drop upload %d", c)
 	}
 	if _, err := os.Stat(filepath.Join(f.Dir, "inbox/existing (1).txt")); err != nil {
 		t.Fatal("drop overwrote or lost the upload")
+	}
+	if b, _ := os.ReadFile(filepath.Join(f.Dir, "inbox/existing.txt")); string(b) != "old" {
+		t.Fatal("drop overwrote the existing file")
 	}
 	c, _, _ = anon(f, "POST", "/s/"+tok+"/upload/", "", "Tus-Resumable", "1.0.0", "Upload-Length", "0",
 		"Upload-Metadata", "filename "+b64("e.txt")+",relativePath "+b64("../../e.txt"))
