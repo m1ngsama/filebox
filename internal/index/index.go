@@ -34,7 +34,12 @@ func under(vol, rel string) []any {
 }
 
 func moved(from, to string) (string, []any) {
-	if from == "." {
+	switch {
+	case from == to:
+		return `path`, nil
+	case to == ".":
+		return `CASE path WHEN ? THEN '.' ELSE substr(path, length(?) + 2) END`, []any{from, from}
+	case from == ".":
 		return `CASE path WHEN '.' THEN ? ELSE ? || '/' || path END`, []any{to, to}
 	}
 	return `? || substr(path, length(?) + 1)`, []any{to, from}

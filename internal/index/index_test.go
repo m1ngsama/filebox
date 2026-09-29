@@ -233,3 +233,25 @@ func TestScanKeepsUnreadableSubtree(t *testing.T) {
 		t.Fatalf("logs %q", logs.String())
 	}
 }
+
+func TestMovedToRoot(t *testing.T) {
+	e := setup(t)
+	for _, c := range []struct{ from, to, path, want string }{
+		{"x", ".", "x", "."},
+		{"x", ".", "x/f", "f"},
+		{"x/y", ".", "x/y/z/f", "z/f"},
+		{".", "x", "f", "x/f"},
+		{".", "x", ".", "x"},
+		{".", ".", "f", "f"},
+		{"a", "b/c", "a/f", "b/c/f"},
+	} {
+		expr, args := moved(c.from, c.to)
+		var got string
+		if err := e.x.db.QueryRow(`SELECT `+expr+` FROM (SELECT ? AS path)`, append(args, c.path)...).Scan(&got); err != nil {
+			t.Fatal(err)
+		}
+		if got != c.want {
+			t.Errorf("moved(%q, %q) of %q = %q, want %q", c.from, c.to, c.path, got, c.want)
+		}
+	}
+}
