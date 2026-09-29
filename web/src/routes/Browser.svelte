@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { untrack } from 'svelte'
+  import { tick, untrack } from 'svelte'
   import { SvelteSet } from 'svelte/reactivity'
   import { DropdownMenu } from 'bits-ui'
   import Plus from '@lucide/svelte/icons/plus'
@@ -18,6 +18,11 @@
   import List from '@lucide/svelte/icons/list'
   import ChevronRight from '@lucide/svelte/icons/chevron-right'
   import SearchX from '@lucide/svelte/icons/search-x'
+  import Search from '@lucide/svelte/icons/search'
+  import ChevronLeft from '@lucide/svelte/icons/chevron-left'
+  import EllipsisVertical from '@lucide/svelte/icons/ellipsis-vertical'
+  import ArrowUp from '@lucide/svelte/icons/arrow-up'
+  import ArrowDown from '@lucide/svelte/icons/arrow-down'
   import { api, filesURL, rawURL, thumbURL, type Entry, type Move } from '../lib/api'
   import { toast, fail, runLatest } from '../lib/toast.svelte'
   import { navigate, link, route } from '../lib/router.svelte'
@@ -46,6 +51,9 @@
   let preview = $state.raw<Entry | null>(null)
   let details = $state.raw<Entry | null>(null)
   let dialog = $state<Dialog | null>(null)
+  let searching = $state(false)
+  let sheet = $state(false)
+  let filterEl = $state<HTMLInputElement>()
   const selected = new SvelteSet<string>()
   let files = $state<HTMLInputElement>()
   let folder = $state<HTMLInputElement>()
@@ -75,6 +83,7 @@
     vol
     path
     filter = ''
+    searching = false
     details = null
     const focus = new URLSearchParams(untrack(() => route.search)).get('details')
     refresh().then((ok) => {
@@ -121,6 +130,28 @@
     if (!list?.length) return
     const items = [...list].map((file) => ({ file, rel: asFolder ? file.webkitRelativePath : '' }))
     enqueue(items, '/upload/', { vol, dir: path || '/' }, refresh)
+  }
+
+  const creators = [
+    { label: t.upload, icon: Upload, run: () => files?.click() },
+    { label: t.uploadFolder, icon: FolderUp, run: () => folder?.click() },
+    { label: t.newFolder, icon: FolderPlus, run: () => (dialog = { kind: 'mkdir' }) },
+  ]
+
+  function sortBy(k: Sort) {
+    desc = sort === k ? !desc : k !== 'name'
+    sort = k
+  }
+
+  async function search() {
+    searching = true
+    await tick()
+    filterEl?.focus()
+  }
+
+  function endSearch() {
+    searching = false
+    filter = ''
   }
 
   const act = {
@@ -239,8 +270,13 @@
       upload(e.dataTransfer?.files)
     }}
   >
-    <header class="bar">
+    <header class="bar" class:searching>
       <NavToggle />
+      {#if crumbs.length}
+        {@const up = crumbs.length > 1 ? crumbs[crumbs.length - 2] : vol}
+        <a class="up" href={filesURL(vol, parent(path))} onclick={link} aria-label={t.upTo(up)}><ChevronLeft size={20} /><span>{up}</span></a>
+      {/if}
+      <h1 class="title">{crumbs.length ? crumbs[crumbs.length - 1] : vol}</h1>
       <nav class="crumbs" aria-label={t.breadcrumb}>
         <a href={filesURL(vol, '')} onclick={link}>{vol}</a>
         {#each crumbs as c, i}
@@ -252,19 +288,40 @@
         <DropdownMenu.Trigger class="primary new"><Plus size={18} />{t.new}</DropdownMenu.Trigger>
         <DropdownMenu.Portal>
           <DropdownMenu.Content class="menu" preventScroll={false} align="start" sideOffset={4}>
-            <DropdownMenu.Item class="menu-item" onSelect={() => files?.click()}><Upload size={16} />{t.upload}</DropdownMenu.Item>
-            <DropdownMenu.Item class="menu-item" onSelect={() => folder?.click()}><FolderUp size={16} />{t.uploadFolder}</DropdownMenu.Item>
-            <DropdownMenu.Separator class="menu-sep" />
-            <DropdownMenu.Item class="menu-item" onSelect={() => (dialog = { kind: 'mkdir' })}><FolderPlus size={16} />{t.newFolder}</DropdownMenu.Item>
+            {#each creators as c, i (c.label)}
+              {#if i === 2}<DropdownMenu.Separator class="menu-sep" />{/if}
+              <DropdownMenu.Item class="menu-item" onSelect={c.run}><c.icon size={16} />{c.label}</DropdownMenu.Item>
+            {/each}
           </DropdownMenu.Content>
         </DropdownMenu.Portal>
       </DropdownMenu.Root>
       <span class="grow"></span>
       <label for="filter" class="sr-only">{t.filter}</label>
-      <input id="filter" class="filter" type="search" bind:value={filter} placeholder={t.filter} />
-      <button class="icon-btn" aria-label={grid ? t.listView : t.gridView} title={grid ? t.listView : t.gridView} onclick={() => (grid = !grid)}>
+      <input id="filter" class="filter" type="search" bind:value={filter} bind:this={filterEl} placeholder={t.filter} />
+      <button class="icon-btn search-open" aria-label={t.openFilter} onclick={search}><Search size={20} /></button>
+      <button class="icon-btn search-close" aria-label={t.closeFilter} onclick={endSearch}><X size={20} /></button>
+      <button class="icon-btn view" aria-label={grid ? t.listView : t.gridView} title={grid ? t.listView : t.gridView} onclick={() => (grid = !grid)}>
         {#if grid}<List size={20} />{:else}<LayoutGrid size={20} />{/if}
       </button>
+      <DropdownMenu.Root>
+        <DropdownMenu.Trigger class="icon-btn overflow" aria-label={t.more}><EllipsisVertical size={20} /></DropdownMenu.Trigger>
+        <DropdownMenu.Portal>
+          <DropdownMenu.Content class="menu" preventScroll={false} align="end" sideOffset={4}>
+            <DropdownMenu.Item class="menu-item" onSelect={() => (grid = !grid)}>
+              {#if grid}<List size={16} />{t.listView}{:else}<LayoutGrid size={16} />{t.gridView}{/if}
+            </DropdownMenu.Item>
+            <DropdownMenu.Separator class="menu-sep" />
+            <DropdownMenu.Group>
+              <DropdownMenu.GroupHeading class="menu-label">{t.sortBy}</DropdownMenu.GroupHeading>
+              {#each [['name', t.name], ['size', t.size], ['mtime', t.mtime]] as [k, label] (k)}
+                <DropdownMenu.Item class="menu-item" aria-current={sort === k || undefined} onSelect={() => sortBy(k as Sort)}>
+                  {#if sort !== k}<span class="menu-gap"></span>{:else if desc}<ArrowDown size={16} />{:else}<ArrowUp size={16} />{/if}{label}
+                </DropdownMenu.Item>
+              {/each}
+            </DropdownMenu.Group>
+          </DropdownMenu.Content>
+        </DropdownMenu.Portal>
+      </DropdownMenu.Root>
     </header>
 
     {#if error && at === here}<p class="error banner">{error}</p>{/if}
@@ -299,6 +356,7 @@
     {/key}
 
     {#if dragging}<div class="dropzone">{t.dropHere}</div>{/if}
+    {#if !selected.size}<button class="primary fab" aria-label={t.new} onclick={() => (sheet = true)}><Plus size={24} /></button>{/if}
   </section>
 
   {#if details}
@@ -312,6 +370,22 @@
 
 <input bind:this={files} type="file" multiple hidden onchange={(e) => upload(e.currentTarget.files)} />
 <input bind:this={folder} type="file" webkitdirectory hidden onchange={(e) => upload(e.currentTarget.files, true)} />
+
+{#if sheet}
+  {#await import('../components/Sheet.svelte') then { default: Sheet }}
+    <Sheet title={t.new} onclose={() => (sheet = false)}>
+      {#each creators as c (c.label)}
+        <button
+          class="sheet-item"
+          onclick={() => {
+            sheet = false
+            c.run()
+          }}><c.icon size={20} />{c.label}</button
+        >
+      {/each}
+    </Sheet>
+  {/await}
+{/if}
 
 {#if preview}
   {#await import('../components/Preview.svelte') then { default: Preview }}

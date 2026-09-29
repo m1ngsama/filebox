@@ -2,10 +2,13 @@
   import { uploads, cancel, clearDone } from '../lib/uploads.svelte'
   import { size } from '../lib/format'
   import { t } from '../lib/i18n'
+
+  let h = $state(0)
+  $effect(() => document.documentElement.style.setProperty('--up-h', `${uploads.length ? h + 8 : 0}px`))
 </script>
 
 {#if uploads.length}
-  <aside class="uploads">
+  <aside class="uploads" bind:offsetHeight={h}>
     <header>
       <span>{t.uploads}</span>
       <button onclick={clearDone}>{t.clearDone}</button>
