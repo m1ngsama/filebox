@@ -62,7 +62,7 @@
         action: { label: t.show, run: () => navigate(`${filesURL(v, dir(first.path))}?details=${encodeURIComponent(first.name)}`) },
       })
     }
-    if (bad) fail(new Error(`${bad.name}：${(res[list.indexOf(bad)] as PromiseRejectedResult).reason.message}`))
+    if (bad) fail(new Error(t.failedItem(bad.name, (res[list.indexOf(bad)] as PromiseRejectedResult).reason.message)))
     await load()
   }
 
