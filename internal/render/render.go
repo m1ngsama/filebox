@@ -81,7 +81,7 @@ const workerArg = "render-worker"
 
 var (
 	timeout = backstop
-	self, _ = os.Executable()
+	self    = executable()
 	nice, _ = exec.LookPath("nice")
 )
 
@@ -258,6 +258,17 @@ func stderr(err error) string {
 	}
 	return ""
 }
+
+// /proc/<pid>/exe keeps pointing at the running binary after an upgrade replaces the file.
+func executable() string {
+	if p := fmt.Sprintf("/proc/%d/exe", os.Getpid()); runtime.GOOS == "linux" && fileExists(p) {
+		return p
+	}
+	p, _ := os.Executable()
+	return p
+}
+
+func fileExists(p string) bool { _, err := os.Stat(p); return err == nil }
 
 func init() {
 	if self == "" {
