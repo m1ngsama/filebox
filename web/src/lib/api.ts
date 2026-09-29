@@ -1,6 +1,6 @@
 import type { PublicKeyCredentialCreationOptionsJSON, PublicKeyCredentialRequestOptionsJSON } from '@simplewebauthn/browser'
 import { t } from './i18n'
-import { child } from './format'
+import { child, parent, base } from './format'
 
 export const errorText = (status: number): string | undefined =>
   t.errors[status] ?? (status >= 500 ? t.serverError : undefined)
@@ -51,6 +51,7 @@ async function req<T>(method: string, url: string, body?: unknown, signal?: Abor
 
 export const enc = (p: string) => p.split('/').filter(Boolean).map(encodeURIComponent).join('/')
 export const filesURL = (vol: string, path: string) => `/files/${encodeURIComponent(vol)}/${enc(path)}${path ? '/' : ''}`
+export const selectURL = (vol: string, path: string) => `${filesURL(vol, parent(path))}?select=${encodeURIComponent(base(path))}`
 export const rawURL = (vol: string, path: string, dl = false) => `/raw/${encodeURIComponent(vol)}/${enc(path)}${dl ? '?dl' : ''}`
 export const thumbURL = (vol: string, path: string) => `/thumb/${encodeURIComponent(vol)}/${enc(path)}`
 export const validShareToken = (tok: string) => /^[A-Za-z0-9_-]{22}$/.test(tok)

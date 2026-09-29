@@ -1,15 +1,13 @@
 <script lang="ts">
   import Eye from '@lucide/svelte/icons/eye'
-  import Download from '@lucide/svelte/icons/download'
-  import FolderOpen from '@lucide/svelte/icons/folder-open'
   import Clock from '@lucide/svelte/icons/clock'
   import EmptyState from '../components/EmptyState.svelte'
   import EntryList, { type Action } from '../components/EntryList.svelte'
   import Preview from '../components/Preview.svelte'
-  import { api, filesURL, rawURL, thumbURL, type Entry, type RecentFile } from '../lib/api'
-  import { navigate } from '../lib/router.svelte'
-  import { thumbable, rawThumb, arrange, parent, days, type Sort } from '../lib/format'
+  import { api, rawURL, thumbURL, type Entry, type RecentFile } from '../lib/api'
+  import { thumbable, rawThumb, arrange, days, type Sort } from '../lib/format'
   import { t } from '../lib/i18n'
+  import { folderAction, downloadAction, actOn } from '../lib/located'
 
   let files = $state.raw<RecentFile[]>([])
   let scanning = $state(false)
@@ -39,23 +37,13 @@
     return () => clearTimeout(timer)
   })
 
-  const actions: Action[] = [
-    { id: 'open', label: t.open, icon: Eye },
-    { id: 'download', label: t.download, icon: Download },
-    { id: 'folder', label: t.openFolder, icon: FolderOpen },
-  ]
+  const actions: Action[] = [{ id: 'open', label: t.open, icon: Eye }, downloadAction, folderAction]
 
   function onaction(id: string, e: Entry | null) {
     if (!e) return
     const f = loc(e)
     if (id === 'open') preview = e
-    else if (id === 'folder') navigate(`${filesURL(f.vol, parent(f.path))}?select=${encodeURIComponent(f.name)}`)
-    else {
-      const a = document.createElement('a')
-      a.href = rawURL(f.vol, f.path, true)
-      a.download = ''
-      a.click()
-    }
+    else actOn(id, f)
   }
 </script>
 

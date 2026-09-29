@@ -33,6 +33,7 @@
   import { navigate, link, route } from '../lib/router.svelte'
   import { enqueue, type Replaced } from '../lib/uploads.svelte'
   import { loadStars, starred, star } from '../lib/favorites.svelte'
+  import { folderAction, downloadAction, actOn } from '../lib/located'
   import { thumbable, rawThumb, arrange, parent, base, child, flip, sorts, type Sort } from '../lib/format'
   import { t } from '../lib/i18n'
   import { load, save } from '../lib/storage'
@@ -168,22 +169,7 @@
 
   const hitLoc = (e: Entry) => e as RecentFile
 
-  function locate(e: Entry) {
-    const h = hitLoc(e)
-    navigate(`${filesURL(h.vol, parent(h.path))}?select=${encodeURIComponent(h.name)}`)
-  }
-
-  const hitActions: Action[] = [
-    { id: 'folder', label: t.openFolder, icon: FolderOpen },
-    { id: 'download', label: t.download, icon: Download },
-  ]
-
-  function onhit(id: string, e: Entry | null) {
-    if (!e) return
-    const h = hitLoc(e)
-    if (id === 'folder') locate(e)
-    else saveURL(h.dir ? zipURL(h.vol, [h.path], h.name) : rawURL(h.vol, h.path, true))
-  }
+  const locate = (e: Entry) => actOn('folder', hitLoc(e))
 
   $effect(() => {
     const f = filter
@@ -568,8 +554,8 @@
         bind:desc={() => hitDesc, (v) => (hitDesc = v)}
         thumb={(e) => (!e.dir && thumbable(e.name) ? thumbURL(hitLoc(e).vol, hitLoc(e).path) : null)}
         raw={(e) => (rawThumb(e) ? rawURL(hitLoc(e).vol, hitLoc(e).path) : null)}
-        actions={(e) => (e ? hitActions : [])}
-        onaction={onhit}
+        actions={(e) => (e ? [folderAction, downloadAction] : [])}
+        onaction={(id, e) => e && actOn(id, hitLoc(e))}
         onopen={locate}
         loading={finding}
         id={(e) => `${hitLoc(e).vol}:${hitLoc(e).path}`}

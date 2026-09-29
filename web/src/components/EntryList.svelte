@@ -12,7 +12,7 @@
   import ArrowUp from '@lucide/svelte/icons/arrow-up'
   import ArrowDown from '@lucide/svelte/icons/arrow-down'
   import FileIcon from './FileIcon.svelte'
-  import { filesURL, type Entry, type Loc } from '../lib/api'
+  import { selectURL, type Entry, type Loc } from '../lib/api'
   import { link } from '../lib/router.svelte'
   import { size, date, ago, look, fallback, flip, sorts, type Sort } from '../lib/format'
   import { t } from '../lib/i18n'
@@ -266,7 +266,7 @@
     {@const l = loc(e)}
     {@const segs = l.path.split('/')}
     {#each [l.vol, ...segs.slice(0, -1)] as s, i (i)}{#if i}<span class="slash">/</span>{/if}<a
-        href={`${filesURL(l.vol, segs.slice(0, i).join('/'))}?select=${encodeURIComponent(segs[i])}`}
+        href={selectURL(l.vol, segs.slice(0, i + 1).join('/'))}
         onclick={link}>{s}</a
       >{/each}
   {/if}
