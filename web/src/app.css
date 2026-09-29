@@ -418,7 +418,6 @@ button.quiet:hover:not(:disabled) { color: var(--danger); background: color-mix(
   .toasts { bottom: calc(var(--dock) + var(--space-4) + var(--up, 0px) + var(--fab-h, 0px)); }
   :root:has(.uploads) { --up: calc(var(--up-h) + var(--space-2)); }
   :root:has(.fab) { --fab-h: calc(var(--fab-size) + var(--space-2)); }
-  .filter { order: 9; width: auto; flex: 1 1 100%; }
   .row { height: 56px; grid-template-columns: 44px minmax(0, 1fr) 44px; }
   .row > .check-cell, .row > .num, .card-check { display: none; }
   .selecting .row { grid-template-columns: 40px 44px minmax(0, 1fr) 44px; }
