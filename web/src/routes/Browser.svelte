@@ -53,6 +53,7 @@
   let details = $state.raw<Entry | null>(null)
   let dialog = $state<Dialog | null>(null)
   let searching = $state(false)
+  let help = $state(false)
   let sheet = $state<'new' | 'more' | null>(null)
   let filterEl = $state<HTMLInputElement>()
   const selected = new SvelteSet<string>()
@@ -222,15 +223,35 @@
     else toast(t.movedTo(w, `${done[0].to.vol}:/${parent(done[0].to.path)}`), { action: undo(() => reverse(done)) })
   }
 
+  function focused() {
+    const i = (document.activeElement as HTMLElement | null)?.closest<HTMLElement>('[data-i]')?.dataset.i
+    return i === undefined ? undefined : shown[+i]
+  }
+
   function keydown(e: KeyboardEvent) {
     if (document.querySelector('[role=dialog], [role=menu]')) return
-    const typing = e.target instanceof HTMLInputElement || e.target instanceof HTMLSelectElement
+    const typing = (e.target as Element).matches?.('input:not([type=checkbox], [type=radio]), select, textarea, [contenteditable]')
+    const mod = e.metaKey || e.ctrlKey
+    const k = e.key.toLowerCase()
+    const target = one ?? focused()
     if (e.key === 'Escape') {
       if (details) closeDetails()
+      else if (searching || filter) endSearch()
       else selected.clear()
-    } else if (typing) return
-    else if ((e.metaKey || e.ctrlKey) && !e.shiftKey && !e.repeat && e.key.toLowerCase() === 'z' && runLatest(t.undo)) e.preventDefault()
-    else if ((e.key === 'Delete' || e.key === 'Backspace') && selected.size) dialog = { kind: 'delete', names: [...selected] }
+    } else if (typing || e.altKey) return
+    else if (mod && !e.shiftKey && !e.repeat && k === 'z' && runLatest(t.undo)) e.preventDefault()
+    else if (mod && !e.shiftKey && k === 'a') {
+      e.preventDefault()
+      for (const x of shown) selected.add(x.name)
+    } else if (mod) return
+    else if (e.key === '/' || e.key === '?' || e.key === 'n' || e.key === 'u' || (e.key === 'F2' && target)) {
+      e.preventDefault()
+      if (e.key === '/') search()
+      else if (e.key === '?') help = true
+      else if (e.key === 'n') dialog = { kind: 'mkdir' }
+      else if (e.key === 'u') files?.click()
+      else if (target) dialog = { kind: 'rename', e: target }
+    } else if ((e.key === 'Delete' || e.key === 'Backspace') && selected.size) dialog = { kind: 'delete', names: [...selected] }
     else if (e.key === 'Enter' && selected.size === 1 && !(e.target as Element).closest('button, a, [role=grid]')) {
       const hit = entries.find((x) => selected.has(x.name))
       if (hit) open(hit)
@@ -373,6 +394,12 @@
 
 <input bind:this={files} type="file" multiple hidden onchange={(e) => upload(e.currentTarget.files)} />
 <input bind:this={folder} type="file" webkitdirectory hidden onchange={(e) => upload(e.currentTarget.files, true)} />
+
+{#if help}
+  {#await import('../components/ShortcutsDialog.svelte') then { default: ShortcutsDialog }}
+    <ShortcutsDialog onclose={() => (help = false)} />
+  {/await}
+{/if}
 
 {#if selected.size}
   <div class="sel-tools" role="toolbar" aria-label={t.selected(selected.size)}>
