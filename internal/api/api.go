@@ -374,7 +374,7 @@ func (a *API) search(w http.ResponseWriter, r *http.Request) {
 		}
 		in.Vol, in.Under = v.Name, rel
 	}
-	hits, err := a.Index.Search(in)
+	hits, err := a.Index.Search(r.Context(), in)
 	if err != nil {
 		httpx.Error(w, err)
 		return

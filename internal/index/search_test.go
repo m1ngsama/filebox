@@ -1,6 +1,7 @@
 package index
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -15,7 +16,7 @@ func (e *env) find(t *testing.T, q Query) []string {
 	if q.Limit == 0 {
 		q.Limit = 200
 	}
-	hits, err := e.x.Search(q)
+	hits, err := e.x.Search(context.Background(), q)
 	if err != nil {
 		t.Fatalf("search %q: %v", q.Text, err)
 	}
@@ -160,6 +161,17 @@ func BenchmarkSearch(b *testing.B) {
 	bt.flush()
 	b.ResetTimer()
 	for i := 0; b.Loop(); i++ {
-		e.x.Search(Query{Text: []string{"holiday", "00123", "sub1", "zz", "report-0999"}[i%5], Limit: 200})
+		e.x.Search(context.Background(), Query{Text: []string{"holiday", "00123", "sub1", "zz", "report-0999"}[i%5], Limit: 200})
+	}
+}
+
+func TestSearchStopsOnCancel(t *testing.T) {
+	e := setup(t)
+	e.write(t, "report.txt", "x", time.Now())
+	e.scan(t)
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	if _, err := e.x.Search(ctx, Query{Text: "report", Limit: 10}); err == nil {
+		t.Fatal("cancelled search returned no error")
 	}
 }
