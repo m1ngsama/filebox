@@ -56,7 +56,7 @@ func TestRelativeLinksStayInsideTheRoot(t *testing.T) {
 		"![a](/abs.png)":             `src="/raw/v/abs.png"`,
 		"![a](/../../etc/passwd)":    `src="/raw/v/etc/passwd"`,
 		"![a](https://x.test/a.png)": `src="https://x.test/a.png"`,
-		"[n](other.md#top)":          `href="/raw/v/docs/other.md"`,
+		"[n](other.md#top)":          `href="/raw/v/docs/other.md#top" target="_blank"`,
 		"[n](#top)":                  `href="#top"`,
 	}
 	for src, want := range cases {

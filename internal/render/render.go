@@ -47,12 +47,13 @@ var policy = func() *bluemonday.Policy {
 	p.AllowAttrs("type").Matching(regexp.MustCompile(`^checkbox$`)).OnElements("input")
 	p.AllowAttrs("checked", "disabled").OnElements("input")
 	p.AddTargetBlankToFullyQualifiedLinks(true)
+	p.AllowAttrs("target").Matching(regexp.MustCompile(`^_blank$`)).OnElements("a")
 	return p
 }()
 
 func IsMarkdown(name string) bool {
 	switch strings.ToLower(path.Ext(name)) {
-	case ".md", ".markdown", ".mdown", ".mkd":
+	case ".md", ".markdown":
 		return true
 	}
 	return false
@@ -79,8 +80,7 @@ const (
 	maxOutput = 4 << 20
 )
 
-// raw is the URL prefix that serves files under the same root as rel; "" drops relative links.
-func Serve(w http.ResponseWriter, r *http.Request, root *os.Root, rel, raw string) {
+func Serve(w http.ResponseWriter, r *http.Request, root *os.Root, rel, rawPrefix string) {
 	f, err := root.Open(rel)
 	if err != nil {
 		httpx.Error(w, err)
@@ -96,7 +96,7 @@ func Serve(w http.ResponseWriter, r *http.Request, root *os.Root, rel, raw strin
 		httpx.Fail(w, 400, "is a directory")
 		return
 	}
-	sum := sha256.Sum256(fmt.Appendf(nil, "%s\x00%s\x00%s\x00%d\x00%d", version, raw, rel, st.Size(), st.ModTime().UnixNano()))
+	sum := sha256.Sum256(fmt.Appendf(nil, "%s\x00%s\x00%s\x00%d\x00%d", version, rawPrefix, rel, st.Size(), st.ModTime().UnixNano()))
 	key := hex.EncodeToString(sum[:16])
 	etag := `"` + key + `"`
 	h := w.Header()
@@ -122,7 +122,7 @@ func Serve(w http.ResponseWriter, r *http.Request, root *os.Root, rel, raw strin
 		case <-r.Context().Done():
 			return
 		}
-		res = Render(path.Base(rel), src, linker(path.Dir(rel), raw))
+		res = Render(path.Base(rel), src, linker(path.Dir(rel), rawPrefix))
 		<-renders
 		mu.Lock()
 		if cached+len(res.html) > maxCache {
@@ -261,6 +261,9 @@ func linker(dir, raw string) func(string) string {
 		for i, s := range segs {
 			segs[i] = url.PathEscape(s)
 		}
+		if u.Fragment != "" {
+			return raw + strings.Join(segs, "/") + "#" + url.PathEscape(u.Fragment)
+		}
 		return raw + strings.Join(segs, "/")
 	}
 }
@@ -284,7 +287,11 @@ func (l links) Transform(doc *ast.Document, _ text.Reader, _ parser.Context) {
 		case *ast.Image:
 			n.Destination = []byte(l.link(string(n.Destination)))
 		case *ast.Link:
-			n.Destination = []byte(l.link(string(n.Destination)))
+			d := string(n.Destination)
+			n.Destination = []byte(l.link(d))
+			if u := string(n.Destination); u != d && strings.HasPrefix(u, "/") {
+				n.SetAttributeString("target", []byte("_blank"))
+			}
 		}
 		return ast.WalkContinue, nil
 	})
