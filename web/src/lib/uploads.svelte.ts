@@ -97,6 +97,12 @@ async function run(job: Job, signal: AbortSignal) {
       fingerprint: () =>
         Promise.resolve(['tus', endpoint, meta.vol, meta.dir, meta.relativePath ?? '', meta.overwrite ?? '', file.name, file.size, file.lastModified].join('|')),
       onProgress: (sent) => progress(job, sent),
+      onAfterResponse: (req, res) => {
+        if (req.getMethod() !== 'HEAD' || job.sent) return
+        const off = Number(res.getHeader('Upload-Offset')) || 0
+        progress(job, off)
+        samples = samples.map(([at, b]) => [at, b + off])
+      },
       onSuccess: ({ lastResponse }) => resolve(lastResponse.getHeader('Upload-Replaced') ?? null),
       onError: (e) => {
         if (endpoint === '/upload/' && (e as tus.DetailedError).originalResponse?.getStatus() === 401) session.lost()
