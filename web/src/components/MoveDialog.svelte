@@ -6,6 +6,7 @@
   import Modal from './Modal.svelte'
   import { api, type Move } from '../lib/api'
   import { t } from '../lib/i18n'
+  import { child } from '../lib/format'
 
   let {
     vols,
@@ -23,7 +24,6 @@
   let status = $state('')
   const same = $derived(at.vol === vol && at.path === dir)
   const crumbs = $derived(at.path ? at.path.split('/') : [])
-  const join = (d: string, n: string) => (d ? `${d}/${n}` : n)
 
   $effect(() => {
     let stale = false
@@ -75,7 +75,7 @@
     <ul class="picker-list">
       {#each folders as f (f)}
         <li>
-          <button type="button" onclick={() => (at = { vol: at.vol, path: join(at.path, f) })}><Folder size={18} /><span>{f}</span></button>
+          <button type="button" onclick={() => (at = { vol: at.vol, path: child(at.path, f) })}><Folder size={18} /><span>{f}</span></button>
         </li>
       {:else}
         <li class="hint">{t.noSubfolders}</li>

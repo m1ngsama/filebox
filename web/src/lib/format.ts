@@ -91,6 +91,7 @@ export const look = (n: string) => (icons.get(ext(n)) ?? kind(n)) as Look
 
 export const parent = (p: string) => (p.includes('/') ? p.slice(0, p.lastIndexOf('/')) : '')
 export const base = (p: string) => p.slice(p.lastIndexOf('/') + 1)
+export const child = (dir: string, n: string) => (dir ? `${dir}/${n}` : n)
 
 export const fallback = (urls: (string | null | false | undefined)[], failures: number) => urls.filter(Boolean)[failures] || null
 

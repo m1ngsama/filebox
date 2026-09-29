@@ -1,5 +1,6 @@
 import type { PublicKeyCredentialCreationOptionsJSON, PublicKeyCredentialRequestOptionsJSON } from '@simplewebauthn/browser'
 import { t } from './i18n'
+import { child } from './format'
 
 export const errorText = (status: number): string | undefined =>
   t.errors[status] ?? (status >= 500 ? t.serverError : undefined)
@@ -84,13 +85,12 @@ export const api = {
     if (r?.job) await api.waitJob(r.job, onprogress)
   },
   async transfer(vol: string, dir: string, names: string[], to: Loc, copy: boolean, onstatus?: (i: number, name: string, s?: JobStatus) => void) {
-    const join = (d: string, n: string) => (d ? `${d}/${n}` : n)
     const done: Move[] = []
     try {
       for (const [i, n] of names.entries()) {
         const show = (s?: JobStatus) => onstatus?.(i, n, s)
         show()
-        const m = { from: { vol, path: join(dir, n) }, to: { vol: to.vol, path: join(to.path, n) } }
+        const m = { from: { vol, path: child(dir, n) }, to: { vol: to.vol, path: child(to.path, n) } }
         if (copy) await api.waitJob((await api.cp(m.from, m.to)).job, show)
         else await api.move(m.from, m.to, show)
         done.push(m)

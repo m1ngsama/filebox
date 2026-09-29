@@ -12,7 +12,7 @@
   import { api, HttpError, shareRawURL, shareThumbURL, shareURL, shareZipURL, saveURL, validShareToken, type Entry, type ShareInfo } from '../lib/api'
   import { route, link, navigate } from '../lib/router.svelte'
   import { enqueue } from '../lib/uploads.svelte'
-  import { arrange, size, thumbable, rawThumb, fallback, type Sort } from '../lib/format'
+  import { arrange, size, thumbable, rawThumb, fallback, child, type Sort } from '../lib/format'
   import { t } from '../lib/i18n'
 
   let { token }: { token: string } = $props()
@@ -35,7 +35,7 @@
   const base = $derived(shareURL(token))
   const p = $derived(new URLSearchParams(route.search).get('p') ?? '')
   const crumbs = $derived(p ? p.split('/') : [])
-  const join = (n: string) => (p ? `${p}/${n}` : n)
+  const join = (n: string) => child(p, n)
   const here = (sub: string) => (sub ? `${base}?${new URLSearchParams({ p: sub })}` : base)
   const shown = $derived(arrange(at === p ? entries : [], '', sort, desc))
   const shared = $derived(info?.locked === false ? info : null)

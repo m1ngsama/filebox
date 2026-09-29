@@ -30,7 +30,7 @@
   import { toast, fail, runLatest } from '../lib/toast.svelte'
   import { navigate, link, route } from '../lib/router.svelte'
   import { enqueue, type Replaced } from '../lib/uploads.svelte'
-  import { thumbable, rawThumb, arrange, parent, base, flip, sorts, type Sort } from '../lib/format'
+  import { thumbable, rawThumb, arrange, parent, base, child, flip, sorts, type Sort } from '../lib/format'
   import { t } from '../lib/i18n'
   import { load, save } from '../lib/storage'
   import NavToggle from '../components/NavToggle.svelte'
@@ -68,7 +68,7 @@
   let folder = $state<HTMLInputElement>()
 
   const here = $derived(`${vol}/${path}`)
-  const join = (n: string) => (path ? `${path}/${n}` : n)
+  const join = (n: string) => child(path, n)
   const crumbs = $derived(path ? path.split('/') : [])
   const shown = $derived(arrange(at === here ? entries : [], query, sort, desc))
   const one = $derived(selected.size === 1 ? entries.find((e) => selected.has(e.name)) : undefined)
