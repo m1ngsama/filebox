@@ -2,6 +2,7 @@ package render
 
 import (
 	"bytes"
+	"context"
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
@@ -112,19 +113,13 @@ func Serve(w http.ResponseWriter, r *http.Request, root *os.Root, rel, rawPrefix
 	res, ok := cache[key]
 	mu.Unlock()
 	if !ok {
-		select {
-		case renders <- struct{}{}:
-		case <-r.Context().Done():
+		var err error
+		if res, err = slot(r.Context(), f, rel, rawPrefix); err != nil {
+			if r.Context().Err() == nil {
+				httpx.Error(w, err)
+			}
 			return
 		}
-		src, err := io.ReadAll(io.LimitReader(f, Limit+1))
-		if err != nil {
-			<-renders
-			httpx.Error(w, err)
-			return
-		}
-		res = Render(path.Base(rel), src, linker(path.Dir(rel), rawPrefix))
-		<-renders
 		mu.Lock()
 		if cached+len(res.html) > maxCache {
 			clear(cache)
@@ -144,6 +139,20 @@ func Serve(w http.ResponseWriter, r *http.Request, root *os.Root, rel, rawPrefix
 		h.Set("X-Plain", "1")
 	}
 	w.Write(res.html)
+}
+
+func slot(ctx context.Context, f io.Reader, rel, rawPrefix string) (result, error) {
+	select {
+	case renders <- struct{}{}:
+	case <-ctx.Done():
+		return result{}, ctx.Err()
+	}
+	defer func() { <-renders }()
+	src, err := io.ReadAll(io.LimitReader(f, Limit+1))
+	if err != nil {
+		return result{}, err
+	}
+	return Render(path.Base(rel), src, linker(path.Dir(rel), rawPrefix)), nil
 }
 
 func Render(name string, src []byte, link func(string) string) result {
