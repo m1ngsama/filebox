@@ -58,6 +58,7 @@
   let help = $state(false)
   let sheet = $state<'new' | 'more' | null>(null)
   let filterEl = $state<HTMLInputElement>()
+  let opener = $state<HTMLButtonElement>()
   const selected = new SvelteSet<string>()
   let files = $state<HTMLInputElement>()
   let folder = $state<HTMLInputElement>()
@@ -154,9 +155,11 @@
     filterEl?.focus()
   }
 
-  function endSearch() {
+  async function endSearch() {
     searching = false
     filter = ''
+    await tick()
+    if (narrow.current) opener?.focus()
   }
 
   const act = {
@@ -226,9 +229,11 @@
     else toast(t.movedTo(w, `${done[0].to.vol}:/${parent(done[0].to.path)}`), { action: undo(() => reverse(done)) })
   }
 
-  function pass(id: string) {
+  async function pass(id: string) {
     const e = one
     selected.clear()
+    await tick()
+    document.querySelector<HTMLElement>('[role=grid] [tabindex="0"]')?.focus()
     if (e) onaction(id, e)
   }
 
@@ -336,7 +341,7 @@
       <span class="grow"></span>
       <label for="filter" class="sr-only">{t.filter}</label>
       <input id="filter" class="filter" type="search" bind:value={filter} bind:this={filterEl} placeholder={t.filter} />
-      <button class="icon-btn search-open" aria-label={t.openFilter} onclick={search}><Search size={20} /></button>
+      <button class="icon-btn search-open" aria-label={t.openFilter} onclick={search} bind:this={opener}><Search size={20} /></button>
       <button class="icon-btn search-close" aria-label={t.closeFilter} onclick={endSearch}><X size={20} /></button>
       <button class="icon-btn view" aria-label={grid ? t.listView : t.gridView} title={grid ? t.listView : t.gridView} onclick={() => (grid = !grid)}>
         {#if grid}<List size={20} />{:else}<LayoutGrid size={20} />{/if}

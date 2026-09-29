@@ -857,6 +857,24 @@ test.describe('on a phone', () => {
     await expect.poll(async () => (await fab.boundingBox())!.y + 56 <= (await panel.boundingBox())!.y).toBe(true)
   })
 
+  test('focus stays on the page after closing the search and the more sheet', async ({ page, server }) => {
+    writeFileSync(join(server.vol, 'docs', 'x.txt'), 'x')
+    await login(page)
+    await row(page, 'docs').locator('button.name').tap()
+    const opener = page.getByRole('button', { name: t.openFilter })
+    await opener.tap()
+    await expect(page.locator('#filter')).toBeFocused()
+    await page.getByRole('button', { name: t.closeFilter }).tap()
+    await expect(opener).toBeFocused()
+    await (await finger(page)).hold(row(page, 'x.txt'))
+    await page.getByRole('toolbar').getByRole('button', { name: t.more }).tap()
+    await page.getByRole('dialog').getByRole('button', { name: t.rename }).tap()
+    await expect(page.getByLabel(t.newName)).toBeFocused()
+    await page.keyboard.press('Escape')
+    await expect(page.getByRole('dialog')).toHaveCount(0)
+    await expect(row(page, 'x.txt')).toBeFocused()
+  })
+
   test('a long text preview scrolls by touch', async ({ page, server }) => {
     writeFileSync(join(server.vol, 'docs', 'long.txt'), Array.from({ length: 400 }, (_, i) => `line ${i}`).join('\n'))
     await login(page)
