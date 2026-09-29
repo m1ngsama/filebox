@@ -168,6 +168,7 @@ export const t = {
   shareExisting: '已有相同的分享链接，已复制到剪贴板',
   shareExistingShown: '已有相同的分享链接',
   editShare: '编辑分享',
+  dropExposed: '改成这个权限后，拿到链接的人都能看到并下载这个文件夹里已有的文件，包括别人投递的文件。',
   shareSaved: '分享设置已保存',
   keepExpiry: '保持不变',
   requirePassword: '需要密码',

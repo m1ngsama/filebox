@@ -69,6 +69,7 @@
       <input type="number" min="0" step="1" inputmode="numeric" bind:value={limit} placeholder={t.uploadLimitHint} />
     </label>
   {/if}
+  {#if init.mode === 'drop' && mode !== 'drop'}<p class="warn-note" role="alert">{t.dropExposed}</p>{/if}
   {#if error}<p class="error">{error}</p>{/if}
   {#snippet footer()}
     <button type="button" onclick={onclose}>{t.cancel}</button>
