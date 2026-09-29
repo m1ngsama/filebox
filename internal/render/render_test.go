@@ -1,11 +1,14 @@
 package render
 
 import (
+	"bytes"
 	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
+	"unicode/utf8"
 )
 
 func md(t *testing.T, src string) string {
@@ -94,5 +97,24 @@ func TestTruncatedAndCached(t *testing.T) {
 	Serve(w2, r, root, "big.txt", "/raw/v/")
 	if w2.Code != 304 {
 		t.Fatal(w2.Code)
+	}
+}
+
+func TestCutKeepsInvalidBytesAndWholeRunes(t *testing.T) {
+	gbk := bytes.Repeat([]byte{0xc4, 0xe3, 0xba, 0xc3}, Limit/4+10)
+	start := time.Now()
+	res := Render("a.txt", gbk, nil)
+	if !res.truncated || time.Since(start) > 5*time.Second {
+		t.Fatalf("truncated %v in %v", res.truncated, time.Since(start))
+	}
+	if got := cut(gbk, Limit); len(got) < Limit-utf8.UTFMax {
+		t.Fatalf("non-UTF-8 prefix cut to %d bytes", len(got))
+	}
+	s := []byte(strings.Repeat("a", 10) + "\xff" + strings.Repeat("好", 10))
+	if got := cut(s, 16); string(got) != string(s[:14]) {
+		t.Fatalf("got %q", got)
+	}
+	if got := cut(s, 17); string(got) != string(s[:17]) {
+		t.Fatalf("whole rune dropped: %q", got)
 	}
 }

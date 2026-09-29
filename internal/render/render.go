@@ -126,13 +126,7 @@ func Serve(w http.ResponseWriter, r *http.Request, root *os.Root, rel, raw strin
 func Render(name string, src []byte, link func(string) string) result {
 	truncated := len(src) > Limit
 	if truncated {
-		src = src[:Limit]
-		if i := bytes.LastIndexByte(src, '\n'); i > 0 {
-			src = src[:i+1]
-		}
-		for len(src) > 0 && !utf8.Valid(src) {
-			src = src[:len(src)-1]
-		}
+		src = cut(src, Limit)
 	}
 	var buf bytes.Buffer
 	if IsMarkdown(name) {
@@ -141,6 +135,22 @@ func Render(name string, src []byte, link func(string) string) result {
 		highlight(&buf, lexers.Match(name), string(src))
 	}
 	return result{policy.SanitizeBytes(buf.Bytes()), truncated}
+}
+
+func cut(src []byte, n int) []byte {
+	src = src[:n]
+	if i := bytes.LastIndexByte(src, '\n'); i > 0 {
+		return src[:i+1]
+	}
+	for i := len(src) - 1; i >= 0 && i >= len(src)-utf8.UTFMax; i-- {
+		if utf8.RuneStart(src[i]) {
+			if !utf8.FullRune(src[i:]) {
+				return src[:i]
+			}
+			break
+		}
+	}
+	return src
 }
 
 func highlight(w io.Writer, l chroma.Lexer, code string) {
