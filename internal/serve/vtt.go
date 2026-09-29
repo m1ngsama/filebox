@@ -9,6 +9,9 @@ import (
 	"path"
 	"regexp"
 	"strings"
+	"unicode/utf8"
+
+	"golang.org/x/text/encoding/simplifiedchinese"
 
 	"github.com/m1ngsama/filebox/internal/httpx"
 )
@@ -19,6 +22,11 @@ var srtTime = regexp.MustCompile(`(?m)^(\s*\d+:\d{2}:\d{2}),(\d{1,3})\s*-->\s*(\
 
 func SRTToVTT(src []byte) []byte {
 	src = bytes.TrimPrefix(src, []byte("\xef\xbb\xbf"))
+	if !utf8.Valid(src) {
+		if b, err := simplifiedchinese.GB18030.NewDecoder().Bytes(src); err == nil {
+			src = b
+		}
+	}
 	src = bytes.ReplaceAll(src, []byte("\r\n"), []byte("\n"))
 	src = bytes.ReplaceAll(src, []byte("\r"), []byte("\n"))
 	if bytes.HasPrefix(src, []byte("WEBVTT")) {
