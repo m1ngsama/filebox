@@ -506,6 +506,20 @@ test('an undo toast outlives newer plain toasts', async ({ page, server }) => {
   await expect(page.locator('.toast').getByRole('button', { name: t.undo })).toHaveCount(1)
 })
 
+test('a partial undo restores what it can and names what it could not', async ({ page, server }) => {
+  for (const n of ['p1.txt', 'p2.txt']) writeFileSync(join(server.vol, n), n)
+  await login(page)
+  for (const n of ['p1.txt', 'p2.txt']) await row(page, n).locator('input[type=checkbox]').check()
+  await page.locator('.list-head').getByRole('button', { name: t.remove, exact: true }).click()
+  await page.locator('.dialog').getByRole('button', { name: t.remove, exact: true }).click()
+  await expect(row(page, 'p1.txt')).toHaveCount(0)
+  writeFileSync(join(server.vol, 'p2.txt'), 'new')
+  await page.locator('.toast').getByRole('button', { name: t.undo }).click()
+  await expect(page.getByRole('alert').filter({ hasText: t.undoFailed('“p2.txt”') })).toHaveText(t.failedItem(t.undoFailed('“p2.txt”'), t.errors[409]))
+  expect(readFileSync(join(server.vol, 'p1.txt'), 'utf8')).toBe('p1.txt')
+  expect(readFileSync(join(server.vol, 'p2.txt'), 'utf8')).toBe('new')
+})
+
 test('delete, rename and move each offer an undo', async ({ page, server }) => {
   writeFileSync(join(server.vol, 'undo.txt'), 'u')
   await login(page)

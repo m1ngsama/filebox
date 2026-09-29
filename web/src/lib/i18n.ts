@@ -115,6 +115,7 @@ export const t = {
   copiedTo: (what: string) => `${what}已复制`,
   undoing: '正在撤销…',
   undone: '已撤销',
+  undoFailed: (what: string) => `${what}没能撤销`,
   failedItem: (name: string, msg: string) => `${name}：${msg}`,
   uploaded: (n: number) => `已上传 ${n} 个文件`,
   shareCreated: '已新建分享链接',

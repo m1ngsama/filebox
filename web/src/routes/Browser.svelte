@@ -152,18 +152,30 @@
     else details = e
   }
 
-  const undo = (run: () => Promise<unknown>) => ({
+  type Failed = { name: string; error: Error }
+
+  const undo = (run: () => Promise<Failed[]>) => ({
     label: t.undo,
     run: () =>
-      run().then(
-        () => toast(t.undone),
-        (e) => fail(e),
-      ).finally(refresh),
+      run()
+        .then((bad) => {
+          if (!bad.length) toast(t.undone)
+          else if (bad.length === 1) fail(new Error(t.failedItem(t.undoFailed(t.what([bad[0].name])), bad[0].error.message)))
+          else fail(new Error(t.undoFailed(bad.map((b) => t.what([b.name])).join('、'))))
+        }, fail)
+        .finally(refresh),
   })
 
   async function reverse(moves: Move[]) {
     if (moves.some((m) => m.from.vol !== m.to.vol)) toast(t.undoing, { kind: 'info' })
-    for (const m of [...moves].reverse()) await api.move(m.to, m.from)
+    const bad: Failed[] = []
+    for (const m of [...moves].reverse()) await api.move(m.to, m.from).catch((error) => bad.push({ name: base(m.from.path), error }))
+    return bad
+  }
+
+  async function restore(v: string, items: { path: string; id: string }[]) {
+    const res = await Promise.allSettled(items.map((x) => api.restore(v, x.id)))
+    return items.flatMap((x, i) => (res[i].status === 'rejected' ? [{ name: base(x.path), error: res[i].reason as Error }] : []))
   }
 
   function moved(done: Move[], copy: boolean) {
@@ -346,7 +358,7 @@
           const left = names.filter((n) => failed.has(join(n)))
           if (r.trashed.length)
             toast(t.trashed(t.what(names.filter((n) => !failed.has(join(n))))), {
-              action: undo(() => Promise.all(r.trashed.map((x) => api.restore(v, x.id)))),
+              action: undo(() => restore(v, r.trashed)),
             })
           selected.clear()
           if (details && names.includes(details.name) && !left.includes(details.name)) closeDetails()
