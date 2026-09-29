@@ -143,7 +143,11 @@ func Open(path string) (*DB, error) {
 		return nil, err
 	}
 	d := &DB{s}
-	if err := d.migrate(); err != nil {
+	err = d.migrate()
+	if err == nil {
+		err = d.syncSearch()
+	}
+	if err != nil {
 		s.Close()
 		return nil, err
 	}
@@ -173,6 +177,15 @@ func (d *DB) migrate() error {
 		}
 	}
 	return nil
+}
+
+func (d *DB) syncSearch() error {
+	var ok bool
+	err := d.QueryRow(`SELECT (SELECT count(*) FROM files) = (SELECT count(*) FROM files_fts_docsize)`).Scan(&ok)
+	if err == nil && !ok {
+		_, err = d.Exec(`INSERT INTO files_fts (files_fts) VALUES ('rebuild')`)
+	}
+	return err
 }
 
 func notFound(err error) error {

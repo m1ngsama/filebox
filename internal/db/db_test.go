@@ -348,3 +348,29 @@ func TestMigrateBackfillsSearch(t *testing.T) {
 		t.Fatalf("backfilled %q %d %v", name, size, err)
 	}
 }
+
+func TestOpenRebuildsSearchAfterOldBinaryWrites(t *testing.T) {
+	p := filepath.Join(t.TempDir(), "t.db")
+	d, err := Open(p)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := d.Exec(`INSERT INTO files (vol, path, dir, size, mtime) VALUES ('v', 'kept.txt', 0, 1, 1), ('v', 'gone.txt', 0, 1, 1)`); err != nil {
+		t.Fatal(err)
+	}
+	d.Close()
+	if d, err = Open(p); err != nil {
+		t.Fatal(err)
+	}
+	defer d.Close()
+	if _, err := d.Exec(`DELETE FROM files WHERE path = 'gone.txt'`); err != nil {
+		t.Fatal(err)
+	}
+	var n int
+	if err := d.QueryRow(`SELECT count(*) FROM files_fts WHERE files_fts MATCH '"kept"'`).Scan(&n); err != nil || n != 1 {
+		t.Fatalf("kept.txt found %d times, %v", n, err)
+	}
+	if _, err := d.Exec(`INSERT INTO files_fts (files_fts, rank) VALUES ('integrity-check', 1)`); err != nil {
+		t.Fatal(err)
+	}
+}
