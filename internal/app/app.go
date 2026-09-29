@@ -56,6 +56,9 @@ func (a *App) Handler() http.Handler {
 	mux.Handle("/dav/", d)
 	mux.Handle("/upload/", a.Uploads.Handler("/upload/", a.userUploads()))
 	(&share.Service{DB: a.DB, Vols: a.Vols, Auth: a.Auth, Uploads: a.Uploads, Thumbs: a.Thumbs}).Register(mux)
+	mux.HandleFunc("POST /share-target", func(w http.ResponseWriter, r *http.Request) {
+		http.Redirect(w, r, "/?share-target", http.StatusSeeOther)
+	})
 	mux.Handle("GET /s/{token}", a.spa("share.html"))
 	mux.Handle("/", a.spa("index.html"))
 	return common(http.NewCrossOriginProtection().Handler(mux))
@@ -208,11 +211,16 @@ func (a *App) spa(page string) http.Handler {
 		}
 		if p := strings.TrimPrefix(r.URL.Path, "/"); p != "" {
 			if st, err := fs.Stat(a.Web, p); err == nil && !st.IsDir() {
-				if strings.HasPrefix(p, "assets/") {
+				switch {
+				case strings.HasPrefix(p, "assets/"):
 					w.Header().Set("Cache-Control", "public, max-age=31536000, immutable")
 					if a.precompressed(w, r, p) {
 						return
 					}
+				case p == "sw.js":
+					w.Header().Set("Cache-Control", "no-cache")
+				case path.Ext(p) == ".webmanifest":
+					w.Header().Set("Content-Type", "application/manifest+json")
 				}
 				files.ServeHTTP(w, r)
 				return

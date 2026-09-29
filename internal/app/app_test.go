@@ -49,12 +49,14 @@ func newTestApp(t *testing.T) *fixture {
 	sess, _ := a.Login("admin", "pw-pw-pw-pw", "127.0.0.1", "")
 	bearer, _ := a.NewAppToken(uid, "test", false)
 	web := fstest.MapFS{
-		"index.html":         {Data: []byte("<!doctype html>app")},
-		"share.html":         {Data: []byte("<!doctype html>share")},
-		"assets/app-1.js":    {Data: []byte("js")},
-		"assets/app-1.js.br": {Data: []byte("js-br")},
-		"assets/app-1.js.gz": {Data: []byte("js-gz")},
-		"assets/app-1.css":   {Data: []byte("css")},
+		"index.html":           {Data: []byte("<!doctype html>app")},
+		"share.html":           {Data: []byte("<!doctype html>share")},
+		"sw.js":                {Data: []byte("self")},
+		"manifest.webmanifest": {Data: []byte("{}")},
+		"assets/app-1.js":      {Data: []byte("js")},
+		"assets/app-1.js.br":   {Data: []byte("js-br")},
+		"assets/app-1.js.gz":   {Data: []byte("js-gz")},
+		"assets/app-1.css":     {Data: []byte("css")},
 	}
 	up, err := upload.New(vols)
 	if err != nil {
@@ -189,5 +191,18 @@ func TestCrossOriginBlocked(t *testing.T) {
 	}
 	if got := f.do("GET", "/", nil, "X-No-Auth", "1").Header().Get("Referrer-Policy"); got != "no-referrer" {
 		t.Fatalf("Referrer-Policy %q", got)
+	}
+}
+
+func TestPWAFiles(t *testing.T) {
+	f := newTestApp(t)
+	if w := f.do("GET", "/sw.js", nil, "X-No-Auth", "1"); w.Code != 200 || w.Header().Get("Cache-Control") != "no-cache" {
+		t.Fatalf("sw.js %d %v", w.Code, w.Header())
+	}
+	if w := f.do("GET", "/manifest.webmanifest", nil, "X-No-Auth", "1"); w.Code != 200 || w.Header().Get("Content-Type") != "application/manifest+json" {
+		t.Fatalf("manifest %d %v", w.Code, w.Header())
+	}
+	if w := f.do("POST", "/share-target", nil, "X-No-Auth", "1"); w.Code != 303 || w.Header().Get("Location") != "/?share-target" {
+		t.Fatalf("share target without a service worker %d %v", w.Code, w.Header())
 	}
 }

@@ -1,0 +1,53 @@
+const SHELL = 'shell'
+const BYPASS = /^\/(api|s|dav|raw|thumb|upload)(\/|$)/
+
+self.addEventListener('install', () => self.skipWaiting())
+self.addEventListener('activate', (e) => e.waitUntil(self.clients.claim()))
+
+self.addEventListener('fetch', (e) => {
+  const r = e.request
+  const u = new URL(r.url)
+  if (u.origin !== location.origin) return
+  if (r.method === 'POST' && u.pathname === '/share-target') return e.respondWith(receive(r))
+  if (r.method !== 'GET' || BYPASS.test(u.pathname)) return
+  if (u.pathname.startsWith('/assets/')) e.respondWith(asset(r))
+  else if (r.mode === 'navigate') e.respondWith(page(r))
+})
+
+async function asset(r) {
+  const c = await caches.open(SHELL)
+  const hit = await c.match(r)
+  if (hit) return hit
+  const res = await fetch(r)
+  if (res.ok) await c.put(r, res.clone())
+  return res
+}
+
+async function page(r) {
+  try {
+    const res = await fetch(r)
+    if (res.ok && res.headers.get('Content-Type')?.startsWith('text/html')) {
+      const c = await caches.open(SHELL)
+      const html = await res.clone().text()
+      const old = await c.match('/')
+      if (!old || (await old.text()) !== html) for (const k of await c.keys()) await c.delete(k)
+      await c.put('/', new Response(html, { headers: res.headers }))
+    }
+    return res
+  } catch {
+    return (await caches.match('/')) ?? Response.error()
+  }
+}
+
+async function receive(r) {
+  const form = await r.formData()
+  await caches.delete('share-target')
+  const c = await caches.open('share-target')
+  let i = 0
+  for (const f of form.getAll('files')) {
+    if (!(f instanceof File)) continue
+    const headers = { 'Content-Type': f.type || 'application/octet-stream', 'X-Name': encodeURIComponent(f.name), 'X-Modified': String(f.lastModified) }
+    await c.put(`/share-target/${i++}`, new Response(f, { headers }))
+  }
+  return Response.redirect('/?share-target', 303)
+}

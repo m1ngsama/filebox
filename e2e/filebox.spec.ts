@@ -1509,3 +1509,51 @@ test('settings lists share activity newest first with filters', async ({ page, b
   await expect(list).toHaveCount(1)
   await expect(list.first()).toContainText('v:/docs')
 })
+
+test('the app installs as a PWA whose service worker caches only the shell', async ({ page }) => {
+  const manifest = await (await page.request.get('/manifest.webmanifest')).json()
+  expect(manifest.share_target).toMatchObject({ action: '/share-target', method: 'POST', enctype: 'multipart/form-data' })
+  for (const i of manifest.icons) expect((await page.request.get(i.src)).status()).toBe(200)
+  await login(page)
+  await page.evaluate(() => navigator.serviceWorker.ready)
+  await page.reload()
+  await expect(row(page, 'docs')).toBeVisible()
+  expect(await page.evaluate(() => !!navigator.serviceWorker.controller)).toBe(true)
+  const api = page.waitForResponse((r) => new URL(r.url()).pathname === '/api/ls')
+  await row(page, 'docs').locator('button.name').click()
+  expect((await api).fromServiceWorker()).toBe(false)
+  const cached = await page.evaluate(async () => (await (await caches.open('shell')).keys()).map((r) => new URL(r.url).pathname))
+  expect(cached).toContain('/')
+  expect(cached.some((p) => p.startsWith('/assets/'))).toBe(true)
+  expect(cached.filter((p) => p !== '/' && !p.startsWith('/assets/'))).toEqual([])
+})
+
+test('files shared from another app land in the upload flow', async ({ page, server }) => {
+  await login(page)
+  await page.evaluate(() => navigator.serviceWorker.ready)
+  await page.reload()
+  await expect.poll(() => page.evaluate(() => !!navigator.serviceWorker.controller)).toBe(true)
+  await page.evaluate(() => {
+    const f = document.createElement('form')
+    f.method = 'POST'
+    f.action = '/share-target'
+    f.enctype = 'multipart/form-data'
+    const i = document.createElement('input')
+    i.type = 'file'
+    i.name = 'files'
+    const dt = new DataTransfer()
+    dt.items.add(new File(['from the phone'], 'shared.txt', { type: 'text/plain' }))
+    i.files = dt.files
+    f.append(i)
+    document.body.append(f)
+    f.submit()
+  })
+  const dialog = page.locator('.dialog')
+  await expect(dialog).toContainText(t.uploadTo)
+  await expect(dialog).toContainText(t.sharedFiles(['shared.txt']))
+  await dialog.locator('.picker-list').getByRole('button', { name: 'docs' }).click()
+  await dialog.getByRole('button', { name: t.uploadHere }).click()
+  await expect(page).toHaveURL(/\/files\/v\/docs\/$/)
+  await expect(page.locator('.toast', { hasText: t.uploaded(1) })).toHaveCount(1)
+  expect(readFileSync(join(server.vol, 'docs/shared.txt'), 'utf8')).toBe('from the phone')
+})

@@ -1,0 +1,56 @@
+<script lang="ts">
+  import Folder from '@lucide/svelte/icons/folder'
+  import HardDrive from '@lucide/svelte/icons/hard-drive'
+  import ChevronRight from '@lucide/svelte/icons/chevron-right'
+  import { api, type Loc } from '../lib/api'
+  import { t } from '../lib/i18n'
+  import { child } from '../lib/format'
+
+  let { vols, at = $bindable(), error = $bindable('') }: { vols: string[]; at: Loc; error?: string } = $props()
+
+  let folders = $state<string[]>([])
+  const crumbs = $derived(at.path ? at.path.split('/') : [])
+
+  $effect(() => {
+    let stale = false
+    api.ls(at.vol, at.path).then(
+      (r) => {
+        if (stale) return
+        folders = r.entries.filter((e) => e.dir).map((e) => e.name)
+        error = ''
+      },
+      (e) => {
+        if (stale) return
+        folders = []
+        error = e.message
+      },
+    )
+    return () => {
+      stale = true
+    }
+  })
+</script>
+
+<div class="picker">
+  <div class="picker-vols" role="group" aria-label={t.chooseFolder}>
+    {#each vols as v}
+      <button type="button" class="chip" aria-pressed={at.vol === v} onclick={() => (at = { vol: v, path: '' })}><HardDrive size={14} />{v}</button>
+    {/each}
+  </div>
+  <nav class="crumbs" aria-label={t.breadcrumb}>
+    <button type="button" onclick={() => (at = { vol: at.vol, path: '' })}>{at.vol}</button>
+    {#each crumbs as c, i}
+      <ChevronRight size={14} />
+      <button type="button" onclick={() => (at = { vol: at.vol, path: crumbs.slice(0, i + 1).join('/') })}>{c}</button>
+    {/each}
+  </nav>
+  <ul class="picker-list">
+    {#each folders as f (f)}
+      <li>
+        <button type="button" onclick={() => (at = { vol: at.vol, path: child(at.path, f) })}><Folder size={18} /><span>{f}</span></button>
+      </li>
+    {:else}
+      <li class="hint">{t.noSubfolders}</li>
+    {/each}
+  </ul>
+</div>

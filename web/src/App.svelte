@@ -13,6 +13,7 @@
   let me = $state<Me | null>(null)
   let needLogin = $state(false)
   let error = $state('')
+  let shared = $state(new URLSearchParams(location.search).has('share-target'))
   const parts = $derived(route.path.split('/').filter(Boolean).map(decodeURIComponent))
   const titles: Record<string, string> = { recent: t.recent, favorites: t.favorites, shares: t.myShares, trash: t.trash, settings: t.settings }
 
@@ -90,5 +91,8 @@
     </main>
   </div>
   <UploadPanel />
+  {#if shared}
+    <Lazy load={() => import('./components/ShareTarget.svelte')} vols={me.vols} onclose={() => (shared = false)} />
+  {/if}
 {/if}
 <Toasts />
