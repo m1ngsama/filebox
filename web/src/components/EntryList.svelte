@@ -108,15 +108,18 @@
     held = true
     origin = [ev.clientX, ev.clientY]
     pressing = i
+    const key = id(entries[i])
     clearTimeout(timer)
     timer = setTimeout(() => {
       pressing = -1
       swallow = true
-      anchor = i
-      selected.add(id(entries[i]))
+      anchor = entries.findIndex((e) => id(e) === key)
+      selected.add(key)
       navigator.vibrate?.(10)
     }, 450)
   }
+
+  $effect(() => () => clearTimeout(timer))
 
   function release() {
     clearTimeout(timer)
