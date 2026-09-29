@@ -18,6 +18,8 @@
   import List from '@lucide/svelte/icons/list'
   import ChevronRight from '@lucide/svelte/icons/chevron-right'
   import SearchX from '@lucide/svelte/icons/search-x'
+  import SquareCheck from '@lucide/svelte/icons/square-check'
+  import { narrow } from '../lib/shell.svelte'
   import Search from '@lucide/svelte/icons/search'
   import ChevronLeft from '@lucide/svelte/icons/chevron-left'
   import Ellipsis from '@lucide/svelte/icons/ellipsis'
@@ -158,6 +160,7 @@
   }
 
   const act = {
+    select: { id: 'select', label: t.selectItem, icon: SquareCheck },
     open: { id: 'open', label: t.open, icon: FolderOpen },
     download: { id: 'download', label: t.download, icon: Download },
     rename: { id: 'rename', label: t.rename, icon: Pencil },
@@ -171,13 +174,13 @@
 
   const actions = (e: Entry | null): Action[] =>
     !e ? [act.mkdir, act.upload]
-    : e.dir ? [act.open, act.rename, act.move, act.share, act.details, act.remove]
-    : [act.open, act.download, act.rename, act.move, act.share, act.details, act.remove]
+    : [...(narrow.current ? [act.select] : []), act.open, ...(e.dir ? [] : [act.download]), act.rename, act.move, act.share, act.details, act.remove]
 
   function onaction(id: string, e: Entry | null) {
     if (id === 'mkdir') dialog = { kind: 'mkdir' }
     else if (id === 'upload') files?.click()
     else if (!e) return
+    else if (id === 'select') selected.add(e.name)
     else if (id === 'open') open(e)
     else if (id === 'download') download([e.name])
     else if (id === 'rename') dialog = { kind: 'rename', e }

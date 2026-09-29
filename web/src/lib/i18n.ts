@@ -66,6 +66,7 @@ export const t = {
   listView: '切换到列表视图',
   selectAll: '全选',
   selectNone: '取消全选',
+  selectItem: '选择',
   select: (n: string) => `选择 ${n}`,
   selected: (n: number) => `已选 ${n} 项`,
   clearSelection: '取消选择',
