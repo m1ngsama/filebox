@@ -498,6 +498,20 @@ test('undo from the keyboard keeps focus and lets later toasts expire', async ({
   await expect(row(page, 'kb.txt')).toHaveCount(1)
 })
 
+test('ctrl+z on a focused undo button keeps focus and lets later toasts expire', async ({ page, server }) => {
+  writeFileSync(join(server.vol, 'kz.txt'), 'k')
+  await login(page)
+  await row(page, 'kz.txt').locator('input[type=checkbox]').check()
+  await page.locator('.list-head').getByRole('button', { name: t.remove, exact: true }).click()
+  await page.locator('.dialog').getByRole('button', { name: t.remove, exact: true }).click()
+  await page.locator('.toast').getByRole('button', { name: t.undo, exact: true }).focus()
+  await page.keyboard.press('ControlOrMeta+z')
+  await expect(row(page, 'kz.txt')).toHaveCount(1)
+  expect(await page.evaluate(() => document.activeElement !== document.body)).toBe(true)
+  await expect(page.locator('.toast', { hasText: t.undone })).toHaveCount(1)
+  await expect(page.locator('.toast', { hasText: t.undone })).toHaveCount(0, { timeout: 7000 })
+})
+
 test('an undo toast outlives newer plain toasts', async ({ page, server }) => {
   writeFileSync(join(server.vol, 'keep.txt'), 'k')
   await login(page)

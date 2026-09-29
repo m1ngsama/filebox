@@ -3,22 +3,20 @@
   import CircleCheck from '@lucide/svelte/icons/circle-check'
   import CircleAlert from '@lucide/svelte/icons/circle-alert'
   import Info from '@lucide/svelte/icons/info'
-  import { toasts, dismiss, hold, type Toast } from '../lib/toast.svelte'
+  import { toasts, dismiss, hold, onLeave } from '../lib/toast.svelte'
   import { t } from '../lib/i18n'
 
   const icons = { success: CircleCheck, error: CircleAlert, info: Info }
   let region = $state<HTMLElement>()
   let back: HTMLElement | null = null
 
-  function close(x: Toast) {
-    if (region?.contains(document.activeElement)) {
-      const next = region.querySelector<HTMLElement>(`.toast:not([data-id="${x.id}"]) button`)
-      if (next) next.focus()
-      else (back?.isConnected && back !== document.body ? back : document.querySelector<HTMLElement>('[role=grid] [tabindex="0"], main'))?.focus()
-    }
-    dismiss(x.id)
-    hold('focus', !!region?.contains(document.activeElement))
-  }
+  onLeave((id) => {
+    if (!region?.querySelector(`[data-id="${id}"]`)?.contains(document.activeElement)) return
+    const next = region.querySelector<HTMLElement>(`.toast:not([data-id="${id}"]) button`)
+    if (next) next.focus()
+    else (back?.isConnected && back !== document.body ? back : document.querySelector<HTMLElement>('[role=grid] [tabindex="0"], main'))?.focus()
+    hold('focus', region.contains(document.activeElement))
+  })
 </script>
 
 <section
@@ -50,11 +48,11 @@
         aria-describedby={`toast-${x.id}`}
         aria-keyshortcuts={a.keys}
         onclick={() => {
-          close(x)
+          dismiss(x.id)
           a.run()
         }}>{a.label}</button
       >
     {/if}
-    <button class="icon-btn" aria-label={t.close} onclick={() => close(x)}><X size={16} /></button>
+    <button class="icon-btn" aria-label={t.close} onclick={() => dismiss(x.id)}><X size={16} /></button>
   </div>
 {/snippet}

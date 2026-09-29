@@ -5,6 +5,9 @@ const timers = new Map<number, { left: number; start: number; id: number }>()
 let seq = 0
 let paused = false
 const holds = { hover: false, focus: false }
+let leaving: (id: number) => void = () => {}
+
+export const onLeave = (fn: typeof leaving) => (leaving = fn)
 
 export function toast(text: string, o: { kind?: Toast['kind']; action?: Toast['action']; ms?: number } = {}) {
   const id = ++seq
@@ -39,7 +42,9 @@ export function dismiss(id: number) {
   clearTimeout(timers.get(id)?.id)
   timers.delete(id)
   const i = toasts.findIndex((x) => x.id === id)
-  if (i >= 0) toasts.splice(i, 1)
+  if (i < 0) return
+  leaving(id)
+  toasts.splice(i, 1)
 }
 
 export function hold(why: keyof typeof holds, on: boolean) {
