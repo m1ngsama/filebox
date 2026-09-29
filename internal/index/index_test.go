@@ -6,6 +6,7 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -302,5 +303,24 @@ func TestConcurrentFlushes(t *testing.T) {
 	e.x.db.QueryRow(`SELECT count(*) FROM files_fts WHERE files_fts MATCH '"/f0" OR "/f1"'`).Scan(&fts)
 	if n := failed.Load(); n != 0 || files != 40000 || fts != 40000 {
 		t.Fatalf("%d failures, %d files, %d fts rows", n, files, fts)
+	}
+}
+
+func TestRenameKeepsRowsForRootOrSelf(t *testing.T) {
+	e := setup(t)
+	b := &batch{db: e.x.db, w: &e.x.w, vol: "v", rows: []row{{path: "a", dir: true}, {path: "a/f"}, {path: "b"}}}
+	if err := b.flush(); err != nil {
+		t.Fatal(err)
+	}
+	e.x.Star("v", []string{"a/f", "b"}, true)
+	if err := e.x.rename("v", "a", "a"); err != nil {
+		t.Fatal(err)
+	}
+	if err := e.x.rename("v", "a", "."); err == nil {
+		t.Fatal("rename onto the root succeeded")
+	}
+	favs, _ := e.x.Favorites()
+	if got := e.paths(t); !slices.Equal(got, []string{"a", "a/f", "b"}) || len(favs) != 2 {
+		t.Fatalf("rows %v, favorites %v", got, favs)
 	}
 }

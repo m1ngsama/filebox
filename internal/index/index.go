@@ -100,6 +100,12 @@ func (x *Index) Rename(v *vol.Volume, from, to string) {
 }
 
 func (x *Index) rename(vol, from, to string) error {
+	if from == to {
+		return nil
+	}
+	if to == "." {
+		return fmt.Errorf("rename %q onto the volume root", from)
+	}
 	x.w.Lock()
 	defer x.w.Unlock()
 	tx, err := x.db.Begin()
