@@ -76,7 +76,7 @@ func New(ffmpeg, dir string) *Service {
 	return s
 }
 
-// Probe picks the thumbnail encoder; distro and Homebrew ffmpeg builds often lack libwebp.
+// Distro and Homebrew ffmpeg builds often lack libwebp.
 func (s *Service) Probe(ctx context.Context) {
 	ctx, cancel := context.WithTimeout(ctx, probeTimeout)
 	defer cancel()
