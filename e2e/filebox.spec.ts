@@ -639,6 +639,15 @@ test('settings sections have headings, a sub-nav and quiet destructive buttons',
   await expect(page.getByRole('heading', { name: t.appPasswords })).toBeInViewport()
 })
 
+test('app passwords that fail to load show the error, not an empty list', async ({ page }) => {
+  await login(page)
+  await page.route('**/api/tokens', (r) => r.fulfill({ status: 500, body: '{"error":"boom"}' }))
+  await page.goto('/settings')
+  const card = page.getByRole('region', { name: t.appPasswords })
+  await expect(card.locator('.error')).toHaveText(t.serverError)
+  await expect(card.getByText(t.noTokens)).toHaveCount(0)
+})
+
 test('signing out another device sends it back to login', async ({ page, browser, server }) => {
   const other = await browser.newPage({ baseURL: server.url, userAgent: 'Mozilla/5.0 (X11; Linux x86_64) Firefox/140.0' })
   await login(other)

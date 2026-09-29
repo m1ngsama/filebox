@@ -20,6 +20,7 @@
   let { vols }: { vols: string[] } = $props()
 
   let tokens = $state<Token[] | null>(null)
+  let tokensError = $state('')
   let label = $state('')
   let readonly = $state(false)
   let created = $state('')
@@ -53,8 +54,9 @@
   async function load() {
     try {
       tokens = (await api.tokens()).tokens
+      tokensError = ''
     } catch (e) {
-      error = (e as Error).message
+      tokensError = (e as Error).message
     }
   }
   load()
@@ -199,7 +201,7 @@
         </div>
       {/if}
 
-      <RowList items={tokens ?? (error ? [] : null)} key={(k) => k.id}>
+      <RowList items={tokens} error={tokensError} key={(k) => k.id}>
         {#snippet row(k)}
           <KeyRound size={18} class="row-icon" />
           <div class="row-main">
