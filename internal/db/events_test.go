@@ -32,6 +32,7 @@ func TestEventsViewOncePerDayAndPrune(t *testing.T) {
 		{At: day + 30, ShareID: s.ID, Kind: EventView, Visitor: "b"},
 		{At: day + 86400, ShareID: s.ID, Kind: EventView, Visitor: "a"},
 		{At: day + 40, ShareID: s.ID, Kind: EventDownload, Visitor: "a", Name: "x.txt", Size: 3},
+		{At: day + 45, ShareID: s.ID, Kind: EventDownload, Visitor: "a", Name: "x.txt", Size: 3},
 		{At: day + 50, UserID: uid, Kind: EventLogin},
 		{At: day + 60, Kind: EventLoginFailed},
 	} {

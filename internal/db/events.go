@@ -41,22 +41,17 @@ func (d *DB) Log(e Event) error {
 	if e.ShareID != 0 && e.UserID == 0 {
 		d.QueryRow(`SELECT user_id FROM shares WHERE id = ?`, e.ShareID).Scan(&e.UserID)
 	}
-	if e.Kind != EventView {
-		_, err := d.Exec(`INSERT INTO events (at, user_id, kind, share_id, visitor, name, size) VALUES (?, ?, ?, ?, ?, ?, ?)`,
-			e.At, e.UserID, e.Kind, e.ShareID, e.Visitor, e.Name, e.Size)
-		return err
-	}
 	tx, err := d.Begin()
 	if err != nil {
 		return err
 	}
 	defer tx.Rollback()
-	n, err := affected(tx.Exec(`INSERT OR IGNORE INTO events (at, user_id, kind, share_id, visitor) VALUES (?, ?, ?, ?, ?)`,
-		e.At, e.UserID, e.Kind, e.ShareID, e.Visitor))
+	n, err := affected(tx.Exec(`INSERT OR IGNORE INTO events (at, user_id, kind, share_id, visitor, name, size) VALUES (?, ?, ?, ?, ?, ?, ?)`,
+		e.At, e.UserID, e.Kind, e.ShareID, e.Visitor, e.Name, e.Size))
 	if err != nil {
 		return err
 	}
-	if n > 0 {
+	if n > 0 && e.Kind == EventView {
 		if _, err := tx.Exec(`UPDATE shares SET views = views + 1 WHERE id = ?`, e.ShareID); err != nil {
 			return err
 		}

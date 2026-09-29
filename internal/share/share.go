@@ -477,7 +477,7 @@ func (s *Service) zip(w http.ResponseWriter, r *http.Request) {
 	name := serve.ZipName(o.name(), rels, q.Get("name"))
 	if serve.Zip(w, r, root, rels, top, name) {
 		s.DB.HitShare(o.sh.ID)
-		s.log(r, o.sh, db.EventDownload, name, 0)
+		s.log(r, o.sh, db.EventDownload, serve.ZipName(o.name(), rels, ""), 0)
 	}
 }
 

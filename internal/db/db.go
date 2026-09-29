@@ -120,6 +120,7 @@ var migrations = []string{
 	);
 	CREATE INDEX events_at ON events(at);
 	CREATE UNIQUE INDEX events_view ON events(share_id, visitor, at / 86400) WHERE kind = 'view';
+	CREATE UNIQUE INDEX events_download ON events(share_id, visitor, name, at / 3600) WHERE kind = 'download';
 	CREATE TABLE settings (key TEXT PRIMARY KEY, value BLOB NOT NULL) WITHOUT ROWID;
 	INSERT INTO settings (key, value) VALUES ('visitor_key', randomblob(32));`,
 }
