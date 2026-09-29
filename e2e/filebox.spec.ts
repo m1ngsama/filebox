@@ -492,6 +492,20 @@ test('undo from the keyboard keeps focus and lets later toasts expire', async ({
   await expect(page.locator('.toast', { hasText: t.undone })).toHaveCount(0, { timeout: 7000 })
 })
 
+test('an undo toast outlives newer plain toasts', async ({ page, server }) => {
+  writeFileSync(join(server.vol, 'keep.txt'), 'k')
+  await login(page)
+  await row(page, 'keep.txt').locator('input[type=checkbox]').check()
+  await page.locator('.list-head').getByRole('button', { name: t.remove, exact: true }).click()
+  await page.locator('.dialog').getByRole('button', { name: t.remove, exact: true }).click()
+  await expect(page.locator('.toast').getByRole('button', { name: t.undo })).toHaveCount(1)
+  for (let i = 0; i < 3; i++) {
+    await fileInput(page).setInputFiles({ name: `n${i}.txt`, mimeType: 'text/plain', buffer: Buffer.from('n') })
+    await expect(page.locator('.toast', { hasText: t.uploaded(1) })).not.toHaveCount(0)
+  }
+  await expect(page.locator('.toast').getByRole('button', { name: t.undo })).toHaveCount(1)
+})
+
 test('delete, rename and move each offer an undo', async ({ page, server }) => {
   writeFileSync(join(server.vol, 'undo.txt'), 'u')
   await login(page)

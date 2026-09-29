@@ -9,7 +9,7 @@ const holds = { hover: false, focus: false }
 export function toast(text: string, o: { kind?: Toast['kind']; action?: Toast['action']; ms?: number } = {}) {
   const id = ++seq
   toasts.push({ id, text, kind: o.kind ?? 'success', action: o.action })
-  if (toasts.length > 3) dismiss(toasts[0].id)
+  if (toasts.length > 3) dismiss((toasts.find((x) => !x.action) ?? toasts[0]).id)
   timers.set(id, { left: o.ms ?? (o.action || o.kind === 'error' ? 8000 : 4000), start: 0, id: 0 })
   if (!paused) arm(id)
   return id
