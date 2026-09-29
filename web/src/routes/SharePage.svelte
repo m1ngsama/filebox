@@ -12,7 +12,7 @@
   import { api, HttpError, shareRawURL, shareThumbURL, shareURL, validShareToken, type Entry, type ShareInfo } from '../lib/api'
   import { route, link, navigate } from '../lib/router.svelte'
   import { enqueue } from '../lib/uploads.svelte'
-  import { arrange, size, thumbable, rawThumb, type Sort } from '../lib/format'
+  import { arrange, size, thumbable, rawThumb, fallback, type Sort } from '../lib/format'
   import { t } from '../lib/i18n'
 
   let { token }: { token: string } = $props()
@@ -42,7 +42,7 @@
   const canUpload = $derived(shared?.mode === 'upload' || shared?.mode === 'drop')
   const listed = $derived(!!shared?.dir && shared.mode !== 'drop')
   const file = $derived<Entry | null>(shared && !shared.dir ? { name: shared.name, dir: false, size: shared.size ?? 0, mtime: 0 } : null)
-  const fileSrc = $derived(file && [thumbable(file.name) && shareThumbURL(token, ''), rawThumb(file) && shareRawURL(token, '')].filter(Boolean)[tries])
+  const fileSrc = $derived(file && fallback([thumbable(file.name) && shareThumbURL(token, ''), rawThumb(file) && shareRawURL(token, '')], tries))
 
   async function load() {
     fatal = ''

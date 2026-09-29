@@ -4,12 +4,12 @@
   import FileIcon from './FileIcon.svelte'
   import SharePanel from './SharePanel.svelte'
   import type { Entry } from '../lib/api'
-  import { size, date } from '../lib/format'
+  import { size, date, fallback } from '../lib/format'
   import { t } from '../lib/i18n'
 
   let { vol, path, entry, thumbs, onclose }: { vol: string; path: string; entry: Entry; thumbs: (string | null)[]; onclose: () => void } = $props()
   let tries = $state(0)
-  const src = $derived(thumbs.filter(Boolean)[tries])
+  const src = $derived(fallback(thumbs, tries))
 </script>
 
 <aside class="details" aria-label={t.details}>

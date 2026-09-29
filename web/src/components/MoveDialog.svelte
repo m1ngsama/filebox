@@ -69,7 +69,7 @@
   }
 </script>
 
-<Modal title={t.moveCopyTitle(names.length === 1 ? `“${names[0]}”` : t.items(names.length))} {onclose} onsubmit={() => !same && run(false)}>
+<Modal title={t.moveCopyTitle(t.what(names))} {onclose} onsubmit={() => !same && run(false)}>
   <div class="picker">
     <div class="picker-vols" role="group" aria-label={t.chooseFolder}>
       {#each vols as v}

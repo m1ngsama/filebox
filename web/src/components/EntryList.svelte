@@ -13,7 +13,7 @@
   import ArrowDown from '@lucide/svelte/icons/arrow-down'
   import FileIcon from './FileIcon.svelte'
   import type { Entry } from '../lib/api'
-  import { size, date, ago, look, type Sort } from '../lib/format'
+  import { size, date, ago, look, fallback, type Sort } from '../lib/format'
   import { t } from '../lib/i18n'
 
   let {
@@ -141,7 +141,7 @@
     else for (const e of entries) selected.add(id(e))
   }
 
-  const src = (e: Entry) => (e.dir ? null : ([thumb(e), raw?.(e)].filter(Boolean)[broken.get(id(e)) ?? 0] ?? null))
+  const src = (e: Entry) => (e.dir ? null : fallback([thumb(e), raw?.(e)], broken.get(id(e)) ?? 0))
   const miss = (e: Entry) => broken.set(id(e), (broken.get(id(e)) ?? 0) + 1)
 </script>
 

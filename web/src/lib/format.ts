@@ -86,6 +86,11 @@ const icons = new Map(Object.entries(looks).flatMap(([k, v]) => v.split(' ').map
 export type Look = ReturnType<typeof kind> | 'code' | 'archive' | 'sheet'
 export const look = (n: string) => (icons.get(ext(n)) ?? kind(n)) as Look
 
+export const parent = (p: string) => (p.includes('/') ? p.slice(0, p.lastIndexOf('/')) : '')
+export const base = (p: string) => p.slice(p.lastIndexOf('/') + 1)
+
+export const fallback = (urls: (string | null | false | undefined)[], failures: number) => urls.filter(Boolean)[failures] || null
+
 export const rawThumb = (e: { name: string; size: number; dir: boolean }) => !e.dir && kind(e.name) === 'image' && e.size < 2 << 20
 
 const thumbs = new Set('jpg jpeg png gif webp bmp tif tiff heic avif mp4 m4v mkv mov avi webm ts flv wmv mpg mpeg'.split(' '))

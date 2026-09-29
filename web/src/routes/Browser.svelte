@@ -22,7 +22,7 @@
   import { toast, fail } from '../lib/toast.svelte'
   import { navigate, link, route } from '../lib/router.svelte'
   import { enqueue } from '../lib/uploads.svelte'
-  import { thumbable, rawThumb, arrange, type Sort } from '../lib/format'
+  import { thumbable, rawThumb, arrange, parent, base, type Sort } from '../lib/format'
   import { t } from '../lib/i18n'
   import { load, save } from '../lib/storage'
   import NavToggle from '../components/NavToggle.svelte'
@@ -152,7 +152,6 @@
     else details = e
   }
 
-  const what = (names: string[]) => (names.length === 1 ? `“${names[0]}”` : t.items(names.length))
   const undo = (run: () => Promise<unknown>) => ({
     label: t.undo,
     run: () =>
@@ -172,9 +171,9 @@
     closeDetails()
     refresh()
     if (!done.length) return
-    const w = what(done.map((m) => m.from.path.split('/').pop()!))
+    const w = t.what(done.map((m) => base(m.from.path)))
     if (copy) toast(t.copiedTo(w))
-    else toast(t.movedTo(w, `${done[0].to.vol}:/${done[0].to.path.split('/').slice(0, -1).join('/')}`), { action: undo(() => reverse(done)) })
+    else toast(t.movedTo(w, `${done[0].to.vol}:/${parent(done[0].to.path)}`), { action: undo(() => reverse(done)) })
   }
 
   function keydown(e: KeyboardEvent) {
@@ -338,7 +337,7 @@
       {@const names = dialog.names}
       <ConfirmDialog
         title={t.confirmDeleteTitle}
-        message={t.confirmDelete(what(names))}
+        message={t.confirmDelete(t.what(names))}
         action={t.remove}
         onconfirm={async () => {
           const v = vol
@@ -346,7 +345,7 @@
           const failed = new Set(r.failed.map((f) => f.path))
           const left = names.filter((n) => failed.has(join(n)))
           if (r.trashed.length)
-            toast(t.trashed(what(names.filter((n) => !failed.has(join(n))))), {
+            toast(t.trashed(t.what(names.filter((n) => !failed.has(join(n))))), {
               action: undo(() => Promise.all(r.trashed.map((x) => api.restore(v, x.id)))),
             })
           selected.clear()

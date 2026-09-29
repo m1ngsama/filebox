@@ -8,7 +8,7 @@
   import Preview from '../components/Preview.svelte'
   import { api, filesURL, rawURL, thumbURL, type Entry, type RecentFile } from '../lib/api'
   import { navigate } from '../lib/router.svelte'
-  import { thumbable, rawThumb, arrange, type Sort } from '../lib/format'
+  import { thumbable, rawThumb, arrange, parent, type Sort } from '../lib/format'
   import { t } from '../lib/i18n'
 
   let files = $state.raw<RecentFile[]>([])
@@ -21,7 +21,6 @@
 
   const shown = $derived(arrange(files, '', sort, desc))
   const loc = (e: Entry) => e as RecentFile
-  const parent = (p: string) => (p.includes('/') ? p.slice(0, p.lastIndexOf('/')) : '')
 
   $effect(() => {
     let timer = 0
