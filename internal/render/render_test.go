@@ -2,6 +2,7 @@ package render
 
 import (
 	"bytes"
+	"context"
 	"net/http/httptest"
 	"os"
 	"path/filepath"
@@ -116,5 +117,45 @@ func TestCutKeepsInvalidBytesAndWholeRunes(t *testing.T) {
 	}
 	if got := cut(s, 17); string(got) != string(s[:17]) {
 		t.Fatalf("whole rune dropped: %q", got)
+	}
+}
+
+func TestDeepMarkdownFallsBackToPlainText(t *testing.T) {
+	for name, src := range map[string]string{
+		"quotes": strings.Repeat("> ", 300000) + "x",
+		"lists":  strings.Repeat("- ", 30000) + "x",
+		"links":  strings.Repeat("[a](", 50000) + "x",
+	} {
+		start := time.Now()
+		res := Render("a.md", []byte(src), linker(".", "/raw/v/"))
+		if !res.plain || !strings.HasPrefix(string(res.html), "<pre>") || time.Since(start) > 2*time.Second {
+			t.Errorf("%s: plain %v in %v", name, res.plain, time.Since(start))
+		}
+	}
+	nested := "> a\n> > b\n\n- a\n  - b\n    - c\n\n[x](y (z))\n"
+	if res := Render("a.md", []byte(nested), linker(".", "/raw/v/")); res.plain {
+		t.Fatal("ordinary nesting fell back to plain text")
+	}
+}
+
+func TestRenderWaitsForASlotAndGivesUpWithTheClient(t *testing.T) {
+	dir := t.TempDir()
+	os.WriteFile(filepath.Join(dir, "a.md"), []byte("# hi"), 0o644)
+	root, _ := os.OpenRoot(dir)
+	defer root.Close()
+	for range cap(renders) {
+		renders <- struct{}{}
+	}
+	defer func() {
+		for range cap(renders) {
+			<-renders
+		}
+	}()
+	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
+	defer cancel()
+	w := httptest.NewRecorder()
+	Serve(w, httptest.NewRequest("GET", "/", nil).WithContext(ctx), root, "a.md", "")
+	if w.Body.Len() != 0 {
+		t.Fatalf("rendered past a full semaphore: %s", w.Body)
 	}
 }

@@ -58,9 +58,14 @@ func IsMarkdown(name string) bool {
 	return false
 }
 
+const maxDepth = 32
+
+var renders = make(chan struct{}, 2)
+
 type result struct {
 	html      []byte
 	truncated bool
+	plain     bool
 }
 
 var (
@@ -108,7 +113,13 @@ func Serve(w http.ResponseWriter, r *http.Request, root *os.Root, rel, raw strin
 			httpx.Error(w, err)
 			return
 		}
+		select {
+		case renders <- struct{}{}:
+		case <-r.Context().Done():
+			return
+		}
 		res = Render(path.Base(rel), src, linker(path.Dir(rel), raw))
+		<-renders
 		mu.Lock()
 		if len(cache) >= maxCached {
 			clear(cache)
@@ -120,6 +131,9 @@ func Serve(w http.ResponseWriter, r *http.Request, root *os.Root, rel, raw strin
 	if res.truncated {
 		h.Set("X-Truncated", "1")
 	}
+	if res.plain {
+		h.Set("X-Plain", "1")
+	}
 	w.Write(res.html)
 }
 
@@ -129,12 +143,56 @@ func Render(name string, src []byte, link func(string) string) result {
 		src = cut(src, Limit)
 	}
 	var buf bytes.Buffer
-	if IsMarkdown(name) {
+	plain := false
+	switch {
+	case IsMarkdown(name) && tooDeep(src):
+		plain = true
+		fmt.Fprintf(&buf, "<pre>%s</pre>", html.EscapeString(string(src)))
+	case IsMarkdown(name):
 		markdown(link).Convert(src, &buf)
-	} else {
+	default:
 		highlight(&buf, lexers.Match(name), string(src))
 	}
-	return result{policy.SanitizeBytes(buf.Bytes()), truncated}
+	return result{policy.SanitizeBytes(buf.Bytes()), truncated, plain}
+}
+
+// goldmark is superlinear in block and bracket nesting and cannot be cancelled.
+func tooDeep(src []byte) bool {
+	parens := 0
+	for line := range bytes.Lines(src) {
+		level, indent := 0, 0
+	prefix:
+		for _, c := range line {
+			switch c {
+			case '>', '-', '*', '+', '.', ')':
+				level++
+			case ' ':
+				indent++
+			case '\t':
+				indent += 4
+			case '0', '1', '2', '3', '4', '5', '6', '7', '8', '9':
+			default:
+				break prefix
+			}
+		}
+		if level+indent/4 > maxDepth {
+			return true
+		}
+		if len(bytes.TrimSpace(line)) == 0 {
+			parens = 0
+		}
+		for _, c := range line {
+			switch c {
+			case '(', '[':
+				if parens++; parens > maxDepth {
+					return true
+				}
+			case ')', ']':
+				parens = max(0, parens-1)
+			}
+		}
+	}
+	return false
 }
 
 func cut(src []byte, n int) []byte {

@@ -115,6 +115,7 @@ export const t = {
   previewFailed: '预览加载失败，可以下载后查看。',
   cantPlay: '浏览器无法播放这个视频，可以下载后观看。',
   truncated: '文件太大，只显示了前 1 MiB。',
+  plainText: '文件嵌套太深，按纯文本显示。',
   zoom: '缩放',
   info: '信息',
   noInfo: '这个文件没有更多信息。',
