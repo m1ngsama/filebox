@@ -30,7 +30,7 @@
   import { toast, fail, runLatest } from '../lib/toast.svelte'
   import { navigate, link, route } from '../lib/router.svelte'
   import { enqueue } from '../lib/uploads.svelte'
-  import { thumbable, rawThumb, arrange, parent, base, flip, type Sort } from '../lib/format'
+  import { thumbable, rawThumb, arrange, parent, base, flip, sorts, type Sort } from '../lib/format'
   import { t } from '../lib/i18n'
   import { load, save } from '../lib/storage'
   import NavToggle from '../components/NavToggle.svelte'
@@ -364,8 +364,8 @@
             <DropdownMenu.Separator class="menu-sep" />
             <DropdownMenu.Group>
               <DropdownMenu.GroupHeading class="menu-label">{t.sortBy}</DropdownMenu.GroupHeading>
-              {#each [['name', t.name], ['size', t.size], ['mtime', t.mtime]] as [k, label] (k)}
-                <DropdownMenu.Item class="menu-item" aria-current={sort === k || undefined} onSelect={() => sortBy(k as Sort)}>
+              {#each sorts as [k, label] (k)}
+                <DropdownMenu.Item class="menu-item" aria-current={sort === k || undefined} onSelect={() => sortBy(k)}>
                   {#if sort !== k}<span class="menu-gap"></span>{:else if desc}<ArrowDown size={16} />{:else}<ArrowUp size={16} />{/if}{label}
                 </DropdownMenu.Item>
               {/each}

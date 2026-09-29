@@ -117,10 +117,7 @@ export const t = {
   shortcuts: '键盘快捷键',
   keys: {
     filter: '筛选当前文件夹',
-    mkdir: '新建文件夹',
-    upload: '上传文件',
     rename: '重命名选中或聚焦的项目',
-    selectAll: '全选',
     remove: '把选中的项目移到回收站',
     open: '打开选中的项目',
     move: '在列表里上下移动',

@@ -1,4 +1,4 @@
-import { lang } from './i18n'
+import { lang, t } from './i18n'
 
 export function size(n: number): string {
   const u = ['B', 'KB', 'MB', 'GB', 'TB']
@@ -11,6 +11,7 @@ export function size(n: number): string {
 }
 
 export type Sort = 'name' | 'size' | 'mtime'
+export const sorts: [Sort, string][] = [['name', t.name], ['size', t.size], ['mtime', t.mtime]]
 export const flip = (sort: Sort, desc: boolean, k: Sort) => (sort === k ? !desc : k !== 'name')
 const collator = new Intl.Collator(navigator.language, { numeric: true })
 

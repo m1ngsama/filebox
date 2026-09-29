@@ -13,7 +13,7 @@
   import ArrowDown from '@lucide/svelte/icons/arrow-down'
   import FileIcon from './FileIcon.svelte'
   import type { Entry } from '../lib/api'
-  import { size, date, ago, look, fallback, flip, type Sort } from '../lib/format'
+  import { size, date, ago, look, fallback, flip, sorts, type Sort } from '../lib/format'
   import { t } from '../lib/i18n'
   import { narrow } from '../lib/shell.svelte'
 
@@ -240,8 +240,8 @@
     <button class="ghost select-all" onclick={selectAll}>{all ? t.selectNone : t.selectAll}</button>
   {:else}
     <span></span>
-    {#each [['name', t.name], ['size', t.size], ['mtime', t.mtime]] as [k, label] (k)}
-      <button class={`sort ${k}`} aria-pressed={sort === k} onclick={() => by(k as Sort)}>
+    {#each sorts as [k, label] (k)}
+      <button class={`sort ${k}`} aria-pressed={sort === k} onclick={() => by(k)}>
         {label}
         {#if sort === k}{#if desc}<ArrowDown size={14} />{:else}<ArrowUp size={14} />{/if}{/if}
       </button>

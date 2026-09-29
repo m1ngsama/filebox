@@ -7,10 +7,10 @@
   const k = t.keys
   const rows: [string[][], string][] = [
     [[['/']], k.filter],
-    [[['N']], k.mkdir],
-    [[['U']], k.upload],
+    [[['N']], t.newFolder],
+    [[['U']], t.upload],
     [[['F2']], k.rename],
-    [[[mod, 'A']], k.selectAll],
+    [[[mod, 'A']], t.selectAll],
     [[['Delete'], ['Backspace']], k.remove],
     [[['Enter']], k.open],
     [[['↑'], ['↓']], k.move],
