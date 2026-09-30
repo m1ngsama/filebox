@@ -217,7 +217,7 @@ func (a *API) zip(w http.ResponseWriter, r *http.Request) {
 	}
 	var rels []string
 	for _, p := range q["p"] {
-		rel, err := vol.Clean(p)
+		rel, err := v.Clean(p)
 		if err != nil {
 			httpx.Error(w, err)
 			return

@@ -107,15 +107,33 @@ func (s *Set) Resolve(volName, p string) (*Volume, string, error) {
 	if !ok {
 		return nil, "", fs.ErrNotExist
 	}
-	rel, err := Clean(p)
+	rel, err := v.Clean(p)
 	if err != nil {
 		return nil, "", err
 	}
 	return v, rel, nil
 }
 
-func Reserved(name string) bool {
-	return strings.EqualFold(name, ".filebox") || strings.EqualFold(name, TrashDir)
+var reserved = [...]string{".filebox", TrashDir}
+
+func Reserved(name string) bool { return name == reserved[0] || name == reserved[1] }
+
+func (v *Volume) Clean(p string) (string, error) {
+	c, err := Clean(p)
+	if err != nil {
+		return "", err
+	}
+	first, _, _ := strings.Cut(c, "/")
+	for _, r := range reserved {
+		if strings.EqualFold(first, r) {
+			a, err1 := v.Root.Lstat(first)
+			b, err2 := v.Root.Lstat(r)
+			if err1 == nil && err2 == nil && os.SameFile(a, b) {
+				return "", ErrBadPath
+			}
+		}
+	}
+	return c, nil
 }
 
 func ValidName(name string) bool {

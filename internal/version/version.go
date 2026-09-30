@@ -164,7 +164,7 @@ func (s *Store) Restore(v *vol.Volume, id string, user int64) (string, string, e
 	if err != nil {
 		return "", "", err
 	}
-	dst, err := vol.Clean(x.Path)
+	dst, err := v.Clean(x.Path)
 	if err != nil {
 		return "", "", err
 	}
@@ -238,7 +238,7 @@ func (s *Store) Revert(v *vol.Volume, id string) error {
 	if err != nil {
 		return err
 	}
-	dst, err := vol.Clean(x.Path)
+	dst, err := v.Clean(x.Path)
 	if err != nil {
 		return err
 	}
@@ -529,7 +529,7 @@ func (s *Store) adopt(v *vol.Volume, id string) error {
 	if err != nil {
 		return err
 	}
-	rel, err := vol.Clean(string(b))
+	rel, err := v.Clean(string(b))
 	if err != nil || rel == "." {
 		return vol.ErrBadPath
 	}

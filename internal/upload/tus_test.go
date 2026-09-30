@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"path"
 	"path/filepath"
 	"slices"
 	"strconv"
@@ -302,6 +303,23 @@ func TestTusFolder(t *testing.T) {
 	e.patch(w.Header.Get("Location"), 0, "x")
 	if _, err := os.Stat(filepath.Join(e.dir, "album/2024/f.txt")); err != nil {
 		t.Fatal(err)
+	}
+}
+
+func TestTusFolderWithTrashName(t *testing.T) {
+	e := setup(t)
+	for _, rp := range []string{"mac/.Trash/a.txt", ".Trash/b.txt", "x/.FILEBOX/c.txt"} {
+		w := e.do("POST", "/up/", "", "Upload-Length", "1", "Upload-Metadata", meta("filename", path.Base(rp), "relativePath", rp))
+		if w.StatusCode != 201 {
+			t.Fatalf("%s: create %d", rp, w.StatusCode)
+		}
+		e.patch(w.Header.Get("Location"), 0, "x")
+		if b, _ := os.ReadFile(filepath.Join(e.dir, rp)); string(b) != "x" {
+			t.Fatalf("%s not uploaded", rp)
+		}
+	}
+	if w := e.do("POST", "/up/", "", "Upload-Length", "1", "Upload-Metadata", meta("filename", "d.txt", "relativePath", "a/.trash/d.txt")); w.StatusCode != 400 {
+		t.Fatalf("exact reserved name %d", w.StatusCode)
 	}
 }
 

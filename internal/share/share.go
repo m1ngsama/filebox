@@ -305,8 +305,15 @@ func (o opened) name() string {
 	return path.Base(o.sh.Path)
 }
 
+func (o opened) clean(p string) (string, error) {
+	if o.sh.Path == "." {
+		return o.v.Clean(p)
+	}
+	return vol.Clean(p)
+}
+
 func (o opened) root(p string) (*os.Root, string, func(), error) {
-	rel, err := vol.Clean(p)
+	rel, err := o.clean(p)
 	if err != nil {
 		return nil, "", nil, err
 	}
@@ -442,7 +449,7 @@ func (s *Service) zip(w http.ResponseWriter, r *http.Request) {
 	defer done()
 	var rels []string
 	for _, p := range ps {
-		rel, err := vol.Clean(p)
+		rel, err := o.clean(p)
 		if err == nil && !o.dir && rel != "." {
 			err = fs.ErrNotExist
 		}

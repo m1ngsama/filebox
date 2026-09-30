@@ -142,7 +142,7 @@ func (f *FS) resolve(name string) (*vol.Volume, string, error) {
 	if !ok {
 		return nil, "", os.ErrNotExist
 	}
-	rel, err := vol.Clean(rest)
+	rel, err := v.Clean(rest)
 	if err != nil {
 		return nil, "", os.ErrNotExist
 	}

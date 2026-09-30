@@ -51,7 +51,7 @@ func TargetFor(v *vol.Volume, dir string, meta map[string]string) (Target, error
 				return Target{}, vol.ErrBadPath
 			}
 		}
-		sub, err := vol.Clean(path.Join(dir, path.Dir(rp)))
+		sub, err := v.Clean(path.Join(dir, path.Dir(rp)))
 		if err != nil {
 			return Target{}, err
 		}

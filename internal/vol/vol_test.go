@@ -165,10 +165,29 @@ func TestMoveNeverReplaces(t *testing.T) {
 	}
 }
 
-func TestReservedIgnoresCase(t *testing.T) {
-	for _, p := range []string{".FILEBOX/versions/x", ".Trash/1", "/.FileBox"} {
-		if _, err := Clean(p); !errors.Is(err, ErrBadPath) {
-			t.Errorf("%s accepted", p)
+func TestReservedCaseVariants(t *testing.T) {
+	s, dir := newSet(t)
+	v, _ := s.Get("data")
+	for _, p := range []string{".Trash/1", "a/.trash", ".FileBox"} {
+		if _, err := Clean(p); err != nil {
+			t.Errorf("%s refused: %v", p, err)
 		}
+	}
+	os.Mkdir(filepath.Join(dir, ".trash"), 0o755)
+	a, _ := os.Lstat(filepath.Join(dir, ".trash"))
+	b, err := os.Lstat(filepath.Join(dir, ".TRASH"))
+	insensitive := err == nil && os.SameFile(a, b)
+	if !insensitive {
+		os.Mkdir(filepath.Join(dir, ".TRASH"), 0o755)
+	}
+	_, err = v.Clean(".TRASH/x")
+	if insensitive != errors.Is(err, ErrBadPath) {
+		t.Fatalf("case-insensitive %v, .TRASH/x: %v", insensitive, err)
+	}
+	if _, err := v.Clean(".trash/x"); !errors.Is(err, ErrBadPath) {
+		t.Fatalf(".trash/x: %v", err)
+	}
+	if _, _, err := s.Resolve("data", ".Filebox"); err != nil {
+		t.Fatalf("missing .Filebox refused: %v", err)
 	}
 }

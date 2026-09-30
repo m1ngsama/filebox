@@ -121,7 +121,7 @@ func (a *API) trashRestore(w http.ResponseWriter, r *http.Request) {
 		httpx.Error(w, err)
 		return
 	}
-	dst, err := vol.Clean(it.Path)
+	dst, err := v.Clean(it.Path)
 	if err != nil {
 		httpx.Error(w, err)
 		return
