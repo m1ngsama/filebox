@@ -57,14 +57,22 @@ func (v *visitorKey) at(day int64) []byte {
 
 func (d *DB) Visitor(ip string, now int64) string { return d.visitor(ip, now/86400) }
 
-func (d *DB) visitor(ip string, day int64) string {
+func Client(ip string) (netip.Addr, bool) {
 	a, err := netip.ParseAddr(ip)
 	if err != nil {
-		return ""
+		return a, false
 	}
 	a = a.Unmap()
 	if a.Is6() {
 		a = netip.PrefixFrom(a, 64).Masked().Addr()
+	}
+	return a, true
+}
+
+func (d *DB) visitor(ip string, day int64) string {
+	a, ok := Client(ip)
+	if !ok {
+		return ""
 	}
 	m := hmac.New(sha256.New, d.visitors.at(day))
 	m.Write(a.AsSlice())

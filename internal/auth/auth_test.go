@@ -377,3 +377,24 @@ func TestSessionUserAgentTruncatedOnRune(t *testing.T) {
 		t.Fatalf("user agent %d bytes, valid %v", len(ua), utf8.ValidString(ua))
 	}
 }
+
+func TestLimiterKeysIPv6ByPrefix(t *testing.T) {
+	l := newLimiter(0)
+	now := time.Unix(1_000_000, 0)
+	for i := range 5 {
+		l.fail("2001:db8:1:2::"+strconv.Itoa(i+1), now)
+	}
+	if l.check("2001:db8:1:2:ffff::9", now) == nil {
+		t.Fatal("a new address in the same /64 escaped the ban")
+	}
+	if l.check("2001:db8:1:3::1", now) != nil {
+		t.Fatal("a neighbouring /64 was banned")
+	}
+	if l.check("::ffff:203.0.113.9", now) != nil || l.check("203.0.113.9", now) != nil {
+		t.Fatal("an unrelated IPv4 client was banned")
+	}
+	l.ok("2001:db8:1:2::77")
+	if l.check("2001:db8:1:2::1", now) != nil {
+		t.Fatal("a success in the /64 did not clear it")
+	}
+}

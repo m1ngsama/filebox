@@ -3,6 +3,8 @@ package auth
 import (
 	"sync"
 	"time"
+
+	"github.com/m1ngsama/filebox/internal/db"
 )
 
 const maxEntries = 10000
@@ -36,7 +38,15 @@ func (e *Limited) Error() string {
 
 func (e *Limited) Is(target error) bool { return target == ErrRateLimited }
 
+func key(ip string) string {
+	if a, ok := db.Client(ip); ok {
+		return a.String()
+	}
+	return ip
+}
+
 func (l *limiter) check(ip string, now time.Time) error {
+	ip = key(ip)
 	l.mu.Lock()
 	defer l.mu.Unlock()
 	if end := l.start.Add(time.Minute); l.budget > 0 && l.fails > l.budget && now.Before(end) {
@@ -49,6 +59,7 @@ func (l *limiter) check(ip string, now time.Time) error {
 }
 
 func (l *limiter) fail(ip string, now time.Time) {
+	ip = key(ip)
 	l.mu.Lock()
 	defer l.mu.Unlock()
 	if now.Sub(l.start) >= time.Minute {
@@ -79,6 +90,7 @@ func (l *limiter) fail(ip string, now time.Time) {
 }
 
 func (l *limiter) ok(ip string) {
+	ip = key(ip)
 	l.mu.Lock()
 	delete(l.m, ip)
 	l.mu.Unlock()
