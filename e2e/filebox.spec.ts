@@ -1209,9 +1209,10 @@ test('a delete and a new folder during a streamed listing survive every chunk an
   const victim = (await page.locator('.row').nth(2).locator('button.name').textContent())!.trim()
   await row(page, victim).locator('input[type=checkbox]').check()
   await page.keyboard.press('Delete')
-  await page.locator('.row').first().locator('button.name').focus()
+  await page.locator('.row').first().focus()
   await page.keyboard.press('Escape')
   await page.waitForTimeout(350)
+  await page.getByRole('button', { name: t.size }).focus()
   await page.keyboard.press('n')
   await page.getByLabel(t.folderName).fill('0-new')
   await page.keyboard.press('Enter')
@@ -2142,12 +2143,17 @@ test('a large batch renders a bounded number of rows', async ({ page }) => {
   await expect(panel.locator('header')).toContainText(t.uploading(0, 60))
 })
 
-test('a folder with 20,000 entries streams in, shows its count, then sorts, scrolls and selects all', async ({ page, server }) => {
+test('a folder with 20,000 entries streams in without shifting, shows its count, then sorts, scrolls and selects all', async ({ page, server }) => {
   const dir = join(server.vol, 'huge')
   mkdirSync(dir)
   for (let i = 0; i < 20000; i++) closeSync(openSync(join(dir, `h-${String(i).padStart(5, '0')}.txt`), 'w'))
   await page.addInitScript(() => {
-    const seen: string[] = ((window as unknown as { seen: string[] }).seen = [])
+    const w = window as unknown as { seen: string[]; cls: number }
+    const seen: string[] = (w.seen = [])
+    w.cls = 0
+    new PerformanceObserver((l) => {
+      for (const e of l.getEntries() as unknown as { value: number; hadRecentInput: boolean }[]) if (!e.hadRecentInput) w.cls += e.value
+    }).observe({ type: 'layout-shift', buffered: true })
     new MutationObserver(() => {
       const s = document.querySelector('.files > .loading-count')?.textContent
       if (s && s !== seen.at(-1)) seen.push(s)
@@ -2163,6 +2169,7 @@ test('a folder with 20,000 entries streams in, shows its count, then sorts, scro
   expect(seen.length).toBeGreaterThan(0)
   expect(seen[0]).toMatch(/^正在加载 \d+ 项…$/)
   expect(first).toBeLessThan(5000)
+  expect(await page.evaluate(() => (window as unknown as { cls: number }).cls)).toBeLessThan(0.01)
   await expect(page.locator('.row').first()).toContainText('h-00000.txt')
   await page.locator('.scroller').evaluate((el) => el.scrollTo(0, el.scrollHeight))
   await expect(row(page, 'h-19999.txt')).toBeInViewport()

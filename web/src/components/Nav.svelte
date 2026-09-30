@@ -15,11 +15,12 @@
 
   let { vols, parts, onlogout }: { vols: string[]; parts: string[]; onlogout: () => void } = $props()
   let usage = $state.raw<Record<string, Usage>>({})
+  let measured = $state(false)
   const measure = () =>
     api.vols().then(
       (r) => (usage = Object.fromEntries(r.vols.map((u) => [u.name, u]))),
       () => {},
-    )
+    ).finally(() => (measured = true))
   $effect(() => void measure())
   const cur = $derived(parts[0] === 'files' || parts[0] === 'trash' ? parts[1] : undefined)
 
@@ -54,6 +55,8 @@
             <div class="usage-bar" style:--p={`${Math.min(100, (100 * u.used) / (u.used + u.free))}%`}></div>
             <span class="hint">{t.usage(size(u.used), size(u.total))}</span>
           </div>
+        {:else if !measured}
+          <div class="usage" aria-hidden="true"><div class="usage-bar" style:--p="0%"></div><span class="hint">&nbsp;</span></div>
         {/if}
       </li>
     {/each}

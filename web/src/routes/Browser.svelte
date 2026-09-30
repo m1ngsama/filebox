@@ -801,7 +801,7 @@
       </DropdownMenu.Root>
     </header>
 
-    {#if streaming && at === here}<p class="hint banner loading-count" aria-hidden="true">{t.loadingItems(entries.length)}</p>{/if}
+    {#if streaming && at === here}<p class="loading-count" aria-hidden="true">{t.loadingItems(entries.length)}</p>{/if}
     <p class="sr-only" role="status">{announce}</p>
 
     {#if ranked}

@@ -145,6 +145,11 @@ p.error::before { content: ''; flex: none; width: 1em; height: 1lh; background: 
 .scope button { border: 0; padding: var(--space-0) var(--space-2); border-radius: var(--radius-sm); color: var(--muted); font-size: var(--text-sm); }
 .scope [aria-checked='true'] { background: var(--sel); color: var(--accent); font-weight: 600; }
 .banner { padding: var(--space-2) var(--space-4); }
+.loading-count {
+  position: absolute; left: 50%; bottom: calc(var(--dock) + var(--space-4)); translate: -50% 0; z-index: 5; margin: 0; padding: var(--space-1) var(--space-3);
+  border-radius: var(--radius-full); background: var(--toast-bg); color: var(--toast-fg); font-size: var(--text-sm); font-variant-numeric: tabular-nums; white-space: nowrap; pointer-events: none;
+  box-shadow: var(--shadow); animation: appear var(--dur-2) var(--ease-out);
+}
 
 .files-wrap { display: flex; flex: 1; min-height: 0; }
 .files { position: relative; display: flex; flex-direction: column; flex: 1; min-width: 0; }
