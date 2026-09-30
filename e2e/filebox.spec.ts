@@ -1009,6 +1009,7 @@ test('searching finds words inside text and markdown files and opens the match i
   await expect(hit.locator('mark')).toHaveText('budget <b>rev')
   await expect(hit.locator('.snippet b')).toHaveCount(0)
   await expect(page.getByText(t.noResults)).toHaveCount(0)
+  await expect(page.locator('.list-head')).toHaveCount(0)
   await hit.click()
   await expect(page).toHaveURL(/\/files\/v\/docs\/$/)
   await expect(row(page, 'minutes.txt')).toHaveAttribute('aria-selected', 'true')

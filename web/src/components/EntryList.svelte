@@ -35,6 +35,7 @@
     batch,
     empty,
     footer,
+    head = true,
     loading = false,
     busy = false,
     id = (e) => e.name,
@@ -57,6 +58,7 @@
     batch?: Snippet
     empty?: Snippet
     footer?: Snippet
+    head?: boolean
     loading?: boolean
     busy?: boolean
     id?: (e: Entry) => string
@@ -303,6 +305,7 @@
   {/if}
 {/snippet}
 
+{#if head}
 <div class="list-head" class:grid class:batch={!!selected?.size}>
   {#if selected}
     <input
@@ -330,6 +333,7 @@
     {/each}
   {/if}
 </div>
+{/if}
 
 <ContextMenu.Root onOpenChange={(o) => !o && (ctx = null)}>
   <ContextMenu.Trigger disabled={held || (!ctx && !actions(null).length)}>

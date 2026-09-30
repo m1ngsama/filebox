@@ -15,7 +15,7 @@
       <li>
         <button class="hit" onclick={() => onopen(h)} title={`${h.vol}/${h.path}`}>
           <FileIcon name={h.name} dir={false} size={20} />
-          <span class="head"><span class="name">{h.name}</span><span class="where">{h.vol}/{parent(h.path)}</span></span>
+          <span class="head"><span class="name">{h.name}</span><span class="where">{parent(h.path) ? `${h.vol}/${parent(h.path)}` : h.vol}</span></span>
           <span class="snippet">{#each h.snippet as s, i (i)}{#if i % 2}<mark>{s}</mark>{:else}{s}{/if}{/each}</span>
         </button>
       </li>

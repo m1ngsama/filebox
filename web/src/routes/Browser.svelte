@@ -592,6 +592,7 @@
         loading={finding}
         id={(e) => `${hitLoc(e).vol}:${hitLoc(e).path}`}
         loc={hitLoc}
+        head={!!ranked.length || !content.length}
       >
         {#snippet empty()}
           {#if !finding && !content.length}<EmptyState icon={SearchX} title={t.noResults} hint={t.noResultsHint} />{/if}
