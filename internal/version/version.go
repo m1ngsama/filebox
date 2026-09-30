@@ -10,6 +10,7 @@ import (
 	"log/slog"
 	"path"
 	"regexp"
+	"slices"
 	"strconv"
 	"strings"
 	"sync"
@@ -29,6 +30,7 @@ const (
 	PerFile    = 50
 	MinFreePct = 10
 	guardGrace = 10 * time.Minute
+	OrphanTTL  = 30 * 24 * time.Hour
 	sidecar    = ".path"
 )
 
@@ -286,8 +288,68 @@ func (s *Store) Prune(vols *vol.Set) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	for _, v := range vols.All() {
+		s.expire(v)
 		s.prune(v, "")
 	}
+}
+
+func (s *Store) expire(v *vol.Volume) {
+	if _, err := v.Root.Lstat(vol.VersionsDir); err != nil {
+		return
+	}
+	rows, err := s.DB.Query(`SELECT path, min(orphaned) FROM versions WHERE vol = ? GROUP BY path`, v.Name)
+	if err != nil {
+		slog.Warn("expire versions", "vol", v.Name, "err", err)
+		return
+	}
+	type group struct {
+		path  string
+		since int64
+	}
+	var gs []group
+	for rows.Next() {
+		var g group
+		if rows.Scan(&g.path, &g.since) == nil {
+			gs = append(gs, g)
+		}
+	}
+	rows.Close()
+	now := s.now().UnixMilli()
+	origins := trashed(v)
+	for _, g := range gs {
+		_, err := v.Root.Lstat(g.path)
+		gone := err != nil && !slices.ContainsFunc(origins, func(o string) bool { return g.path == o || strings.HasPrefix(g.path, o+"/") })
+		switch {
+		case !gone && g.since != 0:
+			s.DB.Exec(`UPDATE versions SET orphaned = 0 WHERE vol = ? AND path = ?`, v.Name, g.path)
+		case gone && g.since == 0:
+			s.DB.Exec(`UPDATE versions SET orphaned = ? WHERE vol = ? AND path = ?`, now, v.Name, g.path)
+		case gone && now-g.since > OrphanTTL.Milliseconds():
+			xs, err := s.List(v.Name, g.path)
+			if err != nil {
+				continue
+			}
+			for _, x := range xs {
+				s.drop(v, x.ID)
+			}
+		}
+	}
+}
+
+func trashed(v *vol.Volume) []string {
+	f, err := v.Root.Open(vol.TrashDir)
+	if err != nil {
+		return nil
+	}
+	ids, _ := f.Readdirnames(-1)
+	f.Close()
+	var out []string
+	for _, id := range ids {
+		if b, err := v.Root.ReadFile(path.Join(vol.TrashDir, id, ".origin")); err == nil {
+			out = append(out, string(b))
+		}
+	}
+	return out
 }
 
 func (s *Store) prune(v *vol.Volume, only string) {

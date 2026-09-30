@@ -359,3 +359,29 @@ func TestRecoverKeepsRowsWhenTheStoreIsMissing(t *testing.T) {
 		t.Fatalf("after the folder came back: %v", err)
 	}
 }
+
+func TestExpireVersionsOfDeletedFiles(t *testing.T) {
+	e := setup(t)
+	for _, p := range []string{"gone.txt", "trashed/in.txt", "back.txt", "live.txt"} {
+		e.capture(t, p, "old")
+	}
+	e.write(t, "live.txt", "new")
+	e.write(t, ".trash/1/.origin", "trashed")
+	e.s.Prune(e.vols)
+	e.now = e.now.Add(OrphanTTL / 2)
+	e.write(t, "back.txt", "again")
+	e.s.Prune(e.vols)
+	os.Remove(filepath.Join(e.dir, "back.txt"))
+	e.now = e.now.Add(OrphanTTL/2 + time.Hour)
+	e.s.Prune(e.vols)
+	for p, want := range map[string]int{"gone.txt": 0, "trashed/in.txt": 1, "back.txt": 1, "live.txt": 1} {
+		if n := e.count(t, p); n != want {
+			t.Errorf("%s has %d versions, want %d", p, n, want)
+		}
+	}
+	e.now = e.now.Add(OrphanTTL + time.Minute)
+	e.s.Prune(e.vols)
+	if e.count(t, "back.txt") != 0 {
+		t.Error("back.txt versions kept after it was gone for the whole period")
+	}
+}
