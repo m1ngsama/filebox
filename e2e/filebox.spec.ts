@@ -753,9 +753,15 @@ test('passkey registration and login', async ({ page, context, server }) => {
   await presence(false)
   await page.getByRole('button', { name: t.logout }).click()
   const button = page.getByRole('button', { name: t.passkeyLogin })
-  await expect(button).toBeVisible()
-  await presence(true)
+  let release = () => {}
+  const held = new Promise<void>((r) => (release = r))
+  await page.route('**/api/passkeys/login/begin', async (r) => {
+    await held
+    await r.continue()
+  })
   await button.click()
+  await presence(true)
+  release()
   await expect(row).not.toContainText(t.neverUsed)
 })
 

@@ -4,9 +4,18 @@ import { t } from './i18n'
 
 export const webauthn = () => import('@simplewebauthn/browser')
 
+let explicit = 0
+
 export async function passkeyLogin(autofill = false) {
-  const [{ ceremony, options }, { startAuthentication }] = await Promise.all([api.passkeyLoginBegin(), webauthn()])
-  await api.passkeyLoginFinish(ceremony, await startAuthentication({ optionsJSON: options, useBrowserAutofill: autofill }))
+  if (!autofill) explicit++
+  try {
+    const [{ ceremony, options }, { startAuthentication }] = await Promise.all([api.passkeyLoginBegin(), webauthn()])
+    // Starting autofill aborts any ceremony in flight, including the one the user just clicked.
+    if (autofill && explicit) throw new DOMException('', 'AbortError')
+    await api.passkeyLoginFinish(ceremony, await startAuthentication({ optionsJSON: options, useBrowserAutofill: autofill }))
+  } finally {
+    if (!autofill) explicit--
+  }
 }
 
 export async function addPasskey(name: string) {
