@@ -93,6 +93,15 @@ const icons = new Map(Object.entries(looks).flatMap(([k, v]) => v.split(' ').map
 export type Look = ReturnType<typeof kind> | 'code' | 'archive' | 'sheet'
 export const look = (n: string) => (icons.get(ext(n)) ?? kind(n)) as Look
 
+export const visual = (n: string) => /^(image|video)$/.test(kind(n))
+
+export function ends(n: string): [string, string] {
+  const c = [...n]
+  const d = n.lastIndexOf('.')
+  const k = (d > 0 ? n.length - d : 0) + 4
+  return c.length > k + 1 ? [c.slice(0, -k).join(''), c.slice(-k).join('')] : [n, '']
+}
+
 export const parent = (p: string) => (p.includes('/') ? p.slice(0, p.lastIndexOf('/')) : '')
 export const base = (p: string) => p.slice(p.lastIndexOf('/') + 1)
 export const child = (dir: string, n: string) => (dir ? `${dir}/${n}` : n)

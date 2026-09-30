@@ -1671,6 +1671,37 @@ test.describe('on a phone', () => {
     await expect(row(page, 'x.txt').locator('button.name')).toHaveCSS('text-decoration-line', 'none')
   })
 
+  test('media folders get a three-column grid of bare tiles and long names keep their extension', async ({ page, server }) => {
+    const png = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==', 'base64')
+    mkdirSync(join(server.vol, 'pics'))
+    for (let i = 0; i < 9; i++) writeFileSync(join(server.vol, 'pics', `p${i}.png`), png)
+    const long = '很长很长的动画文件名称用于测试截断效果 第03话.mp4'
+    writeFileSync(join(server.vol, 'pics', long), 'x')
+    await login(page)
+    await page.evaluate(() => localStorage.setItem('grid', '1'))
+    await page.goto('/files/v/pics/')
+    const cards = page.locator('.cards').first()
+    await expect(cards).toHaveCSS('grid-template-columns', /^\S+ \S+ \S+$/)
+    await expect(page.locator('.card-foot')).toHaveCount(0)
+    const box = (await page.locator('.card').first().boundingBox())!
+    expect(box.width).toBeGreaterThan(110)
+    expect(Math.abs(box.width - box.height)).toBeLessThan(1)
+    await expect(page.locator('.card-open', { hasText: '.mp4' }).locator('.mid > :last-child')).toHaveText('第03话.mp4')
+
+    await page.evaluate(() => localStorage.setItem('grid', '0'))
+    await page.goto('/files/v/docs/')
+    await expect(page.locator('.cards')).toHaveCount(0)
+    writeFileSync(join(server.vol, 'docs', long), 'x')
+    await page.goto('/files/v/pics/')
+    const name = row(page, long).locator('button.name')
+    await expect(name).toHaveAccessibleName(long)
+    const [head, tail] = [name.locator('.mid > :first-child'), name.locator('.mid > :last-child')]
+    await expect(tail).toHaveText('第03话.mp4')
+    expect(await head.evaluate((h) => h.scrollWidth > h.clientWidth)).toBe(true)
+    const [n, t2] = [(await name.boundingBox())!, (await tail.boundingBox())!]
+    expect(t2.x + t2.width).toBeLessThanOrEqual(n.x + n.width)
+  })
+
   test('the more sheet stars a multi-selection', async ({ page, server }) => {
     for (const n of ['p1.txt', 'p2.txt']) writeFileSync(join(server.vol, 'docs', n), n)
     await login(page)

@@ -190,19 +190,31 @@ button.ghost { border-color: transparent; background: none; }
 .ficon.archive, [data-look='archive'] { --k: light-dark(#8a5a32, #d6a47a); }
 .ficon.sheet, [data-look='sheet'] { --k: light-dark(#23803c, #6fcf85); }
 [data-look='dir'] { --k: var(--accent); }
-.row .name { justify-self: start; max-width: 100%; border: 0; background: none; padding: 4px 6px; min-width: 0; overflow: hidden; text-overflow: ellipsis; display: block; text-align: left; }
+.row .name { justify-self: start; max-width: 100%; border: 0; background: none; padding: 4px 6px; min-width: 0; display: block; text-align: left; }
+.mid { display: flex; min-width: 0; overflow: hidden; white-space: pre; }
+.mid > :first-child { overflow: hidden; text-overflow: ellipsis; }
+.mid > :nth-child(2) { flex: none; }
 .row .sub { max-width: 100%; padding: 0 6px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .sub a { color: inherit; }
 .group-head { position: absolute; top: 0; left: 0; right: 0; height: 36px; display: flex; align-items: flex-end; padding: 0 var(--space-4) 6px; color: var(--muted); font-size: var(--text-sm); font-weight: 600; border-bottom: 1px solid var(--line); background: var(--nav); }
 .num { color: var(--muted); font-size: var(--text-sm); text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; padding-right: 6px; }
 .more { color: var(--muted); }
-.cards { position: absolute; top: 0; left: 0; right: 0; display: grid; gap: var(--space-3); padding: 6px 12px; height: 212px; }
+.cards { position: absolute; top: 0; left: 0; right: 0; display: grid; gap: var(--space-3); padding: 6px 12px; }
 .card { position: relative; display: flex; flex-direction: column; min-width: 0; border-radius: var(--radius-lg); padding: 6px; }
 .card-check { position: absolute; top: 12px; left: 12px; z-index: 1; }
 .card-open { position: relative; flex: 1; padding: 0; border: 0; border-radius: var(--radius-md); overflow: hidden; background: color-mix(in srgb, var(--k, var(--muted)) 9%, var(--nav)); display: grid; place-items: center; min-height: 0; }
 .card-open img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
 .card-foot { display: flex; align-items: center; gap: 2px; padding: var(--space-1) 0 0 var(--space-1); }
-.card-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.card-name { flex: 1; min-width: 0; }
+.card-badge { position: absolute; right: var(--space-1); bottom: var(--space-1); display: grid; place-items: center; padding: 2px; border-radius: var(--radius-sm); background: color-mix(in srgb, var(--viewer-bg) 55%, transparent); color: var(--viewer-fg); }
+.cards.media .card-open { flex: none; aspect-ratio: 1; }
+.cards.tiles { gap: var(--space-1); padding: 0 var(--space-1); align-items: start; }
+.tiles .card { padding: 0; border-radius: var(--radius-sm); }
+.tiles .card-open { border-radius: var(--radius-sm); }
+.tiles .card.sel { outline: 3px solid var(--accent); outline-offset: -3px; }
+.tiles .card-check { top: var(--space-2); left: var(--space-2); }
+.tile-name { position: absolute; left: var(--space-1); right: var(--space-1); bottom: var(--space-1); font-size: var(--text-xs); }
+.tile-name .mid { justify-content: center; }
 .dropzone {
   position: absolute; inset: 8px; z-index: 5; display: grid; place-items: center; pointer-events: none;
   border: 2px dashed var(--accent); border-radius: var(--radius-xl); font-size: var(--text-xl); font-weight: 600; color: var(--accent);
