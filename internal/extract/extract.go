@@ -266,7 +266,7 @@ var blocks = map[string]bool{"p": true, "div": true, "br": true, "li": true, "tr
 
 func markup(w *text, r io.Reader) error {
 	z := html.NewTokenizer(r)
-	z.SetMaxBuf(MaxText)
+	z.SetMaxBuf(markupBudget)
 	hidden := 0
 	for {
 		switch z.Next() {

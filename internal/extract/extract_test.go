@@ -112,6 +112,7 @@ func TestHTML(t *testing.T) {
 		"bare.htm":    []byte(`<p>alpha</p><p>x < y & z</p><p>omega</p>`),
 		"nohead.html": []byte(`<html><head><title>T</title><body><p>body text`),
 		"icon.svg":    []byte(`<?xml version="1.0"?><svg xmlns="http://www.w3.org/2000/svg"><title>Logo mark</title><path d="M0 0h24v24" fill="red"/><image href="data:image/png;base64,AAAA"/></svg>`),
+		"single.html": []byte(`<p>before</p><img src="data:image/png;base64,` + strings.Repeat("A", 2<<20) + `"><p>after image</p>`),
 		"feed.xml":    []byte(`<?xml version="1.0"?><rss><item><title>News</title><description>Body &amp; more</description></item></rss>`),
 	})
 	for name, want := range map[string]string{
@@ -122,6 +123,7 @@ func TestHTML(t *testing.T) {
 		"nohead.html": "body text",
 		"icon.svg":    "Logo mark",
 		"feed.xml":    "News Body & more",
+		"single.html": "before after image",
 	} {
 		got, err := (&Extractor{}).Extract(context.Background(), r, name)
 		if err != nil || got != want {
