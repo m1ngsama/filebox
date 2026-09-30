@@ -7,7 +7,7 @@
   import ShareRow from '../components/ShareRow.svelte'
   import { api, filesURL, type Share } from '../lib/api'
   import { link } from '../lib/router.svelte'
-  import { place } from '../lib/format'
+  import { place, byLapse } from '../lib/format'
   import { t } from '../lib/i18n'
 
   let shares = $state<Share[] | null>(null)
@@ -15,7 +15,7 @@
 
   async function load() {
     try {
-      shares = (await api.shares()).shares
+      shares = byLapse((await api.shares()).shares)
       error = ''
     } catch (e) {
       error = (e as Error).message

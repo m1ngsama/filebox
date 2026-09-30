@@ -251,6 +251,7 @@ const zh = {
   passkeyAdded: '已添加通行密钥',
   passkeyDeleted: '通行密钥已删除',
   deleteShare: '删除分享',
+  shareActions: '分享操作',
   deleteShareTitle: '删除分享链接',
   deleteShareMessage: '删除后这个链接立即失效，无法恢复。',
   sharesEmptyHint: '在文件的“…”菜单里选择“分享”，就能新建链接。',

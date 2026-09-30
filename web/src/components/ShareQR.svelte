@@ -1,16 +1,13 @@
 <script lang="ts">
-  import { icon } from '../lib/icon'
   import { Popover } from 'bits-ui'
-  import QrCode from '@lucide/svelte/icons/qr-code'
   import { t } from '../lib/i18n'
 
-  let { text }: { text: string } = $props()
+  let { text, anchor, onclose }: { text: string; anchor: HTMLElement | null; onclose: () => void } = $props()
 </script>
 
-<Popover.Root>
-  <Popover.Trigger class="icon-btn" aria-label={t.qrCode} title={t.qrCode}><QrCode size={icon.md} /></Popover.Trigger>
+<Popover.Root open onOpenChange={(o) => !o && onclose()}>
   <Popover.Portal>
-    <Popover.Content class="menu qr" sideOffset={6}>
+    <Popover.Content class="menu qr" sideOffset={6} customAnchor={anchor} role="dialog" aria-label={t.qrCode}>
       {#await import('../lib/qr')}
         <div class="spinner" role="status" aria-label={t.loading}></div>
       {:then { qrPath }}

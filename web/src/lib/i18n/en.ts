@@ -251,6 +251,7 @@ export default (locale: string) => {
     passkeyAdded: 'Passkey added',
     passkeyDeleted: 'Passkey deleted',
     deleteShare: 'Delete share',
+    shareActions: 'Link actions',
     deleteShareTitle: 'Delete share link',
     deleteShareMessage: 'The link stops working right away. This can’t be undone.',
     sharesEmptyHint: 'Choose “Share” in a file’s “…” menu to create a link.',

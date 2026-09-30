@@ -175,10 +175,13 @@ export const placeOf = (target: string) => {
   return i < 0 ? target : place(target.slice(0, i), target.slice(i + 2))
 }
 
+export const lapsed = (s: { expires: number }, now = Date.now()) => !!s.expires && s.expires * 1000 <= now
+export const byLapse = <T extends { expires: number }>(xs: T[]) => [...xs].sort((a, b) => +lapsed(a) - +lapsed(b))
+
 export const shareSummary = (s: { mode: 'read' | 'upload' | 'drop'; expires: number; views: number; has_password: boolean }, now = Date.now()) =>
   [
     t.modes[s.mode],
-    !s.expires ? t.forever : s.expires * 1000 <= now ? t.expired : t.expiresIn(s.expires - now / 1000),
+    !s.expires ? t.forever : lapsed(s, now) ? t.expired : t.expiresIn(s.expires - now / 1000),
     t.visits(s.views),
     s.has_password && t.hasPassword,
   ].filter((x) => typeof x === 'string')

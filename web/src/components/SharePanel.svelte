@@ -3,6 +3,7 @@
   import Link from '@lucide/svelte/icons/link'
   import ShareRow from './ShareRow.svelte'
   import { api, shareLink, type Share } from '../lib/api'
+  import { byLapse } from '../lib/format'
   import { t } from '../lib/i18n'
   import { toast } from '../lib/toast.svelte'
 
@@ -18,7 +19,7 @@
 
   async function load() {
     try {
-      shares = (await api.shares()).shares.filter((s) => s.vol === vol && s.path === path)
+      shares = byLapse((await api.shares()).shares.filter((s) => s.vol === vol && s.path === path))
     } catch (e) {
       error = (e as Error).message
     }
@@ -58,9 +59,7 @@
   {#each shares as s (s.id)}
     <li>
       <Link size={icon.sm} />
-      <ShareRow share={s} {dir} onchange={load}>
-        <a href={shareLink(s.token)} target="_blank" rel="noreferrer">{shareLink(s.token)}</a>
-      </ShareRow>
+      <ShareRow share={s} {dir} onchange={load} />
     </li>
   {:else}
     <li class="hint">{t.noShares}</li>
