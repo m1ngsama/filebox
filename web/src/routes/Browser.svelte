@@ -249,7 +249,9 @@
   })
 
   function closeDetails() {
+    const back = document.activeElement === document.body || !!document.activeElement?.closest('.details')
     details = null
+    if (back) tick().then(() => document.querySelector<HTMLElement>('.main [role=grid] [tabindex="0"]')?.focus())
     if (new URLSearchParams(route.search).has('details')) navigate(route.path, true)
   }
 

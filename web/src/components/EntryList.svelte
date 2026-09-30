@@ -143,6 +143,25 @@
     })
   })
 
+  let lastCols = 0
+  let top = 0
+  $effect(() => {
+    const c = cols
+    untrack(() => {
+      const before = lastCols
+      lastCols = c
+      if (!grid || !before || before === c) return
+      const i = inside && cur ? entries.findIndex((e) => id(e) === cur) : top
+      if (i < 0) return
+      tick().then(() => {
+        $v.scrollToIndex(rowOf(i), { align: 'start' })
+        if (!inside) return
+        want = i
+        tick().then(focusWanted)
+      })
+    })
+  })
+
   $effect(() => {
     const pin = rowOf(tab)
     untrack(() =>
@@ -411,7 +430,10 @@
 <ContextMenu.Root onOpenChange={(o) => !o && (ctx = null)}>
   <ContextMenu.Trigger disabled={held || (!ctx && !actions(null).length)}>
     {#snippet child({ props })}
-      <div {...props} class="scroller" data-seeking={seek ? '' : undefined} class:selecting={!!selected?.size} bind:this={scroller} bind:clientWidth={width} oncontextmenucapture={() => (ctx = null)} onscroll={release} onfocusin={() => (inside = true)} onfocusout={(ev) => (inside = !ev.relatedTarget || !!scroller?.contains(ev.relatedTarget as Node))}>
+      <div {...props} class="scroller" data-seeking={seek ? '' : undefined} class:selecting={!!selected?.size} bind:this={scroller} bind:clientWidth={width} oncontextmenucapture={() => (ctx = null)} onscroll={() => {
+          release()
+          top = ($v.range?.startIndex ?? 0) * cols
+        }} onfocusin={() => (inside = true)} onfocusout={(ev) => (inside = !ev.relatedTarget || !!scroller?.contains(ev.relatedTarget as Node))}>
         {#if !entries.length && loading}
           <div class="skeleton" class:grid role="status" aria-label={t.loading}>
             {#each { length: grid ? 12 : 10 }, i (i)}

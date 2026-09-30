@@ -817,6 +817,37 @@ test('from 900 px details push the list aside and keep the search usable, below 
   }
 })
 
+test('in grid view the focused card stays in view and focused while details open and close', async ({ page, server }) => {
+  mkdirSync(join(server.vol, 'cards'))
+  for (let i = 0; i < 120; i++) writeFileSync(join(server.vol, 'cards', `c-${String(i).padStart(3, '0')}.txt`), 'c')
+  await page.setViewportSize({ width: 1024, height: 768 })
+  await login(page)
+  await page.goto('/files/v/cards/')
+  await page.getByRole('button', { name: t.gridView }).click()
+  const card = (n: number) => page.locator('.card', { hasText: `c-${String(n).padStart(3, '0')}.txt` })
+  await card(0).focus()
+  const cols = await page.locator('.cards').first().locator('.card').count()
+  for (let i = 0; i < 16; i++) await page.keyboard.press('ArrowDown')
+  const n = cols * 16
+  await expect(card(n)).toBeFocused()
+  await page.keyboard.press('Shift+F10')
+  await expect.poll(() => page.evaluate(() => !!document.activeElement?.closest('[role=menu]'))).toBe(true)
+  for (let i = 0; i < 10 && (await page.evaluate(() => (document.activeElement as HTMLElement).innerText.trim())) !== t.details; i++) await page.keyboard.press('ArrowDown')
+  await expect(page.getByRole('menuitem', { name: t.details })).toBeFocused()
+  await page.keyboard.press('Enter')
+  const details = page.getByRole('complementary', { name: t.details })
+  await expect(details).toBeVisible()
+  await expect.poll(() => page.locator('.cards').first().locator('.card').count()).toBeLessThan(cols)
+  await expect(card(n)).toBeFocused()
+  await expect(card(n)).toBeInViewport()
+  await details.getByRole('button', { name: t.close }).focus()
+  await page.keyboard.press('Enter')
+  await expect(details).toHaveCount(0)
+  await expect.poll(() => page.locator('.cards').first().locator('.card').count()).toBe(cols)
+  await expect(card(n)).toBeFocused()
+  await expect(card(n)).toBeInViewport()
+})
+
 test('closing details opened from my shares clears the query', async ({ page }) => {
   await login(page)
   await shareDocs(page, 'read')
