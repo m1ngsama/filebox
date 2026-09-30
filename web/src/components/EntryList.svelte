@@ -91,7 +91,8 @@
   let pressing = $state(-1)
   let held = $state(false)
   let keyed = 0
-  let seek = $state('')
+  let seek = ''
+  let seeking = $state(false)
   let seekTimer = 0
 
   const media = $derived(grid && entries.length > 0 && entries.filter((e) => !e.dir && visual(e.name)).length >= 0.6 * entries.length)
@@ -261,16 +262,28 @@
     focusWanted()
   }
 
-  function typeahead(ch: string, i: number) {
+  function endSeek() {
     clearTimeout(seekTimer)
-    seekTimer = setTimeout(() => (seek = ''), 700)
-    seek += ch.toLocaleLowerCase()
-    const same = [...seek].every((c) => c === seek[0])
-    const q = same ? seek[0] : seek
+    seek = ''
+    seeking = false
+  }
+
+  function find(q: string, from: number) {
     for (let k = 0; k < entries.length; k++) {
-      const j = (i + (same ? 1 : 0) + k) % entries.length
+      const j = (from + k) % entries.length
       if (entries[j].name.toLocaleLowerCase().startsWith(q)) return go(j)
     }
+  }
+
+  function typeahead(text: string, i: number, edit = false) {
+    clearTimeout(seekTimer)
+    seekTimer = setTimeout(endSeek, 700)
+    seeking = true
+    const g = edit ? [...seek].slice(0, -1) : [...seek, ...text.toLocaleLowerCase()]
+    seek = g.join('')
+    if (!g.length) return
+    const same = !edit && g.every((c) => c === g[0])
+    find(same ? g[0] : seek, same ? i + 1 : i)
   }
 
   function key(ev: KeyboardEvent, i: number) {
@@ -278,12 +291,17 @@
     const page = cols * Math.max(1, Math.floor((scroller?.clientHeight ?? 0) / rowPx) - 1)
     const step = { ArrowDown: cols, ArrowUp: -cols, ArrowRight: grid ? 1 : 0, ArrowLeft: grid ? -1 : 0, PageDown: page, PageUp: -page }[ev.key]
     const plain = !ev.ctrlKey && !ev.metaKey && !ev.altKey
-    if (ev.key.length === 1 && plain && (ev.key !== ' ' || seek)) {
+    if (ev.key.length === 1 && plain && (ev.key !== ' ' || seeking)) {
       ev.preventDefault()
       typeahead(ev.key, i)
       return
     }
-    if (!['Shift', 'Control', 'Alt', 'Meta'].includes(ev.key)) seek = ''
+    if (seeking && (ev.key === 'Backspace' || ev.key === 'Delete')) {
+      ev.preventDefault()
+      if (ev.key === 'Backspace') typeahead('', i, true)
+      return
+    }
+    if (!['Shift', 'Control', 'Alt', 'Meta'].includes(ev.key)) endSeek()
     if (ev.key === 'ContextMenu' || (ev.shiftKey && ev.key === 'F10')) {
       ev.preventDefault()
       keyed = performance.now()
@@ -430,7 +448,7 @@
 <ContextMenu.Root onOpenChange={(o) => !o && (ctx = null)}>
   <ContextMenu.Trigger disabled={held || (!ctx && !actions(null).length)}>
     {#snippet child({ props })}
-      <div {...props} class="scroller" data-seeking={seek ? '' : undefined} class:selecting={!!selected?.size} bind:this={scroller} bind:clientWidth={width} oncontextmenucapture={() => (ctx = null)} onscroll={() => {
+      <div {...props} class="scroller" data-seeking={seeking ? '' : undefined} class:selecting={!!selected?.size} bind:this={scroller} bind:clientWidth={width} oncontextmenucapture={() => (ctx = null)} onscroll={() => {
           release()
           top = ($v.range?.startIndex ?? 0) * cols
         }} onfocusin={() => (inside = true)} onfocusout={(ev) => (inside = !ev.relatedTarget || !!scroller?.contains(ev.relatedTarget as Node))}>

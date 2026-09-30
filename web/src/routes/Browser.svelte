@@ -668,7 +668,7 @@
       else if (e.key === 'n') dialog = { kind: 'mkdir' }
       else if (e.key === 'u') files?.click()
       else if (target) dialog = { kind: 'rename', e: target }
-    } else if ((e.key === 'Delete' || e.key === 'Backspace') && selected.size && !e.repeat && performance.now() > calm && inList(e.target as Element)) remove([...selected])
+    } else if ((e.key === 'Delete' || e.key === 'Backspace') && !(e.target as Element).closest('[data-seeking]') && selected.size && !e.repeat && performance.now() > calm && inList(e.target as Element)) remove([...selected])
     else if (e.key === 'Enter' && selected.size === 1 && !(e.target as Element).closest('button, a, [role=grid]')) {
       const hit = entries.find((x) => selected.has(x.name))
       if (hit) open(hit)
