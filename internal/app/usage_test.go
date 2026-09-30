@@ -1,17 +1,23 @@
 package app
 
-import "testing"
+import (
+	"strings"
+	"testing"
+)
 
 func TestVolumeUsageAndFolderSize(t *testing.T) {
 	f := newTestApp(t)
 	vs := decode[struct {
 		Vols []struct {
-			Name              string
+			Name, FS          string
 			Used, Free, Total uint64
 		}
 	}](t, f.do("GET", "/api/vols", nil)).Vols
 	if len(vs) != 2 || vs[0].Name != "v" || vs[0].Total == 0 || vs[0].Used+vs[0].Free != vs[0].Total || vs[0].Free == 0 {
 		t.Fatalf("vols %+v", vs)
+	}
+	if len(vs[0].FS) != 12 || vs[0].FS != vs[1].FS || strings.Contains(vs[0].FS, "/") {
+		t.Fatalf("volumes on one filesystem should share a key: %+v", vs)
 	}
 	f.write(t, "d/a.txt", "abc")
 	f.write(t, "d/e/b.txt", "hello")

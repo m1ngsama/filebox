@@ -376,6 +376,7 @@ func (a *API) search(w http.ResponseWriter, r *http.Request) {
 func (a *API) vols(w http.ResponseWriter, r *http.Request) {
 	type usage struct {
 		Name string `json:"name"`
+		FS   string `json:"fs,omitempty"`
 		vol.Usage
 	}
 	out := []usage{}
@@ -384,7 +385,8 @@ func (a *API) vols(w http.ResponseWriter, r *http.Request) {
 		if err != nil {
 			slog.Warn("volume usage", "vol", v.Name, "err", err)
 		}
-		out = append(out, usage{v.Name, u})
+		fs, _ := v.Device()
+		out = append(out, usage{v.Name, fs, u})
 	}
 	httpx.JSON(w, 200, map[string]any{"vols": out})
 }

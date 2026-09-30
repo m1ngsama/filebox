@@ -22,6 +22,11 @@
       () => {},
     ).finally(() => (measured = true))
   $effect(() => void measure())
+  const bars = $derived.by(() => {
+    const groups = new Map<string, string[]>()
+    for (const v of vols) if (usage[v]?.total) groups.set(usage[v].fs || v, [...(groups.get(usage[v].fs || v) ?? []), v])
+    return new Map([...groups.values()].map((g) => [g.at(-1)!, g]))
+  })
   const cur = $derived(parts[0] === 'files' || parts[0] === 'trash' ? parts[1] : undefined)
 
   function go(e: MouseEvent) {
@@ -49,13 +54,13 @@
         <a href={`/files/${encodeURIComponent(v)}/`} onclick={go} aria-current={parts[0] === 'files' && cur === v ? 'page' : undefined}>
           <HardDrive size={icon.md} /><span>{v}</span>
         </a>
-        {#if usage[v]?.total}
+        {#if bars.has(v)}
           {@const u = usage[v]}
-          <div class="usage">
+          <div class="usage" class:shared={bars.get(v)!.length > 1} title={bars.size > 1 ? t.list(bars.get(v)!) : undefined}>
             <div class="usage-bar" style:--p={`${Math.min(100, (100 * u.used) / (u.used + u.free))}%`}></div>
             <span class="hint">{t.usage(size(u.used), size(u.total))}</span>
           </div>
-        {:else if !measured}
+        {:else if !measured && v === vols.at(-1)}
           <div class="usage" aria-hidden="true"><div class="usage-bar" style:--p="0%"></div><span class="hint">&nbsp;</span></div>
         {/if}
       </li>

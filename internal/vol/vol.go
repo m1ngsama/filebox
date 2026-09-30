@@ -1,6 +1,8 @@
 package vol
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"io/fs"
@@ -42,6 +44,19 @@ func (v *Volume) Usage() (Usage, error) {
 	b := uint64(st.Bsize)
 	used, free := (uint64(st.Blocks)-uint64(st.Bfree))*b, uint64(st.Bavail)*b
 	return Usage{Used: used, Free: free, Total: used + free}, nil
+}
+
+func (v *Volume) Device() (string, error) {
+	fi, err := os.Stat(v.Path)
+	if err != nil {
+		return "", err
+	}
+	st, ok := fi.Sys().(*syscall.Stat_t)
+	if !ok {
+		return "", errors.New("no device id")
+	}
+	h := sha256.Sum256(fmt.Appendf(nil, "%d", uint64(st.Dev)))
+	return hex.EncodeToString(h[:6]), nil
 }
 
 func (v *Volume) Free() (uint64, error) {

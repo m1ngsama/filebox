@@ -1667,6 +1667,18 @@ test('the nav shows volume usage and details add up a folder from the index', as
   await expect(page.locator('.details dd.size')).toHaveText(t.folderSize('6 B', 1))
 })
 
+test('volumes on one filesystem share a single usage bar', async ({ page }) => {
+  const u = (name: string, fs: string, used: number) => ({ name, fs, used, free: 100 - used, total: 100 })
+  await page.route('/api/me', (r) => r.fulfill({ json: { name: 'admin', vols: ['v', 'w', 'x'] } }))
+  await page.route('/api/vols', (r) => r.fulfill({ json: { vols: [u('v', 'aa', 40), u('w', 'aa', 40), u('x', 'bb', 10)] } }))
+  await login(page)
+  const volItem = (n: string) => page.locator('.nav li').filter({ has: page.getByRole('link', { name: n, exact: true }) })
+  await expect(page.locator('.nav .usage')).toHaveCount(2)
+  await expect(volItem('w').locator('.usage.shared')).toHaveAttribute('title', t.list(['v', 'w']))
+  await expect(volItem('x').locator('.usage:not(.shared)')).toHaveCount(1)
+  await expect(volItem('v').locator('.usage')).toHaveCount(0)
+})
+
 test('revisiting a folder revalidates its listing instead of downloading it again', async ({ page }) => {
   await login(page)
   const seen: [number, string | undefined][] = []
