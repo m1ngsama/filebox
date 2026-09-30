@@ -482,7 +482,7 @@ button.quiet:hover:not(:disabled) { color: var(--danger); background: color-mix(
   .scope button { padding: 6px 8px; }
   .bar.searching .search-close { display: inline-grid; }
   .fab { display: inline-flex; }
-  .files .spacer { margin-bottom: calc(var(--dock) + var(--fab-size) + 2 * var(--space-4)); }
+  .files .scroller > :last-child { margin-bottom: calc(var(--dock) + var(--fab-size) + 2 * var(--space-4)); }
   .viewer header { padding-left: var(--space-4); }
   .viewer header .icon-btn { width: 44px; height: 44px; }
   .uploads { right: var(--space-2); bottom: calc(var(--dock) + var(--space-2)); width: calc(100vw - 2 * var(--space-2)); max-height: 40vh; }
