@@ -321,6 +321,7 @@ textarea { resize: vertical; }
 .uploads progress::-webkit-progress-value { background: var(--accent); border-radius: 2px; }
 .uploads progress::-moz-progress-bar { background: var(--accent); border-radius: 2px; }
 .uploads .up-total { flex: none; border-radius: 0; }
+.uploads .up-view { color: var(--accent); font-weight: 600; }
 .uploads.collapsed { border-radius: var(--radius-full); }
 .uploads.collapsed header { padding-inline: var(--space-2); }
 .uploads ul { list-style: none; padding: 0 var(--space-1); margin: 0; overflow: auto; border-top: 1px solid var(--line); }
@@ -483,6 +484,7 @@ button.busy::before { content: ''; width: 14px; height: 14px; border: 2px solid 
   .scope button { padding: 6px 8px; }
   .bar.searching .search-close { display: inline-grid; }
   .fab { display: inline-flex; }
+  :root:has(.uploads:not(.collapsed)) .fab { display: none; }
   .files .scroller > :last-child { margin-bottom: calc(var(--dock) + var(--fab-size) + 2 * var(--space-4)); }
   .viewer header { padding-left: var(--space-4); }
   .viewer header .icon-btn { width: 44px; height: 44px; }

@@ -179,16 +179,17 @@
   })
 
   $effect(() => {
-    const name = new URLSearchParams(route.search).get('select')
-    if (!name || at !== here || streaming) return
+    const names = new URLSearchParams(route.search).getAll('select')
+    if (!names.length || at !== here || streaming) return
     untrack(async () => {
       filter = query = ''
       searching = false
       await tick()
-      if (entries.some((e) => e.name === name)) {
+      const hit = names.filter((n) => entries.some((e) => e.name === n))
+      if (hit.length) {
         selected.clear()
-        selected.add(name)
-        reveal = name
+        for (const n of hit) selected.add(n)
+        reveal = hit[0]
       }
       navigate(route.path, true)
     })
@@ -375,7 +376,7 @@
 
   function pick(name: string) {
     selected.clear()
-    selected.add(name)
+    if (!narrow.current) selected.add(name)
     reveal = name
   }
 

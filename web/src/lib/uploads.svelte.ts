@@ -25,6 +25,7 @@ const KEEP_FAILED = 200
 
 export const uploads = $state<Item[]>([])
 export const totals = $state({ files: 0, ok: 0, bytes: 0, sent: 0, speed: 0 })
+export const finished = $state<{ last: { n: number; vol?: string; dir: string; names: string[] } | null }>({ last: null })
 const groups = new Map<number, Group>()
 const pending: Job[] = []
 const refreshers = new Set<() => void>()
@@ -36,6 +37,7 @@ let undoer: Undo | undefined
 let samples: [number, number][] = []
 let ticker = 0
 let debounce = 0
+let fading = 0
 
 export function enqueue(files: { file: File; rel?: string }[], endpoint: string, meta: Record<string, string>, refresh: () => void, undo?: Undo) {
   const byTop = new Map<string, Item>()
@@ -53,6 +55,7 @@ export function enqueue(files: { file: File; rel?: string }[], endpoint: string,
     const job = { item, file, endpoint, meta: rel ? { ...meta, relativePath: rel } : meta, sent: 0, ok: false, err: false }
     groups.get(item.id)!.jobs.push(job)
     pending.push(job)
+    finished.last = null
     totals.files++
     totals.bytes += file.size
   }
@@ -210,17 +213,26 @@ function idle() {
   ticker = 0
   clearTimeout(debounce)
   flush()
+  let meta: Record<string, string> | undefined
+  const names: string[] = []
   for (let i = uploads.length - 1; i >= 0; i--) {
     const u = uploads[i]
     if (u.state !== 'done') continue
+    const m = groups.get(u.id)?.jobs[0].meta
+    meta ??= m
+    if (m?.vol === meta?.vol && m?.dir === meta?.dir) names.push(u.name)
     groups.delete(u.id)
     uploads.splice(i, 1)
   }
   const failed = uploads.filter((u) => u.state === 'error')
   for (const u of failed.slice(0, Math.max(0, failed.length - KEEP_FAILED))) forget(u)
   Object.assign(totals, { files: 0, ok: 0, bytes: 0, sent: 0, speed: 0 })
+  if (uploaded) {
+    finished.last = { n: uploaded, vol: meta?.vol, dir: meta?.dir === '/' ? '' : (meta?.dir ?? ''), names: names.reverse() }
+    clearTimeout(fading)
+    fading = setTimeout(() => (finished.last = null), 8000)
+  }
   if (uploaded && replaced.length) toast(t.uploadedReplaced(uploaded, replaced.length), { actions: [undoer?.(replaced)] })
-  else if (uploaded) toast(t.uploaded(uploaded))
   uploaded = 0
   replaced = []
   undoer = undefined
@@ -261,5 +273,6 @@ export function retry(item: Item) {
 }
 
 export function clearFailed() {
+  finished.last = null
   for (const u of uploads.filter((u) => u.state === 'error')) forget(u)
 }

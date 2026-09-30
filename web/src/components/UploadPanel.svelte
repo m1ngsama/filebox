@@ -5,7 +5,9 @@
   import ChevronUp from '@lucide/svelte/icons/chevron-up'
   import CircleCheck from '@lucide/svelte/icons/circle-check'
   import FileIcon from './FileIcon.svelte'
-  import { uploads, totals, cancel, retry, clearFailed } from '../lib/uploads.svelte'
+  import { uploads, totals, finished, cancel, retry, clearFailed } from '../lib/uploads.svelte'
+  import { filesURL } from '../lib/api'
+  import { navigate } from '../lib/router.svelte'
   import { size } from '../lib/format'
   import { narrow } from '../lib/shell.svelte'
   import { t } from '../lib/i18n'
@@ -24,17 +26,25 @@
   const title = $derived(
     active
       ? [t.uploading(totals.ok, totals.files), totals.speed > 0 && `${size(totals.speed)}/s`, left >= 1 && t.eta(left)].filter(Boolean).join(' · ')
-      : t.uploadsFailed(failed),
+      : [finished.last && t.uploaded(finished.last.n), failed && t.uploadsFailed(failed)].filter(Boolean).join(' · '),
   )
+
+  function view() {
+    const f = finished.last
+    if (!f?.vol) return
+    finished.last = null
+    navigate(`${filesURL(f.vol, f.dir)}?${new URLSearchParams(f.names.map((n) => ['select', n]))}`)
+  }
 </script>
 
-{#if uploads.length}
-  <aside class="uploads" class:collapsed aria-label={t.uploads} bind:offsetHeight={h}>
+{#if uploads.length || finished.last}
+  <aside class="uploads" class:collapsed={collapsed || !uploads.length} aria-label={t.uploads} bind:offsetHeight={h}>
     <header>
-      <button class="up-title" aria-expanded={!collapsed} onclick={() => (open = collapsed)}>
+      <button class="up-title" aria-expanded={uploads.length ? !collapsed : undefined} onclick={() => (open = collapsed)}>
         <span>{title}</span>
-        {#if collapsed}<ChevronUp size={18} />{:else}<ChevronDown size={18} />{/if}
+        {#if !uploads.length}{:else if collapsed}<ChevronUp size={18} />{:else}<ChevronDown size={18} />{/if}
       </button>
+      {#if !active && finished.last?.vol}<button class="ghost up-view" onclick={view}>{t.show}</button>{/if}
       {#if !active}<button class="icon-btn" aria-label={t.close} onclick={clearFailed}><X size={18} /></button>{/if}
     </header>
     {#if active}<progress class="up-total" max={totals.bytes || 1} value={totals.sent}></progress>{/if}

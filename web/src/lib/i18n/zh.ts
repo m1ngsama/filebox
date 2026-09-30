@@ -222,7 +222,7 @@ const zh = {
   undone: '已撤销',
   undoFailed: (what: string) => `${what}没能撤销`,
   failedItem: (name: string, msg: string) => `${name}：${msg}`,
-  uploaded: (n: number) => `已上传 ${n} 个文件`,
+  uploaded: (n: number) => `已完成 ${n} 项`,
   uploadedReplaced: (n: number, m: number) => `已上传 ${n} 个文件，替换的 ${m} 个旧文件已移到回收站`,
   shareCreated: '已新建分享链接',
   shareCreatedCopied: '已新建分享链接，并复制到剪贴板',
