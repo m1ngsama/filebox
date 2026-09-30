@@ -20,13 +20,18 @@ const maxSubtitle = 8 << 20
 
 var srtTime = regexp.MustCompile(`(?m)^(\s*\d+:\d{2}:\d{2}),(\d{1,3})\s*-->\s*(\d+:\d{2}:\d{2}),(\d{1,3})`)
 
-func SRTToVTT(src []byte) []byte {
+func UTF8(src []byte) []byte {
 	src = bytes.TrimPrefix(src, []byte("\xef\xbb\xbf"))
 	if !utf8.Valid(src) {
 		if b, err := simplifiedchinese.GB18030.NewDecoder().Bytes(src); err == nil {
-			src = b
+			return b
 		}
 	}
+	return src
+}
+
+func SRTToVTT(src []byte) []byte {
+	src = UTF8(src)
 	src = bytes.ReplaceAll(src, []byte("\r\n"), []byte("\n"))
 	src = bytes.ReplaceAll(src, []byte("\r"), []byte("\n"))
 	if bytes.HasPrefix(src, []byte("WEBVTT")) {
