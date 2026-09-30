@@ -83,9 +83,13 @@ func Handler(vols *vol.Set, a *auth.Auth, ix *index.Index, vs *version.Store) ht
 				}
 			}
 		}
+		var doomed []string
+		for _, p := range gone {
+			doomed = append(doomed, ls.below(p, fsys.same)...)
+		}
 		release := func() {
-			for _, p := range gone {
-				ls.release(time.Now(), p, fsys.same)
+			for _, tok := range doomed {
+				ls.Unlock(time.Now(), tok)
 			}
 		}
 		if r.Method != "COPY" && r.Method != "MOVE" {

@@ -81,7 +81,16 @@ func (l *locks) Unlock(now time.Time, tok string) error {
 
 func under(p, root string) bool { return p == root || root == "/" || strings.HasPrefix(p, root+"/") }
 
-func within(p, root string, same func(a, b string) bool) bool { return under(p, root) }
+func within(p, root string, same func(a, b string) bool) bool {
+	if under(p, root) {
+		return true
+	}
+	if len(p) < len(root) || (len(p) > len(root) && p[len(root)] != '/') {
+		return false
+	}
+	head := p[:len(root)]
+	return same != nil && strings.EqualFold(head, root) && same(head, root)
+}
 
 func (l *locks) covering(now time.Time, p string, same func(a, b string) bool) []string {
 	l.mu.Lock()
@@ -99,18 +108,16 @@ func (l *locks) covering(now time.Time, p string, same func(a, b string) bool) [
 	return out
 }
 
-func (l *locks) release(now time.Time, p string, same func(a, b string) bool) {
+func (l *locks) below(p string, same func(a, b string) bool) []string {
 	l.mu.Lock()
+	defer l.mu.Unlock()
 	var toks []string
 	for tok, h := range l.m {
 		if within(h.root, p, same) {
 			toks = append(toks, tok)
 		}
 	}
-	l.mu.Unlock()
-	for _, tok := range toks {
-		l.Unlock(now, tok)
-	}
+	return toks
 }
 
 func submitted(hdr string) map[string]bool {

@@ -149,3 +149,25 @@ func TestDavOverwriteOfALockedDestination(t *testing.T) {
 		e.req(t, e.rw, "UNLOCK", "/dav/v/doc.docx", "", "Lock-Token", tok)
 	}
 }
+
+func TestDavLockHoldsThroughACaseAlias(t *testing.T) {
+	e := setup(t)
+	e.req(t, e.rw, "MKCOL", "/dav/v/Case", "")
+	e.req(t, e.rw, "PUT", "/dav/v/Case/f.txt", "f")
+	if _, err := os.Stat(filepath.Join(e.dir, "case")); err != nil {
+		t.Skip("case-sensitive filesystem")
+	}
+	tok := e.lock(t, "/dav/v/Case/f.txt")
+	if res, _ := e.req(t, e.rw, "DELETE", "/dav/v/case", ""); res.StatusCode != 423 {
+		t.Fatalf("DELETE through a case alias %d", res.StatusCode)
+	}
+	if res, _ := e.req(t, e.rw, "DELETE", "/dav/v/case", "", "If", "<"+e.srv.URL+"/dav/v/Case/f.txt> ("+tok+")"); res.StatusCode != 204 {
+		t.Fatalf("DELETE through a case alias with the token %d", res.StatusCode)
+	}
+	if res, _ := e.req(t, e.rw, "MKCOL", "/dav/v/Case", ""); res.StatusCode != 201 {
+		t.Fatalf("MKCOL %d", res.StatusCode)
+	}
+	if res, _ := e.req(t, e.rw, "PUT", "/dav/v/Case/f.txt", "new"); res.StatusCode != 201 {
+		t.Fatalf("lock survived a DELETE through its case alias: PUT %d", res.StatusCode)
+	}
+}
