@@ -27,7 +27,7 @@
 .doc img { max-width: 100%; }
 .doc hr { border: 0; border-top: 1px solid var(--line); margin: 1.5em 0; }
 .doc table { display: block; overflow-x: auto; border-collapse: collapse; }
-.doc th, .doc td { padding: 6px 12px; border: 1px solid var(--line); }
+.doc th, .doc td { padding: var(--space-1-5) var(--space-3); border: 1px solid var(--line); }
 .doc th { font-weight: 600; background: var(--code-bg); }
 .doc code { font: 0.9em ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; background: var(--code-bg); padding: 0.15em 0.35em; border-radius: var(--radius-sm); }
 .doc pre { background: var(--code-bg); color: var(--fg); padding: var(--space-3) var(--space-4); border-radius: var(--radius-md); overflow-x: auto; line-height: 1.5; white-space: pre; word-break: normal; tab-size: 4; }

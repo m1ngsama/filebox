@@ -41,8 +41,8 @@
   .name { flex: none; max-width: 70%; font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .where { color: var(--muted); font-size: var(--text-xs); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .snippet {
-    grid-column: 2; margin-top: 2px; color: var(--muted); font-size: var(--text-sm);
+    grid-column: 2; margin-top: var(--space-0); color: var(--muted); font-size: var(--text-sm);
     display: -webkit-box; -webkit-line-clamp: 2; line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; overflow-wrap: anywhere;
   }
-  mark { background: color-mix(in srgb, var(--accent) 22%, transparent); color: var(--fg); border-radius: 2px; padding: 0 1px; }
+  mark { background: color-mix(in srgb, var(--accent) 22%, transparent); color: var(--fg); border-radius: var(--radius-xs); padding: 0 var(--space-0); }
 </style>
