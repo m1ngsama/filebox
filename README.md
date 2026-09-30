@@ -6,6 +6,7 @@ A self-hosted file server in one binary. Browse, preview, upload and share files
 - WebDAV at `/dav/` with per-device app passwords, optionally read-only.
 - Share links with password, expiry, and upload or drop-box modes.
 - WebP thumbnails via ffmpeg (optional).
+- Search by name, path and the text inside documents.
 - Deletes from the web UI and WebDAV go to a per-volume trash that keeps items for 30 days, or less when the disk falls below 10% free, and so does a folder replaced by a WebDAV MOVE or COPY. Junk that macOS and Windows write and delete on their own (`._*`, `.DS_Store`, `.Trashes`, `Thumbs.db`, `desktop.ini`) is deleted for good and never versioned.
 - Passkey login next to the password.
 
@@ -28,6 +29,10 @@ filebox token -data /srv/data/filebox new "laptop"         # app password for We
 ```
 
 Behind a reverse proxy, turn off request and response buffering (nginx: `proxy_request_buffering off; proxy_buffering off;`) and forward `X-Real-IP` and `X-Forwarded-Proto` from loopback. filebox trusts `X-Real-IP`, then the last `X-Forwarded-For` entry, only when the direct peer is loopback, and uses the address for rate limits and the activity log. The proxy must set these headers itself (nginx: `proxy_set_header X-Real-IP $remote_addr;`) and must not pass a client-supplied value through. Caddy and Traefik pass them through by default.
+
+## Content search
+
+filebox extracts the text inside documents in the background, at low priority, so search also finds words in them. It reads up to 1 MiB of text from each plain-text, Markdown, code, HTML and EPUB file, and from PDFs when poppler's [`pdftotext`](https://poppler.freedesktop.org/) is on the `PATH`. Content matches need at least 3 characters. The index lives in the database and takes about four times the extracted text, so a long book adds up to 4 MiB. Pass `-content=false` to turn it off, which also drops the existing content index.
 
 ## Versions
 

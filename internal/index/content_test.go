@@ -110,6 +110,12 @@ func TestContentResumesAfterRestart(t *testing.T) {
 	if n := e.pass(t, e.extractor()); n != 1 {
 		t.Fatalf("restart extracted %d, want only the new file", n)
 	}
+	if err := e.x.DropContent(); err != nil {
+		t.Fatal(err)
+	}
+	if n, f := e.rows(t); n != 0 || f != 0 {
+		t.Fatalf("drop left %d/%d", n, f)
+	}
 }
 
 func TestContentWorkerWakes(t *testing.T) {
