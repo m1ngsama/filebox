@@ -90,8 +90,8 @@
   let origin = [0, 0]
   let pressing = $state(-1)
   let held = $state(false)
-  let menuFor = $state('')
-  let seek = ''
+  let keyed = 0
+  let seek = $state('')
   let seekTimer = 0
 
   const media = $derived(grid && entries.length > 0 && entries.filter((e) => !e.dir && visual(e.name)).length >= 0.6 * entries.length)
@@ -188,7 +188,7 @@
   }
 
   function menu(ev: MouseEvent, e: Entry) {
-    if ((touch && selected) || menuFor) ev.preventDefault()
+    if ((touch && selected) || performance.now() - keyed < 500) ev.preventDefault()
     else ctx = e
   }
 
@@ -250,10 +250,14 @@
     if (ev.key.length === 1 && plain && (ev.key !== ' ' || seek)) {
       ev.preventDefault()
       typeahead(ev.key, i)
-    } else if (ev.key === 'ContextMenu' || (ev.shiftKey && ev.key === 'F10')) {
+      return
+    }
+    if (!['Shift', 'Control', 'Alt', 'Meta'].includes(ev.key)) seek = ''
+    if (ev.key === 'ContextMenu' || (ev.shiftKey && ev.key === 'F10')) {
       ev.preventDefault()
+      keyed = performance.now()
       if (narrow.current) sheet = entries[i]
-      else menuFor = id(entries[i])
+      else (ev.currentTarget as Element).querySelector('.more')?.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true }))
     } else if (ev.key === ' ') {
       ev.preventDefault()
       anchor = id(entries[i])
@@ -326,7 +330,7 @@
   {#if narrow.current}
     <button class="icon-btn more" tabindex="-1" aria-label={`${e.name} ${t.actions}`} aria-haspopup="dialog" onclick={() => (sheet = e)}><Ellipsis size={icon.md} /></button>
   {:else}
-  <DropdownMenu.Root open={menuFor === id(e)} onOpenChange={(o) => (menuFor = o ? id(e) : '')}>
+  <DropdownMenu.Root>
     <DropdownMenu.Trigger class="icon-btn more" tabindex={-1} aria-label={`${e.name} ${t.actions}`}><Ellipsis size={icon.md} /></DropdownMenu.Trigger>
     <DropdownMenu.Portal>
       <DropdownMenu.Content class="menu" preventScroll={false} align="end" sideOffset={4} onCloseAutoFocus={refocus}>{@render items(e)}</DropdownMenu.Content>
@@ -395,7 +399,7 @@
 <ContextMenu.Root onOpenChange={(o) => !o && (ctx = null)}>
   <ContextMenu.Trigger disabled={held || (!ctx && !actions(null).length)}>
     {#snippet child({ props })}
-      <div {...props} class="scroller" class:selecting={!!selected?.size} bind:this={scroller} bind:clientWidth={width} oncontextmenucapture={() => (ctx = null)} onscroll={release} onfocusin={() => (inside = true)} onfocusout={(ev) => (inside = !ev.relatedTarget || !!scroller?.contains(ev.relatedTarget as Node))}>
+      <div {...props} class="scroller" data-seeking={seek ? '' : undefined} class:selecting={!!selected?.size} bind:this={scroller} bind:clientWidth={width} oncontextmenucapture={() => (ctx = null)} onscroll={release} onfocusin={() => (inside = true)} onfocusout={(ev) => (inside = !ev.relatedTarget || !!scroller?.contains(ev.relatedTarget as Node))}>
         {#if !entries.length && loading}
           <div class="skeleton" class:grid role="status" aria-label={t.loading}>
             {#each { length: grid ? 12 : 10 }, i (i)}

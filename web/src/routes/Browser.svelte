@@ -644,7 +644,7 @@
   }
 
   function keydown(e: KeyboardEvent) {
-    if (document.querySelector('[role=dialog], [role=menu]')) return
+    if (document.querySelector("[role=dialog], [role=menu]:not([data-state='closed'])")) return
     const typing = (e.target as Element).matches?.('input:not([type=checkbox], [type=radio]), select, textarea, [contenteditable]')
     const mod = e.metaKey || e.ctrlKey
     const k = e.key.toLowerCase()
@@ -659,7 +659,7 @@
       e.preventDefault()
       for (const x of shown) selected.add(x.name)
     } else if (mod) return
-    else if (e.key === '/' || e.key === '?' || ((e.key === 'n' || e.key === 'u') && !(e.target as Element).closest('[role=grid]')) || (e.key === 'F2' && target)) {
+    else if (e.key === '/' || e.key === '?' || ((e.key === 'n' || e.key === 'u') && !(e.target as Element).closest('[data-seeking]')) || (e.key === 'F2' && target)) {
       e.preventDefault()
       if (e.key === '/') search()
       else if (e.key === '?') help = true

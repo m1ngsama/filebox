@@ -216,7 +216,7 @@ export default (locale: string) => {
       open: 'Open the selected item',
       move: 'Move up and down the list',
       page: 'Jump to the first or last item, or by a page',
-      seek: 'Type the start of a name to jump to it',
+      seek: 'Type the start of a name to jump to it; N and U as the first letter stay shortcuts',
       menu: 'Open the actions menu of the focused item',
       toggle: 'Select or deselect the current item',
       escape: 'Clear the selection, or close details and dialogs',
