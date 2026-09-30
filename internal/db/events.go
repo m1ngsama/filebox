@@ -1,12 +1,14 @@
 package db
 
 import (
+	"cmp"
 	"crypto/hmac"
 	"crypto/rand"
 	"crypto/sha256"
 	"encoding/hex"
 	"log/slog"
 	"net/netip"
+	"slices"
 	"strconv"
 	"strings"
 	"sync"
@@ -160,6 +162,7 @@ func (w *writer) write(batch []item) {
 	if n := w.dropped.Swap(0); n > 0 {
 		slog.Warn("activity log queue full, events dropped", "count", n)
 	}
+	slices.SortStableFunc(batch, func(a, b item) int { return cmp.Compare(a.ev.At, b.ev.At) })
 	if len(batch) > 0 && w.insert(batch) != nil {
 		time.Sleep(retryDelay)
 		if err := w.insert(batch); err != nil {
