@@ -946,6 +946,38 @@ test('ctrl+z during a pending rename undoes the rename, not the action before it
   expect([existsSync(join(server.vol, 'r1.txt')), existsSync(join(server.vol, 'r2.txt'))]).toEqual([false, true])
 })
 
+test('focus, selection and details follow deletes, renames and rollbacks', async ({ page, server }) => {
+  for (const n of ['f1.txt', 'f2.txt', 'f3.txt']) writeFileSync(join(server.vol, n), n)
+  await login(page)
+  await row(page, 'f2.txt').focus()
+  await page.keyboard.press(' ')
+  await page.keyboard.press('Delete')
+  await expect(row(page, 'f3.txt')).toBeFocused()
+  await page.keyboard.press(' ')
+  await page.keyboard.press('Delete')
+  await expect(row(page, 'f1.txt')).toBeFocused()
+
+  await row(page, 'f1.txt').locator('button.more').click()
+  await page.getByRole('menuitem', { name: t.details, exact: true }).click()
+  await expect(page.locator('.details h2')).toHaveText('f1.txt')
+  await row(page, 'f1.txt').locator('button.more').click()
+  await page.getByRole('menuitem', { name: t.rename, exact: true }).click()
+  await page.getByLabel(t.newName).fill('g1.txt')
+  await page.keyboard.press('Enter')
+  await expect(page.locator('.details h2')).toHaveText('g1.txt')
+
+  writeFileSync(join(server.vol, 'taken.txt'), 't')
+  await row(page, 'g1.txt').locator('button.more').click()
+  await page.getByRole('menuitem', { name: t.rename, exact: true }).click()
+  await page.getByLabel(t.newName).fill('taken.txt')
+  await page.keyboard.press('Enter')
+  await expect(page.locator('.toast.error')).toHaveText(t.errors[409])
+  await expect(row(page, 'g1.txt')).toHaveAttribute('aria-selected', 'true')
+  await expect(row(page, 'g1.txt')).toBeFocused()
+  await expect(page.locator('.details h2')).toHaveText('g1.txt')
+  await expect(row(page, 'taken.txt')).toHaveCount(1)
+})
+
 test('a delete counts items that are already gone as done and rolls back a failed request', async ({ page, server }) => {
   writeFileSync(join(server.vol, 'gone-a.txt'), 'a')
   writeFileSync(join(server.vol, 'gone-b.txt'), 'b')

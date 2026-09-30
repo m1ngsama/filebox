@@ -64,7 +64,7 @@
     id?: (e: Entry) => string
     loc?: (e: Entry) => Loc
     group?: (e: Entry) => string
-    reveal?: string
+    reveal?: { name: string; center?: boolean }
     dim?: (e: Entry) => string | undefined
     dnd?: { carry: (e: Entry) => Carried; target: (e: Entry) => Target }
   } = $props()
@@ -241,17 +241,17 @@
     })
   })
 
-  let revealed = ''
+  let revealed: typeof reveal
   $effect(() => {
-    const key = reveal
-    if (!key || key === revealed) return
-    const i = entries.findIndex((e) => id(e) === key)
+    const r = reveal
+    if (!r || r === revealed) return
+    const i = entries.findIndex((e) => id(e) === r.name)
     if (i < 0) return
-    revealed = key
+    revealed = r
     untrack(() => {
-      cur = key
+      cur = r.name
       want = i
-      $v.scrollToIndex(rowOf(i), { align: 'center' })
+      $v.scrollToIndex(rowOf(i), r.center ? { align: 'center' } : undefined)
       tick().then(focusWanted)
     })
   })

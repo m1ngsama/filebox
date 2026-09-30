@@ -64,7 +64,7 @@
   const ranked = $derived(hits && hitSort ? arrange(hits, '', hitSort, hitDesc) : hits)
   let finding = $state(false)
   let partial = $state(false)
-  let reveal = $state('')
+  let reveal = $state.raw<{ name: string; center?: boolean }>()
   let query = $state('')
   let sort = $state<Sort>('name')
   let desc = $state(false)
@@ -127,9 +127,24 @@
     reapply()
   }
 
+  function neighbour(gone: Set<string>) {
+    const idx = shown.flatMap((e, i) => (gone.has(e.name) ? [i] : []))
+    if (!idx.length) return
+    const ok = (e: Entry) => !gone.has(e.name)
+    return (shown.slice(idx.at(-1)! + 1).find(ok) ?? shown.slice(0, idx[0]).reverse().find(ok))?.name
+  }
+
   function rollback(mine: Op[], err: unknown) {
+    const next = neighbour(new Set(mine.filter((o) => o.entry).map((o) => o.name)))
     ops = ops.filter((o) => !mine.includes(o))
     reapply()
+    const back = mine.filter((o) => !o.entry && entries.some((e) => e.name === o.name)).map((o) => o.name)
+    if (back.length) {
+      selected.clear()
+      for (const n of back) selected.add(n)
+    }
+    const to = back[0] ?? next
+    if (to) reveal = { name: to }
     fail(err)
     refresh()
   }
@@ -178,7 +193,7 @@
     filter = ''
     searching = false
     details = null
-    reveal = ''
+    reveal = undefined
     ops = []
     listing = []
     const focus = new URLSearchParams(untrack(() => route.search)).get('details')
@@ -239,7 +254,7 @@
       if (hit.length) {
         selected.clear()
         for (const n of hit) selected.add(n)
-        reveal = hit[0]
+        reveal = { name: hit[0], center: true }
       }
       navigate(route.path, true)
     })
@@ -264,6 +279,16 @@
   })
 
   $effect(() => save('grid', grid ? '1' : '0'))
+
+  $effect(() => {
+    const list = entries
+    if (streaming) return
+    untrack(() => {
+      if (!selected.size) return
+      const have = new Set(list.map((e) => e.name))
+      for (const n of [...selected]) if (!have.has(n)) selected.delete(n)
+    })
+  })
 
   $effect(() => {
     const s = document.documentElement.style
@@ -429,7 +454,7 @@
     calm = performance.now() + 300
     selected.clear()
     if (!narrow.current) selected.add(name)
-    reveal = name
+    reveal = { name, center: true }
   }
 
   function vacant(n: string) {
@@ -453,7 +478,7 @@
   function rename(e: Entry, n: string) {
     vacant(n)
     const m = { from: { vol, path: join(e.name) }, to: { vol, path: join(n) } }
-    if (details?.name === e.name) closeDetails()
+    if (details?.name === e.name) details = { ...e, name: n }
     const mine = begin([
       [e.name, null],
       [n, { ...e, name: n }],
@@ -468,6 +493,7 @@
       },
       (err) => {
         retract(id)
+        if (details?.name === n) details = e
         rollback(mine, err)
       },
     )
@@ -476,8 +502,10 @@
   async function remove(names: string[]) {
     const v = vol
     const paths = names.map(join)
+    const next = neighbour(new Set(names))
     const mine = begin(names.map((n) => [n, null]))
     selected.clear()
+    if (next) reveal = { name: next }
     if (details && names.includes(details.name)) closeDetails()
     const pending = serial(() => api.rm(v, paths))
     const id = toast(t.trashed(t.what(names)), { actions: [undo(async () => restore(v, (await pending).trashed))] })
