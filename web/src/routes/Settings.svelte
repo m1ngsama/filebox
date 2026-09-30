@@ -14,7 +14,7 @@
   import { api, session, type Passkey, type Session, type Token } from '../lib/api'
   import { addPasskey, deviceName, passkeyError, validPasskeyName } from '../lib/passkey'
   import { date, ago, device } from '../lib/format'
-  import { t } from '../lib/i18n'
+  import { t, langPref, setLang, type LangPref } from '../lib/i18n'
   import { toast } from '../lib/toast.svelte'
   import { theme, setTheme, type Theme } from '../lib/theme'
 
@@ -38,6 +38,7 @@
   let renaming = $state<Passkey | null>(null)
   let removing = $state<Passkey | null>(null)
   let mode = $state(theme())
+  const language = langPref()
   const dav = `${location.origin}/dav/`
   const vol = $derived(encodeURIComponent(vols[0] ?? ''))
   const sections = $derived([
@@ -125,6 +126,14 @@
         {#each Object.entries(t.themes) as [k, label] (k)}
           <button type="button" class="chip" aria-pressed={mode === k} onclick={() => setTheme((mode = k as Theme))}>{label}</button>
         {/each}
+      </div>
+      <div class="pref" role="group" aria-labelledby="language-title">
+        <h3 id="language-title">{t.language}</h3>
+        <div class="chips">
+          {#each Object.entries(t.languages) as [k, label] (k)}
+            <button type="button" class="chip" lang={k === 'auto' ? undefined : k} aria-pressed={language === k} onclick={() => language !== k && setLang(k as LangPref)}>{label}</button>
+          {/each}
+        </div>
       </div>
     </section>
 

@@ -8,8 +8,8 @@ web:
 	cd web && bun install --frozen-lockfile && bun run check && bun run build
 
 size: web
-	@e=$$(grep -o 'assets/index-[^"]*\.js' web/dist/index.html); n=$$(gzip -9c web/dist/$$e | wc -c | tr -d ' '); \
-	s=$$(grep -o 'assets/share-[^"]*\.js' web/dist/share.html); m=$$(gzip -9c web/dist/$$s | wc -c | tr -d ' '); \
+	@e=$$(grep -o 'assets/[^"]*\.js' web/dist/index.html); n=$$(gzip -9c web/dist/$$e | wc -c | tr -d ' '); \
+	s=$$(grep -o 'assets/[^"]*\.js' web/dist/share.html); m=$$(gzip -9c web/dist/$$s | wc -c | tr -d ' '); \
 	a=$$(for f in web/dist/assets/*.js; do gzip -9c $$f | wc -c; done | awk '{s+=$$1} END {print s}'); \
 	echo "entry js gzip: $$n bytes (budget 122880), share page js gzip: $$m bytes, all js gzip: $$a bytes"; test $$n -le 122880
 

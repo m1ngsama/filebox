@@ -386,6 +386,8 @@ textarea { resize: vertical; }
 .card-section > header { display: flex; align-items: flex-start; gap: var(--space-3); }
 .card-section > header > div { flex: 1; min-width: 0; }
 .card-section > header p { margin: 2px 0 0; font-size: var(--text-sm); }
+.pref { display: flex; flex-direction: column; gap: var(--space-2); margin-top: var(--space-2); }
+.pref h3 { margin: 0; font-size: var(--text-sm); font-weight: 600; }
 .card-section .rows li:last-child { border-bottom: 0; }
 .card-section .rows li { padding-inline: 0; }
 button.quiet { border-color: transparent; background: none; color: var(--muted); }

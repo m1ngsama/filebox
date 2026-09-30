@@ -6,7 +6,8 @@ import { createServer, type AddressInfo } from 'node:net'
 import { crc32, deflateSync } from 'node:zlib'
 import { networkInterfaces, tmpdir } from 'node:os'
 import { join } from 'node:path'
-import t from '../web/src/lib/i18n/zh'
+import t, { type Table } from '../web/src/lib/i18n/zh'
+import en from '../web/src/lib/i18n/en'
 
 const BIN = join(import.meta.dirname, '../bin/filebox')
 
@@ -52,17 +53,17 @@ const fileInput = (p: Page) => p.locator('input[type=file]:not([webkitdirectory]
 const row = (p: Page, name: string) => p.locator('.row', { hasText: name })
 const unlabeled = (p: Page) => p.evaluate(() => [...document.querySelectorAll('input:not([type=file]):not([type=checkbox])')].filter((i) => !(i as HTMLInputElement).labels?.length).length)
 
-async function login(page: Page) {
+async function login(page: Page, l: Table = t) {
   await page.goto('/')
-  await signIn(page)
+  await signIn(page, l)
 }
 
-async function signIn(page: Page) {
-  await expect(page.getByLabel(t.username)).toBeVisible()
+async function signIn(page: Page, l: Table = t) {
+  await expect(page.getByLabel(l.username)).toBeVisible()
   expect(await unlabeled(page)).toBe(0)
-  await page.getByLabel(t.username).fill('admin')
-  await page.getByLabel(t.password, { exact: true }).fill('pw-pw-pw-pw')
-  await page.getByRole('button', { name: t.login, exact: true }).click()
+  await page.getByLabel(l.username).fill('admin')
+  await page.getByLabel(l.password, { exact: true }).fill('pw-pw-pw-pw')
+  await page.getByRole('button', { name: l.login, exact: true }).click()
   await expect(page).toHaveURL(/\/files\/v\/$/)
 }
 
@@ -105,15 +106,15 @@ function png(w: number, h: number) {
   return Buffer.concat([Buffer.from('89504e470d0a1a0a', 'hex'), chunk('IHDR', ihdr), chunk('IDAT', deflateSync(rows)), chunk('IEND', Buffer.alloc(0))])
 }
 
-async function shareDocs(page: Page, mode: 'read' | 'upload' | 'drop', password = '') {
+async function shareDocs(page: Page, mode: 'read' | 'upload' | 'drop', password = '', l: Table = t) {
   await row(page, 'docs').locator('button.more').click()
   const loaded = page.waitForResponse((r) => r.request().method() === 'GET' && new URL(r.url()).pathname === '/api/shares')
-  await page.getByRole('menuitem', { name: t.share, exact: true }).click()
+  await page.getByRole('menuitem', { name: l.share, exact: true }).click()
   await loaded
-  await page.getByRole('radio', { name: t.modes[mode], exact: true }).check()
-  if (password) await page.getByLabel(t.passwordOptional).fill(password)
+  await page.getByRole('radio', { name: l.modes[mode], exact: true }).check()
+  if (password) await page.getByLabel(l.passwordOptional).fill(password)
   const links = page.locator('.details .shares li a')
-  await page.getByRole('button', { name: t.newShare, exact: true }).click()
+  await page.getByRole('button', { name: l.newShare, exact: true }).click()
   await expect(links).toHaveCount(1)
   const url = await links.getAttribute('href')
   await page.locator('.details-close').click()
@@ -934,14 +935,79 @@ test('searching everything finds a file in another folder and opens it there, se
   await expect(page.getByText(t.noMatch)).toBeVisible()
 })
 
+const han = /[\u3000-\u303f\u4e00-\u9fff\uff00-\uffef]/
+
 test.describe('with an English browser', () => {
   test.use({ locale: 'en-US' })
 
-  test('dates stay in the UI language', async ({ page }) => {
-    await login(page)
-    await page.goto('/settings')
-    await expect(page.getByRole('list', { name: t.sessions }).getByText(new RegExp(`^${t.lastUsed(t.justNow)}$`))).toBeVisible()
+  test('login, browse, upload and sharing read in English, and only the English table loads lazily', async ({ page, browser }) => {
+    const scripts: string[] = []
+    page.on('response', (r) => {
+      if (r.url().endsWith('.js')) scripts.push(new URL(r.url()).pathname)
+    })
+    await page.goto('/')
+    await expect(page.locator('html')).toHaveAttribute('lang', 'en')
+    await signIn(page, en)
+    await expect(row(page, 'docs')).toBeVisible()
+    expect(scripts.filter((s) => /\/en-[\w-]+\.js$/.test(s))).toHaveLength(1)
+    expect(scripts).toHaveLength(2)
+    await row(page, 'docs').locator('button.name').click()
+    await fileInput(page).setInputFiles([
+      { name: 'a.txt', mimeType: 'text/plain', buffer: Buffer.from('a') },
+      { name: 'b.txt', mimeType: 'text/plain', buffer: Buffer.from('b') },
+    ])
+    await expect(page.locator('.toast', { hasText: en.uploaded(2) })).toHaveCount(1)
+    expect(en.uploaded(2)).toBe('Uploaded 2 files')
+    await expect(row(page, 'a.txt').locator('.mtime')).toHaveText(en.justNow)
+    await expect(row(page, 'a.txt').locator('.size')).toHaveText('1 B')
+    expect(await page.locator('body').innerText()).not.toMatch(han)
+    await page.locator('.crumbs a').first().click()
+    const url = await shareDocs(page, 'read', '', en)
+    const anon = await browser.newPage({ locale: 'en-GB' })
+    const req = anon.waitForRequest((r) => new URL(r.url()).pathname.startsWith('/s/'))
+    await anon.goto(url)
+    expect((await req).headers()['accept-language']).toMatch(/^en/)
+    await expect(anon.locator('html')).toHaveAttribute('lang', 'en')
+    await expect(row(anon, 'readme.txt')).toBeVisible()
+    await expect(anon.getByRole('link', { name: en.downloadAll })).toBeVisible()
+    expect(await anon.locator('body').innerText()).not.toMatch(han)
+    await anon.close()
   })
+
+  test('dates stay in the UI language', async ({ page }) => {
+    await login(page, en)
+    await page.goto('/settings')
+    await expect(page.getByRole('list', { name: en.sessions }).getByText(new RegExp(`^${en.lastUsed(en.justNow)}$`))).toBeVisible()
+  })
+
+  test('a Chinese language choice in settings overrides the browser and survives a reload', async ({ page }) => {
+    await login(page, en)
+    await page.goto('/settings')
+    const nav = page.waitForEvent('load')
+    await page.getByRole('group', { name: en.language }).getByRole('button', { name: en.languages.zh }).click()
+    await nav
+    await expect(page.getByRole('heading', { name: t.settings })).toBeVisible()
+    await expect(page.locator('html')).toHaveAttribute('lang', 'zh-CN')
+    await expect(page.getByRole('button', { name: t.languages.zh })).toHaveAttribute('aria-pressed', 'true')
+    await page.reload()
+    await expect(page.getByRole('heading', { name: t.settings })).toBeVisible()
+    const back = page.waitForEvent('load')
+    await page.getByRole('button', { name: t.languages.auto }).click()
+    await back
+    await expect(page.getByRole('heading', { name: en.settings })).toBeVisible()
+  })
+})
+
+test('an English choice in settings switches a Chinese browser to English', async ({ page }) => {
+  await login(page)
+  await page.goto('/settings')
+  const nav = page.waitForEvent('load')
+  await page.getByRole('group', { name: t.language }).getByRole('button', { name: t.languages.en }).click()
+  await nav
+  await expect(page.getByRole('heading', { name: en.settings })).toBeVisible()
+  await page.goto('/')
+  await expect(row(page, 'docs')).toBeVisible()
+  expect(await page.locator('body').innerText()).not.toMatch(han)
 })
 
 test('keyboard shortcuts act on the list and stay quiet while typing', async ({ page, server }) => {

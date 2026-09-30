@@ -4,4 +4,5 @@ export default defineConfig({
   testDir: '.',
   timeout: 180_000,
   fullyParallel: true,
+  use: { locale: 'zh-CN' },
 })
