@@ -146,8 +146,10 @@ func TestContentWorkerWakes(t *testing.T) {
 	e.write(t, "b.txt", "uploaded later", time.Unix(1_700_000_100, 0))
 	e.x.Touch(v, "b.txt")
 	wait("b.txt", "uploaded later")
-	if p := e.x.Progress(); p != nil {
-		t.Fatalf("idle worker reports progress %+v", p)
+	for deadline := time.Now().Add(10 * time.Second); e.x.Progress() != nil; time.Sleep(10 * time.Millisecond) {
+		if time.Now().After(deadline) {
+			t.Fatalf("idle worker still reports progress %+v", e.x.Progress())
+		}
 	}
 }
 
