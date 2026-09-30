@@ -136,6 +136,13 @@ func (v *Volume) Clean(p string) (string, error) {
 	return c, nil
 }
 
+func Junk(name string, dir bool) bool {
+	if dir {
+		return strings.EqualFold(name, ".Trashes")
+	}
+	return strings.HasPrefix(name, "._") || strings.EqualFold(name, ".DS_Store") || strings.EqualFold(name, "Thumbs.db") || strings.EqualFold(name, "desktop.ini")
+}
+
 func ValidName(name string) bool {
 	return name != "" && name != "." && name != ".." && !strings.ContainsAny(name, "/\\\x00")
 }

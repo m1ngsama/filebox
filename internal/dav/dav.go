@@ -326,18 +326,16 @@ func (f *FS) RemoveAll(ctx context.Context, name string) error {
 	return err
 }
 
-func junk(fi fs.FileInfo) bool {
-	n := fi.Name()
-	if fi.IsDir() {
-		return n == ".Trashes"
-	}
-	return n == ".DS_Store" || strings.HasPrefix(n, "._") || strings.EqualFold(n, "Thumbs.db") || strings.EqualFold(n, "desktop.ini")
-}
+func junk(fi fs.FileInfo) bool { return vol.Junk(fi.Name(), fi.IsDir()) }
 
 func (f *FS) setAside(ctx context.Context, ow *overwrite, v *vol.Volume, rel string) error {
 	fi, err := v.Root.Lstat(rel)
 	if err != nil {
 		return err
+	}
+	if junk(fi) {
+		defer f.ix.Touch(v, rel)
+		return v.Root.RemoveAll(rel)
 	}
 	if fi.Mode().IsRegular() {
 		id, err := f.vs.Capture(v, rel, version.WebDAV, user(ctx))

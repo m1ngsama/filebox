@@ -231,7 +231,7 @@ func (s *Store) Replace(v *vol.Volume, tmp, rel, source string, user int64) (str
 	switch {
 	case err == nil && fi.IsDir():
 		return "", &fs.PathError{Op: "replace", Path: rel, Err: syscall.EISDIR}
-	case err != nil || !fi.Mode().IsRegular() || fi.Size() == 0:
+	case err != nil || !fi.Mode().IsRegular() || fi.Size() == 0 || vol.Junk(path.Base(rel), false):
 		return "", v.Root.Rename(tmp, rel)
 	}
 	id, err := s.swap(v, tmp, rel, source, user)

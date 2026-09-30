@@ -420,13 +420,13 @@ func TestDavDeleteGoesToTrash(t *testing.T) {
 func TestDavDeleteJunkSkipsTrash(t *testing.T) {
 	e := setup(t)
 	e.req(t, e.rw, "MKCOL", "/dav/v/d", "")
-	e.req(t, e.rw, "MKCOL", "/dav/v/.Trashes", "")
+	e.req(t, e.rw, "MKCOL", "/dav/v/.trashes", "")
 	e.req(t, e.rw, "MKCOL", "/dav/v/._keep", "")
-	names := []string{"._a.jpg", ".DS_Store", "Thumbs.db", "desktop.ini", "d/.DS_Store", "d/THUMBS.DB"}
+	names := []string{"._a.jpg", ".DS_Store", "Thumbs.db", "desktop.ini", "d/.ds_store", "d/THUMBS.DB", "d/Desktop.INI"}
 	for _, n := range names {
 		e.req(t, e.rw, "PUT", "/dav/v/"+n, "junk")
 	}
-	for _, n := range append(names, ".Trashes", "._keep") {
+	for _, n := range append(names, ".trashes", "._keep") {
 		if res, _ := e.req(t, e.rw, "DELETE", "/dav/v/"+n, ""); res.StatusCode != 204 {
 			t.Fatalf("DELETE %s: %d", n, res.StatusCode)
 		}
@@ -436,5 +436,28 @@ func TestDavDeleteJunkSkipsTrash(t *testing.T) {
 	}
 	if got := e.trash(t); len(got) != 1 || got["._keep"] == "" {
 		t.Fatalf("trash %v", got)
+	}
+}
+
+func TestDavJunkKeepsNoVersions(t *testing.T) {
+	e := setup(t)
+	for _, s := range []string{"one", "two"} {
+		e.req(t, e.rw, "PUT", "/dav/v/.DS_Store", s)
+		e.req(t, e.rw, "PUT", "/dav/v/._a.jpg", s)
+	}
+	e.req(t, e.rw, "PUT", "/dav/v/src", "three")
+	if res, _ := e.req(t, e.rw, "MOVE", "/dav/v/src", "", "Destination", e.srv.URL+"/dav/v/._a.jpg", "Overwrite", "T"); res.StatusCode != 204 {
+		t.Fatalf("MOVE %d", res.StatusCode)
+	}
+	if b, _ := os.ReadFile(filepath.Join(e.dir, "._a.jpg")); string(b) != "three" {
+		t.Fatalf("content %q", b)
+	}
+	for _, n := range []string{".DS_Store", "._a.jpg"} {
+		if got := e.versions(t, n); len(got) != 0 {
+			t.Fatalf("%s versions %q", n, got)
+		}
+	}
+	if len(e.trash(t)) != 0 {
+		t.Fatal("junk went to the trash")
 	}
 }

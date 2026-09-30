@@ -6,7 +6,7 @@ A self-hosted file server in one binary. Browse, preview, upload and share files
 - WebDAV at `/dav/` with per-device app passwords, optionally read-only.
 - Share links with password, expiry, and upload or drop-box modes.
 - WebP thumbnails via ffmpeg (optional).
-- Deletes from the web UI and WebDAV go to a per-volume trash, and so does a folder replaced by a WebDAV MOVE or COPY. Junk that macOS and Windows write and delete on their own (`._*`, `.DS_Store`, `.Trashes`, `Thumbs.db`, `desktop.ini`) is deleted for good.
+- Deletes from the web UI and WebDAV go to a per-volume trash, and so does a folder replaced by a WebDAV MOVE or COPY. Junk that macOS and Windows write and delete on their own (`._*`, `.DS_Store`, `.Trashes`, `Thumbs.db`, `desktop.ini`) is deleted for good and never versioned.
 - Passkey login next to the password.
 
 ## Build
