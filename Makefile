@@ -5,7 +5,7 @@ GOBUILD := CGO_ENABLED=0 go build -trimpath -ldflags "$(LDFLAGS)"
 
 web:
 	! git grep --untracked -nP '[\x{3000}-\x{303f}\x{4e00}-\x{9fff}\x{ff00}-\x{ffef}\x{2018}\x{2019}\x{201c}\x{201d}]' -- web/src ':!web/src/lib/i18n'
-	awk 'FNR==1{d=h=0} /@media \(hover: hover\) and \(pointer: fine\)/{h=d+1;o=1} /:hover/&&!o&&!(h&&d>=h){print FILENAME":"FNR": bare :hover";e=1} {o=0;d+=gsub(/\{/,"{")-gsub(/\}/,"}");if(h&&d<h)h=0} END{exit e}' $$(git ls-files -co --exclude-standard 'web/src/*.css' 'web/src/*.svelte' ':!web/src/components/Lightbox.svelte')
+	awk 'FNR==1{d=h=0} {l=$$0;gsub(/\/\*[^*]*\*\//,"",l)} /@media \(hover: hover\) and \(pointer: fine\)/{h=d+1;o=1} l~/:hover/&&!o&&!(h&&d>=h){print FILENAME":"FNR": bare :hover";e=1} {o=0;d+=gsub(/\{/,"{")-gsub(/\}/,"}");if(h&&d<h)h=0} END{exit e}' $$(git ls-files -co --exclude-standard 'web/src/*.css' 'web/src/*.svelte' ':!web/src/components/Lightbox.svelte')
 	cd web && bun install --frozen-lockfile && bun run check && bun run build
 
 size: web
