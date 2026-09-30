@@ -82,7 +82,7 @@ func serveCmd(args []string) error {
 	data := fl.String("data", "./data", "data directory")
 	listen := fl.String("listen", ":5280", "listen address")
 	ffmpeg := fl.String("ffmpeg", "", "path to ffmpeg for thumbnails; empty disables them")
-	content := fl.Bool("content", true, "index text inside documents for search; false also drops the existing content index")
+	content := fl.Bool("content", true, "index text inside documents for search into content.db in the data directory")
 	var vols, origins multi
 	fl.Var(&vols, "vol", "volume as name=path, repeatable")
 	fl.Var(&origins, "origin", "public origin that may use passkeys, e.g. https://files.example.com; repeatable")
@@ -122,10 +122,15 @@ func serveCmd(args []string) error {
 	}
 	up.Versions = vs
 	ix.Moved = vs.Moved
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
 	if *content {
-		go ix.Extract(context.Background(), set, extract.New(context.Background()))
-	} else if err := ix.DropContent(); err != nil {
-		slog.Error("drop content index", "err", err)
+		if err := ix.OpenContent(filepath.Join(*data, "content.db")); err != nil {
+			slog.Error("content index off", "err", err)
+		} else {
+			defer ix.CloseContent()
+			go func() { ix.Extract(ctx, set, extract.New(ctx)) }()
+		}
 	}
 	go func() {
 		for {
@@ -147,8 +152,6 @@ func serveCmd(args []string) error {
 	a := &app.App{Vols: set, DB: d, Auth: au, Web: webFS, Uploads: up, Thumbs: thumbs, Passkeys: pk, Index: ix, Versions: vs}
 
 	srv := &http.Server{Addr: *listen, Handler: a.Handler(), ReadHeaderTimeout: 10 * time.Second, IdleTimeout: 2 * time.Minute}
-	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
-	defer stop()
 	done := make(chan struct{})
 	go func() {
 		<-ctx.Done()

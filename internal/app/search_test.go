@@ -3,6 +3,7 @@ package app
 import (
 	"context"
 	"net/url"
+	"path/filepath"
 	"slices"
 	"testing"
 	"time"
@@ -76,6 +77,10 @@ func TestSearchContentAPI(t *testing.T) {
 	if r := decode[result](t, f.do("GET", "/api/search?q=content", nil)); r.Content == nil || len(r.Content) != 0 || r.Indexing != nil {
 		t.Fatalf("disabled %+v", r)
 	}
+	if err := f.App.Index.OpenContent(filepath.Join(t.TempDir(), "content.db")); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { f.App.Index.CloseContent() })
 	ctx, cancel := context.WithCancel(context.Background())
 	done := make(chan struct{})
 	go func() {

@@ -1,6 +1,7 @@
 package index
 
 import (
+	"cmp"
 	"context"
 	"encoding/json"
 	"strings"
@@ -106,14 +107,28 @@ func (x *Index) hits(ctx context.Context, sql string, args ...any) ([]Hit, error
 
 func (x *Index) SearchContent(ctx context.Context, q Query) ([]ContentHit, error) {
 	out := []ContentHit{}
-	if x.content.Load() == nil || utf8.RuneCountInString(q.Text) < 3 {
+	c := x.content.Load()
+	if c == nil || utf8.RuneCountInString(q.Text) < 3 {
 		return out, nil
 	}
-	scope, where := scoped(q)
 	phrase := `"` + strings.ReplaceAll(q.Text, `"`, `""`) + `"`
-	rows, err := x.db.QueryContext(ctx, `SELECT f.id, f.vol, f.path, f.name, f.size, f.mtime FROM files f
-		WHERE f.id IN (SELECT rowid FROM contents_fts WHERE contents_fts MATCH ? LIMIT ?)`+scope+` ORDER BY f.mtime DESC LIMIT ?`,
-		append(append([]any{phrase, candidates}, where...), min(q.Limit, contentLimit))...)
+	rows, err := c.db.QueryContext(ctx, `SELECT json_group_array(json_array(id, size, mtime)) FROM contents
+		WHERE status = 'ok' AND id IN (SELECT rowid FROM contents_fts WHERE contents_fts MATCH ? ORDER BY rowid DESC LIMIT ?)`, phrase, candidates)
+	if err != nil {
+		return nil, err
+	}
+	var found string
+	if rows.Next() {
+		err = rows.Scan(&found)
+	}
+	rows.Close()
+	if err != nil || rows.Err() != nil {
+		return nil, cmp.Or(err, rows.Err())
+	}
+	scope, where := scoped(q)
+	rows, err = x.db.QueryContext(ctx, `SELECT f.id, f.vol, f.path, f.name, f.size, f.mtime FROM json_each(?) j JOIN files f ON f.id = j.value ->> 0
+		WHERE f.size = j.value ->> 1 AND f.mtime = j.value ->> 2`+scope+` ORDER BY f.mtime DESC LIMIT ?`,
+		append(append([]any{found}, where...), min(q.Limit, contentLimit))...)
 	if err != nil {
 		return nil, err
 	}
@@ -135,7 +150,7 @@ func (x *Index) SearchContent(ctx context.Context, q Query) ([]ContentHit, error
 		return out, err
 	}
 	list, _ := json.Marshal(ids)
-	rows, err = x.db.QueryContext(ctx, `SELECT rowid, snippet(contents_fts, 0, char(2), char(3), '…', ?) FROM contents_fts
+	rows, err = c.db.QueryContext(ctx, `SELECT rowid, snippet(contents_fts, 0, char(2), char(3), '…', ?) FROM contents_fts
 		WHERE contents_fts MATCH ? AND rowid IN (SELECT value FROM json_each(?))`, snippetWords, phrase, string(list))
 	if err != nil {
 		return nil, err

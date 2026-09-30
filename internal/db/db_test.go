@@ -386,7 +386,6 @@ func TestCheckFindsCorruption(t *testing.T) {
 	for i := range 3000 {
 		d.Exec(`INSERT INTO files (vol, path, dir, size, mtime) VALUES ('v', ?, 0, 1, 1)`, fmt.Sprintf("dir/file-%05d.txt", i))
 	}
-	d.Exec(`INSERT INTO contents_fts (rowid, body) VALUES (1, 'some text')`)
 	if err := d.Check(); err != nil {
 		t.Fatal(err)
 	}

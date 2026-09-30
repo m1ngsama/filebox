@@ -22,6 +22,7 @@ type env struct {
 	vols *vol.Set
 	dir  string
 	out  string
+	cdb  string
 }
 
 func setup(t testing.TB) *env {

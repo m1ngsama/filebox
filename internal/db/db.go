@@ -140,19 +140,6 @@ var migrations = []string{
 	) WITHOUT ROWID;
 	CREATE INDEX versions_path ON versions(vol, path, created);`,
 	`ALTER TABLE versions ADD COLUMN orphaned INTEGER NOT NULL DEFAULT 0;`,
-	`CREATE TABLE contents (
-		id INTEGER PRIMARY KEY,
-		size INTEGER NOT NULL,
-		mtime INTEGER NOT NULL,
-		bytes INTEGER NOT NULL
-	);
-	CREATE VIRTUAL TABLE contents_fts USING fts5(body, tokenize='trigram');
-	CREATE TRIGGER contents_delete AFTER DELETE ON contents BEGIN
-		DELETE FROM contents_fts WHERE rowid = old.id;
-	END;
-	CREATE TRIGGER files_contents_delete AFTER DELETE ON files BEGIN
-		DELETE FROM contents WHERE id = old.id;
-	END;`,
 }
 
 type DB struct {
