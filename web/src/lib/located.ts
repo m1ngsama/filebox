@@ -1,9 +1,16 @@
 import Download from '@lucide/svelte/icons/download'
 import FolderOpen from '@lucide/svelte/icons/folder-open'
 import type { Action } from '../components/EntryList.svelte'
-import { rawURL, zipURL, saveURL, saveZip, selectURL, type Loc } from './api'
+import { rawURL, zipURL, saveURL, selectURL, type Loc } from './api'
+import { toast } from './toast.svelte'
 import { navigate } from './router.svelte'
 import { t } from './i18n'
+
+export const packing = (name: string) => toast(t.zipping(name), { kind: 'info' })
+export function saveZip(url: string, name: string) {
+  packing(name)
+  saveURL(url)
+}
 
 export const folderAction: Action = { id: 'folder', label: t.openFolder, icon: FolderOpen }
 export const downloadAction: Action = { id: 'download', label: t.download, icon: Download }

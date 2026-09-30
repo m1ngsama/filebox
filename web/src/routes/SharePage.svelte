@@ -15,11 +15,12 @@
   import FileIcon from '../components/FileIcon.svelte'
   import EmptyState from '../components/EmptyState.svelte'
   import Toasts from '../components/Toasts.svelte'
-  import { api, HttpError, shareFileURL, shareRawURL, shareThumbURL, shareURL, shareZipURL, saveURL, saveZip, packing, validShareToken, type Entry, type ShareInfo } from '../lib/api'
+  import { api, HttpError, shareFileURL, shareRawURL, shareThumbURL, shareURL, shareZipURL, saveURL, validShareToken, type Entry, type ShareInfo } from '../lib/api'
   import { route, link, navigate } from '../lib/router.svelte'
   import { enqueue } from '../lib/uploads.svelte'
   import { arrange, size, kind, thumbable, rawThumb, fallback, child, type Sort } from '../lib/format'
   import { load as recall, save } from '../lib/storage'
+  import { saveZip, packing } from '../lib/located'
   import { t } from '../lib/i18n'
 
   let { token }: { token: string } = $props()
