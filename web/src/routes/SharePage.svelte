@@ -102,6 +102,11 @@
       if (want !== p || stop.signal.aborted) return
       entries = []
       const status = e instanceof HttpError ? e.status : 0
+      if (status === 401) {
+        info = { locked: true, mode: info?.mode ?? 'read' }
+        error = null
+        return
+      }
       if (status === 410) {
         info = null
         fatal = 'expired'

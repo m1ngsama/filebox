@@ -958,7 +958,9 @@ test('an upload that loses the session returns to login and resumes after it', a
   expect(await sha(join(server.vol, 'filebox-e2e-160.bin'))).toBe(await sha(src))
 })
 
-test('password share opens anonymously', async ({ page, browser }) => {
+test('password share opens anonymously and asks again when its cookie is gone', async ({ page, browser, server }) => {
+  mkdirSync(join(server.vol, 'docs/sub'))
+  writeFileSync(join(server.vol, 'docs/sub/inner.txt'), 'i')
   await login(page)
   const url = await shareDocs(page, 'read', 'secret-pass')
   const anon = await browser.newPage()
@@ -980,6 +982,14 @@ test('password share opens anonymously', async ({ page, browser }) => {
   await row(anon, 'readme.txt').locator('button.name').click()
   await expect(anon.locator('.viewer pre')).toHaveText('hello\n')
   expect((await anon.request.get(`${url}/raw/readme.txt`)).status()).toBe(200)
+  await anon.keyboard.press('Escape')
+  await anon.context().clearCookies()
+  await row(anon, 'sub').locator('button.name').click()
+  await expect(anon.getByRole('heading', { level: 1, name: t.shareLocked })).toBeVisible()
+  await expect(anon.getByText(t.errors[401])).toHaveCount(0)
+  await field.fill('secret-pass')
+  await field.press('Enter')
+  await expect(row(anon, 'inner.txt')).toBeVisible()
   await anon.close()
 })
 
