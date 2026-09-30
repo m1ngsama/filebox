@@ -36,7 +36,7 @@
       <button type="button" class="chip" aria-pressed={at.vol === v} onclick={() => (at = { vol: v, path: '' })}><HardDrive size={icon.sm} />{v}</button>
     {/each}
   </div>
-  <nav class="crumbs" aria-label={t.breadcrumb}>
+  <nav class="crumbs" aria-label={t.pickerPath}>
     <button type="button" onclick={() => (at = { vol: at.vol, path: '' })}>{at.vol}</button>
     {#each crumbs as c, i}
       <ChevronRight size={icon.sm} />

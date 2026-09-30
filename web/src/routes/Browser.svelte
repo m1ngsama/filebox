@@ -637,7 +637,7 @@
       e.preventDefault()
       for (const x of shown) selected.add(x.name)
     } else if (mod) return
-    else if (e.key === '/' || e.key === '?' || e.key === 'n' || e.key === 'u' || (e.key === 'F2' && target)) {
+    else if (e.key === '/' || e.key === '?' || ((e.key === 'n' || e.key === 'u') && !(e.target as Element).closest('[role=grid]')) || (e.key === 'F2' && target)) {
       e.preventDefault()
       if (e.key === '/') search()
       else if (e.key === '?') help = true

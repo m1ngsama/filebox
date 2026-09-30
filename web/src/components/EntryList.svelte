@@ -90,6 +90,9 @@
   let origin = [0, 0]
   let pressing = $state(-1)
   let held = $state(false)
+  let menuFor = $state('')
+  let seek = ''
+  let seekTimer = 0
 
   const media = $derived(grid && entries.length > 0 && entries.filter((e) => !e.dir && visual(e.name)).length >= 0.6 * entries.length)
   const tiles = $derived(media && narrow.current)
@@ -97,6 +100,7 @@
   const cols = $derived(!grid ? 1 : Math.max(1, media ? Math.floor((width - gap) / ((tiles ? 110 : 128) + gap)) : Math.floor((width - 16) / 172)))
   const tile = $derived((width - (cols + 1) * gap) / cols)
   const rowH = $derived(!media ? 212 : tiles ? tile + gap : tile + 52)
+  const rowPx = $derived(grid ? rowH : narrow.current ? 56 : 48)
   const layout = $derived.by(() => {
     if (!group || grid) return null
     const items: (string | number)[] = []
@@ -125,7 +129,7 @@
   $effect(() => {
     const list = entries
     const items = layout?.items
-    const h = grid ? rowH : narrow.current ? 56 : 48
+    const h = rowPx
     const opts = {
       count: rows,
       estimateSize: (i: number) => (typeof items?.[i] === 'string' ? 36 : h),
@@ -168,7 +172,10 @@
     }, 450)
   }
 
-  $effect(() => () => clearTimeout(timer))
+  $effect(() => () => {
+    clearTimeout(timer)
+    clearTimeout(seekTimer)
+  })
 
   function release() {
     clearTimeout(timer)
@@ -181,7 +188,7 @@
   }
 
   function menu(ev: MouseEvent, e: Entry) {
-    if (touch && selected) ev.preventDefault()
+    if ((touch && selected) || menuFor) ev.preventDefault()
     else ctx = e
   }
 
@@ -216,10 +223,38 @@
     if (want >= 0) tick().then(focusWanted)
   })
 
+  function go(to: number) {
+    cur = id(entries[to])
+    want = to
+    $v.scrollToIndex(rowOf(to))
+    focusWanted()
+  }
+
+  function typeahead(ch: string, i: number) {
+    clearTimeout(seekTimer)
+    seekTimer = setTimeout(() => (seek = ''), 700)
+    seek += ch.toLocaleLowerCase()
+    const same = [...seek].every((c) => c === seek[0])
+    const q = same ? seek[0] : seek
+    for (let k = 0; k < entries.length; k++) {
+      const j = (i + (same ? 1 : 0) + k) % entries.length
+      if (entries[j].name.toLocaleLowerCase().startsWith(q)) return go(j)
+    }
+  }
+
   function key(ev: KeyboardEvent, i: number) {
-    if (ev.target !== ev.currentTarget) return
-    const step = { ArrowDown: cols, ArrowUp: -cols, ArrowRight: grid ? 1 : 0, ArrowLeft: grid ? -1 : 0 }[ev.key]
-    if (ev.key === ' ') {
+    if (ev.target !== ev.currentTarget || ev.defaultPrevented) return
+    const page = cols * Math.max(1, Math.floor((scroller?.clientHeight ?? 0) / rowPx) - 1)
+    const step = { ArrowDown: cols, ArrowUp: -cols, ArrowRight: grid ? 1 : 0, ArrowLeft: grid ? -1 : 0, PageDown: page, PageUp: -page }[ev.key]
+    const plain = !ev.ctrlKey && !ev.metaKey && !ev.altKey
+    if (ev.key.length === 1 && plain && (ev.key !== ' ' || seek)) {
+      ev.preventDefault()
+      typeahead(ev.key, i)
+    } else if (ev.key === 'ContextMenu' || (ev.shiftKey && ev.key === 'F10')) {
+      ev.preventDefault()
+      if (narrow.current) sheet = entries[i]
+      else menuFor = id(entries[i])
+    } else if (ev.key === ' ') {
       ev.preventDefault()
       anchor = id(entries[i])
       toggle(id(entries[i]))
@@ -228,11 +263,7 @@
       onopen(entries[i])
     } else if (step !== undefined || ev.key === 'Home' || ev.key === 'End') {
       ev.preventDefault()
-      const to = ev.key === 'Home' ? 0 : ev.key === 'End' ? entries.length - 1 : Math.min(entries.length - 1, Math.max(0, i + step!))
-      cur = id(entries[to])
-      want = to
-      $v.scrollToIndex(rowOf(to))
-      focusWanted()
+      go(ev.key === 'Home' ? 0 : ev.key === 'End' ? entries.length - 1 : Math.min(entries.length - 1, Math.max(0, i + step!)))
     }
   }
 
@@ -270,6 +301,13 @@
     else for (const e of entries) selected.add(id(e))
   }
 
+  function refocus(ev: Event) {
+    const row = scroller?.querySelector<HTMLElement>('[role=grid] [tabindex="0"]')
+    if (!row) return
+    ev.preventDefault()
+    row.focus()
+  }
+
   const src = (e: Entry) => (e.dir ? null : fallback([thumb(e), raw?.(e)], broken.get(id(e)) ?? 0))
   const cancel = (img: HTMLImageElement) => () => img.removeAttribute('src')
   const miss = (e: Entry) => broken.set(id(e), (broken.get(id(e)) ?? 0) + 1)
@@ -286,12 +324,12 @@
 
 {#snippet more(e: Entry)}
   {#if narrow.current}
-    <button class="icon-btn more" aria-label={`${e.name} ${t.actions}`} aria-haspopup="dialog" onclick={() => (sheet = e)}><Ellipsis size={icon.md} /></button>
+    <button class="icon-btn more" tabindex="-1" aria-label={`${e.name} ${t.actions}`} aria-haspopup="dialog" onclick={() => (sheet = e)}><Ellipsis size={icon.md} /></button>
   {:else}
-  <DropdownMenu.Root>
-    <DropdownMenu.Trigger class="icon-btn more" aria-label={`${e.name} ${t.actions}`}><Ellipsis size={icon.md} /></DropdownMenu.Trigger>
+  <DropdownMenu.Root open={menuFor === id(e)} onOpenChange={(o) => (menuFor = o ? id(e) : '')}>
+    <DropdownMenu.Trigger class="icon-btn more" tabindex={-1} aria-label={`${e.name} ${t.actions}`}><Ellipsis size={icon.md} /></DropdownMenu.Trigger>
     <DropdownMenu.Portal>
-      <DropdownMenu.Content class="menu" preventScroll={false} align="end" sideOffset={4}>{@render items(e)}</DropdownMenu.Content>
+      <DropdownMenu.Content class="menu" preventScroll={false} align="end" sideOffset={4} onCloseAutoFocus={refocus}>{@render items(e)}</DropdownMenu.Content>
     </DropdownMenu.Portal>
   </DropdownMenu.Root>
   {/if}
@@ -316,7 +354,7 @@
 
 {#snippet check(e: Entry, cls: string)}
   {#if selected}
-    <label class={`hit ${cls}`}><input type="checkbox" checked={selected.has(id(e))} onchange={() => toggle(id(e))} aria-label={t.select(e.name)} /></label>
+    <label class={`hit ${cls}`}><input type="checkbox" tabindex="-1" checked={selected.has(id(e))} onchange={() => toggle(id(e))} aria-label={t.select(e.name)} /></label>
   {:else}
     <span></span>
   {/if}
@@ -394,7 +432,7 @@
                     onpointercancel={release}
                   >
                     {@render check(e, 'card-check')}
-                    <button class="card-open" data-look={e.dir ? 'dir' : look(e.name)} onclick={() => tap(i)} title={e.name} aria-label={e.name}>
+                    <button class="card-open" tabindex="-1" data-look={e.dir ? 'dir' : look(e.name)} onclick={() => tap(i)} title={e.name} aria-label={e.name}>
                       {#if s}
                         <img src={s} alt="" draggable="false" loading="lazy" decoding="async" onerror={() => miss(e)} {@attach cancel} />
                         {#if look(e.name) === 'video'}<span class="card-badge"><Play size={icon.sm} /></span>{/if}
@@ -451,7 +489,7 @@
                   {#if s}<img src={s} alt="" draggable="false" loading="lazy" decoding="async" onerror={() => miss(e)} {@attach cancel} />{:else}<FileIcon name={e.name} dir={e.dir} />{/if}
                 </span>
                 <span class="cell name-cell" role="gridcell">
-                  <button class="name" onclick={() => tap(n)} title={e.name} aria-label={e.name}>{@render label(e.name)}</button>
+                  <button class="name" tabindex="-1" onclick={() => tap(n)} title={e.name} aria-label={e.name}>{@render label(e.name)}</button>
                   {#if narrow.current}
                     <span class="hint sub">{#if gone}{@render trail(e)} · {gone}{:else}{e.dir ? '' : `${size(e.size)} · `}{ago(e.mtime)}{#if loc}{' · '}{@render trail(e)}{/if}{/if}</span>
                   {:else if loc}

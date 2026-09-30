@@ -43,6 +43,12 @@
     }
   }
 
+  function skip(e: MouseEvent) {
+    e.preventDefault()
+    const to = document.querySelector<HTMLElement>('.main [role=grid] [tabindex="0"]') ?? document.getElementById('main')
+    to?.focus()
+  }
+
   async function logout() {
     await api.logout()
     globalThis.caches?.delete('share-target')
@@ -67,11 +73,12 @@
     <button onclick={load}>{t.retry}</button>
   </div>
 {:else if needLogin}
-  <Login onok={load} />
+  <main><Login onok={load} /></main>
 {:else if me}
   <div class="shell">
+    <a class="skip" href="#main" onclick={skip}>{parts[0] === 'files' ? t.skipToList : t.skipToMain}</a>
     <Nav vols={me.vols} {parts} onlogout={logout} />
-    <main class="main" tabindex="-1">
+    <main class="main" id="main" tabindex="-1">
       {#if me.vols.length && parts[0] === 'files' && parts[1]}
         <Browser vol={parts[1]} path={parts.slice(2).join('/')} vols={me.vols} />
       {:else}
