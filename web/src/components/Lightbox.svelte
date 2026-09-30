@@ -168,17 +168,18 @@
     })
     if (onedge) {
       const edge = (d: 1 | -1) => (d > 0 ? pswp.currIndex === n - 1 : pswp.currIndex === 0)
+      const towards = (d: 1 | -1) => ((book?.rtl ? -d : d) as 1 | -1)
       for (const d of [1, -1] as const) {
         const go = d > 0 ? pswp.next.bind(pswp) : pswp.prev.bind(pswp)
-        pswp[d > 0 ? 'next' : 'prev'] = () => (edge(d) ? onedge(d) : go())
+        pswp[d > 0 ? 'next' : 'prev'] = () => (edge(d) ? onedge(towards(d)) : go())
       }
       let from: { x: number; i: number } | null = null
       pswp.on('pointerDown', (e) => (from = { x: e.originalEvent.clientX, i: pswp.currIndex }))
       pswp.on('pointerUp', (e) => {
         const dx = from && from.i === pswp.currIndex && (pswp.currSlide?.currZoomLevel ?? 1) <= (pswp.currSlide?.zoomLevels.fit ?? 1) ? e.originalEvent.clientX - from.x : 0
         from = null
-        if (dx < -80 && edge(1)) onedge(1)
-        else if (dx > 80 && edge(-1)) onedge(-1)
+        if (dx < -80 && edge(1)) onedge(towards(1))
+        else if (dx > 80 && edge(-1)) onedge(towards(-1))
       })
     }
     pswp.on('keydown', (e) => {
@@ -186,7 +187,7 @@
       if (onedge && n === 1 && (k.key === 'ArrowRight' || k.key === 'ArrowLeft')) {
         e.preventDefault()
         k.preventDefault()
-        onedge(k.key === 'ArrowRight' ? 1 : -1)
+        onedge(book?.rtl === (k.key === 'ArrowRight') ? -1 : 1)
       } else if (k.key === 'i' && !book && !k.metaKey && !k.ctrlKey && !k.altKey) info = !info
       else if (k.key === 'Escape' && info) {
         e.preventDefault()

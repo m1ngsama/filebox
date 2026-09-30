@@ -145,7 +145,7 @@
   function key(e: KeyboardEvent) {
     if (k === 'image' || (k === 'comic' && pages?.length) || inline || e.defaultPrevented) return
     if (e.key === 'Escape') onclose()
-    else if ((e.key === 'ArrowLeft' || e.key === 'ArrowRight') && k !== 'book' && !e.metaKey && !e.ctrlKey && !e.altKey && !(e.target instanceof HTMLMediaElement))
+    else if ((e.key === 'ArrowLeft' || e.key === 'ArrowRight') && k !== 'book' && k !== 'comic' && !e.metaKey && !e.ctrlKey && !e.altKey && !(e.target instanceof HTMLMediaElement))
       step(e.key === 'ArrowRight' ? 1 : -1)
     else if (e.key === 'Tab' && root) {
       const f = [...root.querySelectorAll<HTMLElement>('a[href], button, video, audio, iframe, pre, article')].filter((x) => x.offsetParent)
@@ -161,7 +161,8 @@
   let zoomed = $state(false)
 
   function touchstart(e: TouchEvent) {
-    const one = e.touches.length === 1 && k !== 'text' && k !== 'pdf' && k !== 'book' && !zoomed && !inline
+    const media = e.target instanceof HTMLMediaElement
+    const one = e.touches.length === 1 && k !== 'text' && k !== 'pdf' && k !== 'book' && !media && !zoomed && !inline
     start = one ? { x: e.touches[0].clientX, y: e.touches[0].clientY } : null
     off = { x: 0, y: 0 }
   }
@@ -225,6 +226,7 @@
           images={pages}
           url={pageURL}
           {onclose}
+          onedge={list.length > 1 ? step : undefined}
           book={{ title: entry.name, rtl, onpage: (i) => save(spot, String(i)), onrtl: flip }}
         />
       {/key}
