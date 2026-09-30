@@ -20,6 +20,7 @@ import (
 	"github.com/m1ngsama/filebox/internal/app"
 	"github.com/m1ngsama/filebox/internal/auth"
 	"github.com/m1ngsama/filebox/internal/db"
+	"github.com/m1ngsama/filebox/internal/extract"
 	"github.com/m1ngsama/filebox/internal/index"
 	"github.com/m1ngsama/filebox/internal/passkey"
 	"github.com/m1ngsama/filebox/internal/render"
@@ -120,6 +121,7 @@ func serveCmd(args []string) error {
 	}
 	up.Versions = vs
 	ix.Moved = vs.Moved
+	go ix.Extract(context.Background(), set, extract.New(context.Background()))
 	go func() {
 		for {
 			up.Sweep(24 * time.Hour)

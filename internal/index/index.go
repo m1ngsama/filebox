@@ -64,6 +64,7 @@ type Index struct {
 	mu      sync.Mutex
 	touched map[pending]struct{}
 	ready   atomic.Bool
+	content atomic.Pointer[content]
 	Moved   func(v *vol.Volume, to string)
 }
 
@@ -83,6 +84,7 @@ func (x *Index) Touch(v *vol.Volume, rel string) {
 	if err := x.sync(v, rel); err != nil {
 		slog.Warn("index update", "vol", v.Name, "path", rel, "err", err)
 	}
+	x.poke()
 }
 
 func (x *Index) Rename(v *vol.Volume, from, to string) {
@@ -148,6 +150,7 @@ func (x *Index) Scan(vols *vol.Set) error {
 		x.sync(p.v, p.rel)
 	}
 	x.ready.Store(true)
+	x.poke()
 	if err != nil {
 		return err
 	}
