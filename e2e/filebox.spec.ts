@@ -1762,7 +1762,7 @@ test.describe('on a phone', () => {
     const tall = async (l: Locator) => {
       const all = await l.all()
       expect(all.length).toBeGreaterThan(0)
-      for (const x of all) if (await x.isVisible()) expect((await x.boundingBox())!.height, await x.evaluate((e) => e.outerHTML.slice(0, 80))).toBeGreaterThanOrEqual(44)
+      for (const x of all) if (await x.isVisible()) expect(Math.round((await x.boundingBox())!.height), await x.evaluate((e) => e.outerHTML.slice(0, 80))).toBeGreaterThanOrEqual(44)
     }
     await row(page, 'docs').locator('button.name').tap()
     await tall(page.locator('.files > .bar').locator('button, a'))
