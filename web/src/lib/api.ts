@@ -64,17 +64,25 @@ async function list(url: string, signal?: AbortSignal, onchunk?: (entries: Entry
   const out: Entry[] = []
   const rd = r.body.pipeThrough(new TextDecoderStream()).getReader()
   let buf = ''
-  for (;;) {
-    const { value, done } = await rd.read()
-    if (done) return out
-    const lines = (buf + value).split('\n')
-    buf = lines.pop()!
-    for (const l of lines) {
-      const m: { entries?: Entry[]; error?: string } = JSON.parse(l)
-      if (m.error) throw new HttpError(500, t.serverError)
-      for (const e of m.entries!) out.push(e)
+  try {
+    for (;;) {
+      const { value, done } = await rd.read()
+      if (done) {
+        if (buf.trim()) throw new HttpError(500, t.serverError)
+        return out
+      }
+      const lines = (buf + value).split('\n')
+      buf = lines.pop()!
+      for (const l of lines) {
+        const m: { entries?: Entry[]; error?: string } = JSON.parse(l)
+        if (m.error || !m.entries) throw new HttpError(500, t.serverError)
+        for (const e of m.entries) out.push(e)
+      }
+      if (lines.length) onchunk?.(out)
     }
-    if (lines.length) onchunk?.(out)
+  } catch (e) {
+    rd.cancel().catch(() => {})
+    throw e instanceof SyntaxError ? new HttpError(500, t.serverError) : e
   }
 }
 
