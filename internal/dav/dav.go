@@ -1,7 +1,9 @@
 package dav
 
 import (
+	"cmp"
 	"context"
+	"crypto/rand"
 	"encoding/xml"
 	"errors"
 	"io"
@@ -12,6 +14,7 @@ import (
 	"os"
 	"path"
 	"strings"
+	"syscall"
 	"time"
 
 	"golang.org/x/net/webdav"
@@ -53,6 +56,11 @@ func Handler(vols *vol.Set, a *auth.Auth, ix *index.Index, vs *version.Store) ht
 		}
 		// Browsers with cached Basic credentials would otherwise render uploaded HTML on this origin.
 		serve.SafeHeaders(w.Header(), "")
+		if r.Method == "PUT" {
+			pb := &putBody{ReadCloser: r.Body, want: r.ContentLength}
+			r.Body = pb
+			r = r.WithContext(context.WithValue(r.Context(), putKey{}, pb))
+		}
 		if r.Method != "COPY" && r.Method != "MOVE" {
 			h.ServeHTTP(w, r)
 			return
@@ -168,19 +176,11 @@ func (f *FS) OpenFile(ctx context.Context, name string, flag int, perm os.FileMo
 	if flag == os.O_RDWR && f.ix != nil {
 		flag = os.O_RDONLY
 	}
-	kept := ""
-	if flag&os.O_TRUNC != 0 && rel != "." {
-		if fi, err := v.Root.Lstat(rel); err == nil && fi.Mode().IsRegular() && fi.Size() > 0 {
-			if kept, err = f.vs.Capture(v, rel, version.WebDAV, user(ctx)); err != nil {
-				return nil, err
-			}
-		}
+	if pb, ok := ctx.Value(putKey{}).(*putBody); ok && flag&os.O_TRUNC != 0 && rel != "." {
+		return f.stage(ctx, pb, v, rel, perm)
 	}
 	fh, err := v.Root.OpenFile(rel, flag, perm)
 	if err != nil {
-		if kept != "" {
-			f.vs.Restore(v, kept, 0)
-		}
 		return nil, err
 	}
 	var file webdav.File = fh
@@ -195,6 +195,74 @@ func (f *FS) OpenFile(ctx context.Context, name string, flag int, perm os.FileMo
 	}
 	return propFile{file, f.ix, v, rel}, nil
 }
+
+type putKey struct{}
+
+type putBody struct {
+	io.ReadCloser
+	want, n int64
+	eof     bool
+	err     error
+}
+
+func (b *putBody) Read(p []byte) (int, error) {
+	n, err := b.ReadCloser.Read(p)
+	b.n += int64(n)
+	if err == io.EOF {
+		b.eof = true
+	} else if err != nil {
+		b.err = err
+	}
+	return n, err
+}
+
+func (b *putBody) complete() bool { return b.eof && b.err == nil && (b.want < 0 || b.n == b.want) }
+
+var errIncomplete = errors.New("upload body incomplete")
+
+func (f *FS) stage(ctx context.Context, pb *putBody, v *vol.Volume, rel string, perm os.FileMode) (webdav.File, error) {
+	if fi, err := v.Root.Stat(path.Dir(rel)); err != nil || !fi.IsDir() {
+		return nil, os.ErrNotExist
+	}
+	if fi, err := v.Root.Lstat(rel); err == nil {
+		if fi.IsDir() {
+			return nil, &fs.PathError{Op: "open", Path: rel, Err: syscall.EISDIR}
+		}
+		perm = fi.Mode().Perm()
+	}
+	if err := v.Root.MkdirAll(vol.TmpDir, 0o700); err != nil {
+		return nil, err
+	}
+	tmp := path.Join(vol.TmpDir, rand.Text())
+	fh, err := v.Root.OpenFile(tmp, os.O_RDWR|os.O_CREATE|os.O_EXCL, perm)
+	if err != nil {
+		return nil, err
+	}
+	commit := func(closed error) error {
+		if closed != nil || !pb.complete() {
+			v.Root.Remove(tmp)
+			return cmp.Or(closed, errIncomplete)
+		}
+		if err := f.vs.Replace(v, tmp, rel, version.WebDAV, user(ctx)); err != nil {
+			v.Root.Remove(tmp)
+			return err
+		}
+		f.ix.Touch(v, rel)
+		return nil
+	}
+	var file webdav.File = staged{fh, commit}
+	if f.ix != nil {
+		file = propFile{file, f.ix, v, rel}
+	}
+	return file, nil
+}
+
+type staged struct {
+	*os.File
+	commit func(closed error) error
+}
+
+func (s staged) Close() error { return s.commit(s.File.Close()) }
 
 func (f *FS) RemoveAll(ctx context.Context, name string) error {
 	v, rel, err := f.resolve(name)

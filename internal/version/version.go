@@ -13,6 +13,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"syscall"
 	"time"
 
 	"github.com/m1ngsama/filebox/internal/db"
@@ -183,6 +184,33 @@ func (s *Store) Restore(v *vol.Volume, id string, user int64) (string, string, e
 	}
 	s.forget(v, id)
 	return dst, prev, nil
+}
+
+func (s *Store) Replace(v *vol.Volume, tmp, rel, source string, user int64) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	kept := ""
+	if fi, err := v.Root.Lstat(rel); err == nil {
+		if fi.IsDir() {
+			return &fs.PathError{Op: "replace", Path: rel, Err: syscall.EISDIR}
+		}
+		if fi.Mode().IsRegular() && fi.Size() > 0 {
+			s.guard(v, s.now().UnixMilli())
+			if kept, err = s.capture(v, rel, source, user); err != nil {
+				return err
+			}
+		}
+	}
+	if err := v.Root.Rename(tmp, rel); err != nil {
+		if kept != "" {
+			s.unwind(v, kept, rel)
+		}
+		return err
+	}
+	if kept != "" {
+		s.prune(v, rel)
+	}
+	return nil
 }
 
 func (s *Store) Revert(v *vol.Volume, id string) error {

@@ -1,11 +1,16 @@
 package dav
 
 import (
+	"encoding/base64"
+	"net"
+	"net/http/httptest"
+	"net/url"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/m1ngsama/filebox/internal/version"
 	"github.com/m1ngsama/filebox/internal/vol"
@@ -205,5 +210,81 @@ func TestDavOverwrittenFolderGoesToTrash(t *testing.T) {
 	}
 	if b, _ := os.ReadFile(filepath.Join(e.dir, "folder")); string(b) != "a" {
 		t.Fatalf("destination %q", b)
+	}
+}
+
+func (e *env) staged(t *testing.T) []os.DirEntry {
+	t.Helper()
+	des, _ := os.ReadDir(filepath.Join(e.dir, vol.TmpDir))
+	return des
+}
+
+func (e *env) intact(t *testing.T, what string) {
+	t.Helper()
+	if b, _ := os.ReadFile(filepath.Join(e.dir, "a.txt")); string(b) != "original content" {
+		t.Fatalf("live file after %s: %q", what, b)
+	}
+	if got := e.versions(t, "a.txt"); len(got) != 0 {
+		t.Fatalf("%s captured a version: %q", what, got)
+	}
+	if des := e.staged(t); len(des) != 0 {
+		t.Fatalf("%s left a temp file: %v", what, des)
+	}
+}
+
+func TestDavAbortedPutKeepsLiveFile(t *testing.T) {
+	e := setup(t)
+	e.req(t, e.rw, "PUT", "/dav/v/a.txt", "original content")
+	u, _ := url.Parse(e.srv.URL)
+	c, err := net.Dial("tcp", u.Host)
+	if err != nil {
+		t.Fatal(err)
+	}
+	auth := base64.StdEncoding.EncodeToString([]byte("me:" + e.rw))
+	c.Write([]byte("PUT /dav/v/a.txt HTTP/1.1\r\nHost: x\r\nAuthorization: Basic " + auth + "\r\nContent-Length: 100\r\n\r\npartial"))
+	for i := 0; i < 100 && len(e.staged(t)) == 0; i++ {
+		time.Sleep(10 * time.Millisecond)
+	}
+	if len(e.staged(t)) == 0 {
+		t.Fatal("upload was not staged")
+	}
+	if b, _ := os.ReadFile(filepath.Join(e.dir, "a.txt")); string(b) != "original content" {
+		t.Fatalf("live file during the upload: %q", b)
+	}
+	c.Close()
+	for i := 0; i < 200 && len(e.staged(t)) != 0; i++ {
+		time.Sleep(10 * time.Millisecond)
+	}
+	e.intact(t, "an aborted PUT")
+}
+
+func TestDavShortPutKeepsLiveFile(t *testing.T) {
+	e := setup(t)
+	e.req(t, e.rw, "PUT", "/dav/v/a.txt", "original content")
+	r := httptest.NewRequest("PUT", "/dav/v/a.txt", strings.NewReader("partial"))
+	r.ContentLength = 100
+	r.SetBasicAuth("me", e.rw)
+	w := httptest.NewRecorder()
+	e.srv.Config.Handler.ServeHTTP(w, r)
+	if w.Code < 400 {
+		t.Fatalf("short PUT %d", w.Code)
+	}
+	e.intact(t, "a short PUT")
+	res, _ := e.req(t, e.rw, "PUT", "/dav/v/a.txt", "replacement")
+	if res.StatusCode != 201 {
+		t.Fatalf("PUT %d", res.StatusCode)
+	}
+	if b, _ := os.ReadFile(filepath.Join(e.dir, "a.txt")); string(b) != "replacement" || len(e.staged(t)) != 0 {
+		t.Fatalf("after a good PUT: %q", b)
+	}
+	if got := e.versions(t, "a.txt"); len(got) != 1 || got[0] != "original content" {
+		t.Fatalf("versions %q", got)
+	}
+	if res, _ := e.req(t, e.rw, "PUT", "/dav/v/missing/a.txt", "x"); res.StatusCode != 409 {
+		t.Fatalf("PUT into a missing folder %d", res.StatusCode)
+	}
+	e.req(t, e.rw, "MKCOL", "/dav/v/d", "")
+	if res, _ := e.req(t, e.rw, "PUT", "/dav/v/d", "x"); res.StatusCode < 400 {
+		t.Fatalf("PUT onto a folder %d", res.StatusCode)
 	}
 }

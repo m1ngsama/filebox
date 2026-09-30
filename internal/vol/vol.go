@@ -15,6 +15,7 @@ const (
 	UploadsDir  = ".filebox/uploads"
 	JobsDir     = ".filebox/jobs"
 	VersionsDir = ".filebox/versions"
+	TmpDir      = ".filebox/tmp"
 	TrashDir    = ".trash"
 )
 

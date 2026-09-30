@@ -428,9 +428,12 @@ func TestJobMoveRefusesSymlinks(t *testing.T) {
 func TestClearStaging(t *testing.T) {
 	f := newTestApp(t)
 	f.write(t, ".filebox/jobs/dead/half.bin", "x")
+	f.write(t, ".filebox/tmp/PARTIALPUT", "x")
 	api.ClearStaging(f.App.Vols)
-	if _, err := os.Stat(filepath.Join(f.Dir, ".filebox/jobs")); !os.IsNotExist(err) {
-		t.Fatalf("stale staging kept: %v", err)
+	for _, d := range []string{".filebox/jobs", ".filebox/tmp"} {
+		if _, err := os.Stat(filepath.Join(f.Dir, d)); !os.IsNotExist(err) {
+			t.Fatalf("stale %s kept: %v", d, err)
+		}
 	}
 }
 

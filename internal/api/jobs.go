@@ -122,6 +122,7 @@ var errSpecial = errors.New("symlink or special file")
 func ClearStaging(vols *vol.Set) {
 	for _, v := range vols.All() {
 		v.Root.RemoveAll(vol.JobsDir)
+		v.Root.RemoveAll(vol.TmpDir)
 	}
 }
 
