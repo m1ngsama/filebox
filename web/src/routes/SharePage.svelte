@@ -21,8 +21,8 @@
   import { api, HttpError, shareFileURL, shareRawURL, shareThumbURL, shareURL, shareZipURL, saveURL, validShareToken, type Entry, type ShareInfo } from '../lib/api'
   import { route, link, navigate } from '../lib/router.svelte'
   import { enqueue } from '../lib/uploads.svelte'
-  import { arrange, size, kind, thumbable, rawThumb, fallback, child, type Sort } from '../lib/format'
-  import { load as recall, save } from '../lib/storage'
+  import { arrange, size, kind, thumbable, rawThumb, fallback, child, mostlyMedia, type Sort } from '../lib/format'
+  import { viewOf, keepView, type View } from '../lib/storage'
   import { saveZip, packing } from '../lib/located'
   import { t } from '../lib/i18n'
 
@@ -38,7 +38,7 @@
   let error = $state<{ status: number; message: string } | null>(null)
   let sort = $state<Sort>('name')
   let desc = $state(false)
-  let grid = $state(recall('shareGrid') === '1')
+  let chosen = $state<View>()
   let preview = $state.raw<Entry | null>(null)
   let dragging = $state(false)
   let depth = 0
@@ -62,7 +62,15 @@
   const folder = $derived(crumbs.at(-1) ?? shared?.name ?? '')
   const left = $derived(shared?.expires ? shared.expires - Date.now() / 1000 : 0)
 
-  $effect(() => save('shareGrid', grid ? '1' : '0'))
+  const grid = $derived(chosen ? chosen === 'grid' : at === p && mostlyMedia(entries))
+  $effect(() => {
+    chosen = viewOf(`s:${token}/${p}`)
+  })
+
+  function flipView() {
+    chosen = grid ? 'list' : 'grid'
+    keepView(`s:${token}/${p}`, chosen)
+  }
 
   let barH = $state(0)
   $effect(() => {
@@ -227,10 +235,10 @@
       {#if file}
         <a class="button primary" href={shareRawURL(token, '', true)} download><Download size={icon.md} /><span>{t.download}</span></a>
       {:else if listed}
-        <button class="icon-btn view" aria-label={grid ? t.listView : t.gridView} title={grid ? t.listView : t.gridView} onclick={() => (grid = !grid)}>
+        <button class="icon-btn view" aria-label={grid ? t.listView : t.gridView} title={grid ? t.listView : t.gridView} onclick={flipView}>
           {#if grid}<List size={icon.md} />{:else}<LayoutGrid size={icon.md} />{/if}
         </button>
-        <a class={shared.mode === 'upload' ? 'button' : 'button primary'} href={shareZipURL(token, p ? [p] : [], folder)} download onclick={() => packing(folder)}
+        <a class={shared.mode === 'upload' ? 'button labeled' : 'button primary labeled'} href={shareZipURL(token, p ? [p] : [], folder)} download onclick={() => packing(folder)}
           ><Download size={icon.md} /><span>{t.downloadAll}</span></a
         >
         {#if shared.mode === 'upload'}<button class="primary" onclick={() => picker?.click()}><Upload size={icon.md} /><span>{t.upload}</span></button>{/if}
@@ -238,10 +246,11 @@
     {/if}
   </header>
 
-  {#if shared && (shared.note || shared.expires || (canUpload && shared.max_upload))}
+  {#if shared && (shared.note || shared.expires || (canUpload && shared.max_upload) || listed)}
     <div class="public-info">
       {#if shared.note}<p class="public-note">{shared.note}</p>{/if}
       <p class="hint">
+        {#if listed}<span class="public-count">{at === p && !error ? t.folderSummary(shown.length, size(shown.reduce((n, e) => n + e.size, 0))) : '\u00a0'}</span>{/if}
         {#if shared.expires}<span><Clock size={icon.sm} />{left > 0 ? t.expiresIn(left) : t.expired}</span>{/if}
         {#if canUpload && shared.max_upload}<span>{t.maxUpload(size(shared.max_upload))}</span>{/if}
       </p>

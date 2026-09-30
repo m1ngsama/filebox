@@ -65,9 +65,9 @@
   import { enqueue, type Replaced } from '../lib/uploads.svelte'
   import { loadStars, starred, star } from '../lib/favorites.svelte'
   import { folderAction, downloadAction, actOn, saveZip } from '../lib/located'
-  import { thumbable, rawThumb, arrange, parent, base, child, flip, sorts, place, type Sort } from '../lib/format'
+  import { thumbable, rawThumb, arrange, parent, base, child, flip, sorts, place, mostlyMedia, type Sort } from '../lib/format'
   import { t } from '../lib/i18n'
-  import { load, save } from '../lib/storage'
+  import { viewOf, keepView, type View } from '../lib/storage'
   import NavToggle from '../components/NavToggle.svelte'
   import EmptyState from '../components/EmptyState.svelte'
   import EntryList, { type Action } from '../components/EntryList.svelte'
@@ -100,7 +100,7 @@
   let query = $state('')
   let sort = $state<Sort>('name')
   let desc = $state(false)
-  let grid = $state(load('grid') === '1')
+  let chosen = $state<View>()
   let dragging = $state(false)
   let depth = 0
   let preview = $state.raw<Entry | null>(null)
@@ -122,6 +122,12 @@
   const join = (n: string) => child(path, n)
   const crumbs = $derived(path ? path.split('/') : [])
   const shown = $derived(at !== here ? [] : streaming ? entries : arrange(entries, query, sort, desc))
+  const grid = $derived(chosen ? chosen === 'grid' : at === here && mostlyMedia(entries))
+
+  function flipView() {
+    chosen = grid ? 'list' : 'grid'
+    keepView(here, chosen)
+  }
   const one = $derived(selected.size === 1 ? entries.find((e) => selected.has(e.name)) : undefined)
   const thumb = (e: Entry) => (!e.dir && thumbable(e.name) ? thumbURL(vol, join(e.name)) : null)
   const raw = (e: Entry) => (rawThumb(e) ? rawURL(vol, join(e.name)) : null)
@@ -233,6 +239,7 @@
     searching = false
     error = null
     details = null
+    chosen = viewOf(`${vol}/${path}`)
     reveal = undefined
     listing = []
     listingKey = ''
@@ -343,8 +350,6 @@
     path
     selected.clear()
   })
-
-  $effect(() => save('grid', grid ? '1' : '0'))
 
   $effect(() => {
     const list = entries
@@ -791,14 +796,14 @@
       </div>
       <button class="icon-btn search-open" aria-label={t.openFilter} onclick={search} bind:this={opener}><Search size={icon.md} /></button>
       <button class="icon-btn search-close" aria-label={t.closeFilter} onclick={endSearch}><X size={icon.md} /></button>
-      <button class="icon-btn view" aria-label={grid ? t.listView : t.gridView} title={grid ? t.listView : t.gridView} onclick={() => (grid = !grid)}>
+      <button class="icon-btn view" aria-label={grid ? t.listView : t.gridView} title={grid ? t.listView : t.gridView} onclick={flipView}>
         {#if grid}<List size={icon.md} />{:else}<LayoutGrid size={icon.md} />{/if}
       </button>
       <DropdownMenu.Root>
         <DropdownMenu.Trigger class="icon-btn overflow" aria-label={t.more}><EllipsisVertical size={icon.md} /></DropdownMenu.Trigger>
         <DropdownMenu.Portal to="main">
           <DropdownMenu.Content class="menu" preventScroll={false} align="end" sideOffset={4}>
-            <DropdownMenu.Item class="menu-item" onSelect={() => (grid = !grid)}>
+            <DropdownMenu.Item class="menu-item" onSelect={flipView}>
               {#if grid}<List size={icon.sm} />{t.listView}{:else}<LayoutGrid size={icon.sm} />{t.gridView}{/if}
             </DropdownMenu.Item>
             <DropdownMenu.Separator class="menu-sep" />

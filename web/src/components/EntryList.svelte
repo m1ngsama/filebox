@@ -16,7 +16,7 @@
   import FileIcon from './FileIcon.svelte'
   import { selectURL, type Entry, type Loc } from '../lib/api'
   import { link } from '../lib/router.svelte'
-  import { size, date, ago, look, fallback, flip, sorts, visual, ends, SEP, type Sort } from '../lib/format'
+  import { size, date, ago, look, fallback, flip, sorts, mostlyMedia, ends, SEP, type Sort } from '../lib/format'
   import { t } from '../lib/i18n'
   import { narrow } from '../lib/shell.svelte'
   import { carry, drop, target, type Carried, type Target } from '../lib/dnd'
@@ -96,7 +96,7 @@
   let seeking = $state(false)
   let seekTimer = 0
 
-  const media = $derived(grid && entries.length > 0 && entries.filter((e) => !e.dir && visual(e.name)).length >= 0.6 * entries.length)
+  const media = $derived(grid && mostlyMedia(entries))
   const tiles = $derived(media && narrow.current)
   const gap = $derived(tiles ? 4 : 12)
   const cols = $derived(!grid ? 1 : Math.max(1, media ? Math.floor((width - gap) / ((tiles ? 110 : 128) + gap)) : Math.floor((width - 16) / 172)))

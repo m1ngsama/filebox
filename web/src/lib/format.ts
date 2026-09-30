@@ -95,6 +95,8 @@ export const look = (n: string) => (icons.get(ext(n)) ?? kind(n)) as Look
 
 export const visual = (n: string) => /^(image|video)$/.test(kind(n))
 
+export const mostlyMedia = (es: Row[]) => es.length > 0 && es.filter((e) => !e.dir && (visual(e.name) || ext(e.name) === 'cbz')).length >= 0.6 * es.length
+
 const graphemes = new Intl.Segmenter(locale, { granularity: 'grapheme' })
 const split = (s: string) => Array.from(graphemes.segment(s), (x) => x.segment)
 

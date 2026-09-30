@@ -593,7 +593,7 @@ button.busy::before { content: ''; width: 14px; height: 14px; border: 2px solid 
   .shares li:has(.share-meta) > .icon-btn:first-of-type, .rows li:has(.share-meta) > button:first-of-type { margin-left: auto; }
   .public-bar { flex-wrap: nowrap; }
   .public-bar .brand:not(:only-child) { display: none; }
-  .public-bar .button span, .public-bar button.primary span { position: absolute; width: 1px; height: 1px; margin: -1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+  .public-bar .button:not(.labeled) span, .public-bar button.primary span { position: absolute; width: 1px; height: 1px; margin: -1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
   .public-bar .crumbs { min-width: 0; overflow: hidden; }
   .public-inline { padding: 0; }
   .viewer.inline { border-radius: 0; }
