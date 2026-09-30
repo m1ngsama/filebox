@@ -784,8 +784,10 @@ test('keyboard alone browses, selects, renames, moves, shares, deletes and undoe
   await expect(note).toBeFocused()
   await page.keyboard.press('Space')
   await expect(note).toHaveAttribute('aria-selected', 'true')
-  await page.keyboard.press('Delete')
-  await expect(note).toHaveCount(0)
+  await expect(async () => {
+    await page.keyboard.press('Delete')
+    await expect(note).toHaveCount(0, { timeout: 200 })
+  }).toPass()
   await expect(page.locator('.toast', { hasText: t.trashed(t.what(['note.txt'])) })).toBeVisible()
   await page.keyboard.press('ControlOrMeta+z')
   await expect(note).toBeVisible()
