@@ -1,3 +1,11 @@
+<script lang="ts" module>
+  import type { Entry as Row } from '../lib/api'
+
+  type Op = { key: string; name: string; entry: Row | null; settled: number }
+  let ops: Op[] = []
+  let clock = 0
+</script>
+
 <script lang="ts">
   import { tick, untrack } from 'svelte'
   import { SvelteSet } from 'svelte/reactivity'
@@ -94,28 +102,28 @@
   const thumb = (e: Entry) => (!e.dir && thumbable(e.name) ? thumbURL(vol, join(e.name)) : null)
   const raw = (e: Entry) => (rawThumb(e) ? rawURL(vol, join(e.name)) : null)
 
-  type Op = { name: string; entry: Entry | null; settled: number }
   let listing: Entry[] = []
-  let ops: Op[] = []
-  let clock = 0
+  let listingKey = ''
   let chain: Promise<unknown> = Promise.resolve()
 
-  function overlay(list: Entry[], started: number) {
+  function overlay(list: Entry[], started: number, key: string) {
     listing = list
-    ops = ops.filter((o) => !o.settled || o.settled >= started)
-    if (!ops.length) return list
+    listingKey = key
+    ops = ops.filter((o) => o.key !== key || !o.settled || o.settled >= started)
+    const mine = ops.filter((o) => o.key === key)
+    if (!mine.length) return list
     const m = new Map(list.map((e) => [e.name, e]))
-    for (const o of ops) {
+    for (const o of mine) {
       if (o.entry) m.set(o.name, o.entry)
       else m.delete(o.name)
     }
     return [...m.values()]
   }
 
-  const reapply = () => (entries = overlay(listing, 0))
+  const reapply = () => (entries = overlay(listing, 0, listingKey))
 
   function begin(changes: [string, Entry | null][]) {
-    const mine = changes.map(([name, entry]) => ({ name, entry, settled: 0 }))
+    const mine = changes.map(([name, entry]) => ({ key: here, name, entry, settled: 0 }))
     ops.push(...mine)
     reapply()
     return mine
@@ -135,9 +143,12 @@
   }
 
   function rollback(mine: Op[], err: unknown) {
-    const next = neighbour(new Set(mine.filter((o) => o.entry).map((o) => o.name)))
+    fail(err)
+    const visible = mine[0]?.key === here && at === here
+    const next = visible ? neighbour(new Set(mine.filter((o) => o.entry).map((o) => o.name))) : undefined
     ops = ops.filter((o) => !mine.includes(o))
     reapply()
+    if (!visible) return
     const back = mine.filter((o) => !o.entry && entries.some((e) => e.name === o.name)).map((o) => o.name)
     if (back.length) {
       selected.clear()
@@ -145,7 +156,6 @@
     }
     const to = back[0] ?? next
     if (to) reveal = { name: to }
-    fail(err)
     refresh()
   }
 
@@ -169,7 +179,7 @@
         said = last
         announce = t.loadingItems(es.length)
       }
-      entries = overlay(es.slice(), started)
+      entries = overlay(es.slice(), started, want)
       streaming = true
       error = ''
       at = want
@@ -179,7 +189,7 @@
       (e: Error) => [[], e.message] as const,
     )
     if (want !== here || signal?.aborted) return false
-    entries = overlay([...list], started)
+    entries = overlay([...list], started, want)
     listed = started
     error = err
     streaming = false
@@ -195,8 +205,8 @@
     searching = false
     details = null
     reveal = undefined
-    ops = []
     listing = []
+    listingKey = ''
     const focus = new URLSearchParams(untrack(() => route.search)).get('details')
     refresh().then((ok) => {
       if (ok && focus) details = entries.find((e) => e.name === focus) ?? null
