@@ -1026,6 +1026,27 @@ test('searching finds words inside text and markdown files and opens the match i
   await expect(row(page, 'minutes.txt')).toHaveAttribute('aria-selected', 'true')
 })
 
+test('one or two Chinese characters find names and words inside documents', async ({ page }) => {
+  await login(page)
+  await row(page, 'docs').locator('button.name').click()
+  await fileInput(page).setInputFiles({ name: '\u8bd1\u6587.txt', mimeType: 'text/plain', buffer: Buffer.from('\u672c\u4e66\u7684\u8bd1\u8005\u5e8f\u5199\u5728\u524d\u9762\n') })
+  await expect(row(page, '\u8bd1\u6587.txt')).toHaveCount(1)
+  await page.getByRole('radio', { name: t.scopeAll }).click()
+  const section = page.getByRole('region', { name: t.contentMatches })
+  const search = async (q: string) =>
+    expect(async () => {
+      await page.getByLabel(t.filter).fill('')
+      await page.getByLabel(t.filter).fill(q)
+      await expect(section.locator('.hit')).toHaveCount(1, { timeout: 1500 })
+    }).toPass({ timeout: 30_000 })
+  await search('\u8bd1\u8005')
+  await expect(section.locator('mark')).toHaveText('\u8bd1\u8005')
+  await expect(row(page, '\u8bd1\u6587.txt')).toHaveCount(0)
+  await search('\u8bd1')
+  await expect(section.locator('mark')).toHaveText('\u8bd1')
+  await expect(row(page, '\u8bd1\u6587.txt')).toHaveCount(1)
+})
+
 const han = /[\u3000-\u303f\u4e00-\u9fff\uff00-\uffef]/
 
 test.describe('with an English browser', () => {
