@@ -29,7 +29,7 @@
   import ArrowUp from '@lucide/svelte/icons/arrow-up'
   import ArrowDown from '@lucide/svelte/icons/arrow-down'
   import { api, errorText, filesURL, fileURL, rawURL, thumbURL, zipURL, saveURL, saveZip, selectURL, type Entry, type Move, type RecentFile, type ContentHit, type Progress } from '../lib/api'
-  import { toast, fail, runLatest, dismiss, retext, type Action as Act } from '../lib/toast.svelte'
+  import { toast, fail, runLatest, retract, retext, type ToastAction } from '../lib/toast.svelte'
   import { navigate, link, route } from '../lib/router.svelte'
   import { enqueue, type Replaced } from '../lib/uploads.svelte'
   import { loadStars, starred, star } from '../lib/favorites.svelte'
@@ -82,6 +82,7 @@
   let barH = $state(0)
   let conflict = $state<{ name: string; rest: number; resolve: (r: [Choice, boolean] | null) => void } | null>(null)
   const selected = new SvelteSet<string>()
+  let calm = 0
   let files = $state<HTMLInputElement>()
   let folder = $state<HTMLInputElement>()
 
@@ -391,7 +392,7 @@
 
   type Failed = { name: string; error: Error }
 
-  const undo = (run: () => Promise<Failed[]>): Act => ({
+  const undo = (run: () => Promise<Failed[]>): ToastAction => ({
     label: t.undo,
     keys: 'Control+Z Meta+Z',
     run: () =>
@@ -412,8 +413,10 @@
   }
 
   async function restore(v: string, items: { path: string; id: string }[]) {
-    const res = await Promise.allSettled(items.map((x) => api.restore(v, x.id)))
-    return items.flatMap((x, i) => (res[i].status === 'rejected' ? [{ name: base(x.path), error: res[i].reason as Error }] : []))
+    if (!items.length) return []
+    const { failed } = await api.restoreMany(v, items.map((x) => x.id))
+    const path = new Map(items.map((x) => [x.id, x.path]))
+    return failed.map((f) => ({ name: base(path.get(f.id) ?? f.id), error: new Error(errorText(f.status) ?? f.error) }))
   }
 
   async function unreplace(rs: Replaced[]) {
@@ -423,6 +426,7 @@
   }
 
   function pick(name: string) {
+    calm = performance.now() + 300
     selected.clear()
     if (!narrow.current) selected.add(name)
     reveal = name
@@ -455,13 +459,17 @@
       [n, { ...e, name: n }],
     ])
     pick(n)
-    serial(() => api.mv(m.from, m.to)).then(
+    const pending = serial(() => api.mv(m.from, m.to))
+    const id = toast(t.renamed(n), { actions: [undo(() => pending.then(() => reverse([m])))] })
+    pending.then(
       () => {
         settle(mine)
-        toast(t.renamed(n), { actions: [undo(() => reverse([m]))] })
         loadStars(true)
       },
-      (err) => rollback(mine, err),
+      (err) => {
+        retract(id)
+        rollback(mine, err)
+      },
     )
   }
 
@@ -482,14 +490,14 @@
       const keep = new Set(bad.map((f) => base(f.path)))
       const done = names.filter((n) => !keep.has(n))
       if (done.length) retext(id, t.trashed(t.what(done)))
-      else dismiss(id)
+      else retract(id)
       const f = bad[0]
       rollback(
         mine.filter((o) => keep.has(o.name)),
         new Error(bad.length > 1 ? t.removeFailed([...keep]) : t.failedItem(t.what([base(f.path)]), errorText(f.status) ?? f.error)),
       )
     } catch (err) {
-      dismiss(id)
+      retract(id)
       rollback(mine, err)
     }
   }
@@ -565,7 +573,7 @@
       else if (e.key === 'n') dialog = { kind: 'mkdir' }
       else if (e.key === 'u') files?.click()
       else if (target) dialog = { kind: 'rename', e: target }
-    } else if ((e.key === 'Delete' || e.key === 'Backspace') && selected.size) remove([...selected])
+    } else if ((e.key === 'Delete' || e.key === 'Backspace') && selected.size && !e.repeat && performance.now() > calm && inList(e.target as Element)) remove([...selected])
     else if (e.key === 'Enter' && selected.size === 1 && !(e.target as Element).closest('button, a, [role=grid]')) {
       const hit = entries.find((x) => selected.has(x.name))
       if (hit) open(hit)

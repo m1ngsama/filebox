@@ -209,6 +209,7 @@ export const api = {
   },
   trash: (vol: string) => req<{ items: TrashItem[] }>('GET', `/api/trash?${q({ vol })}`),
   restore: (vol: string, id: string) => req<void>('POST', '/api/trash/restore', { vol, id }),
+  restoreMany: (vol: string, ids: string[]) => req<{ failed: { id: string; status: number; error: string }[] }>('POST', '/api/trash/restore', { vol, ids }),
   emptyTrash: (vol: string) => req<void>('POST', '/api/trash/empty', { vol }),
   purge: (vol: string, ids: string[]) => req<void>('POST', '/api/trash/delete', { vol, ids }),
   versions: (vol: string, p: string) => req<{ versions: Version[] }>('GET', `/api/versions?${q({ vol, p })}`),

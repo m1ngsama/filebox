@@ -1,7 +1,7 @@
 import type * as tus from 'tus-js-client'
 import { t } from './i18n'
 import { errorText, session } from './api'
-import { toast, type Action } from './toast.svelte'
+import { toast, type ToastAction } from './toast.svelte'
 
 export type Item = {
   id: number
@@ -17,7 +17,7 @@ export type Item = {
 
 type Job = { item: Item; file: File; endpoint: string; meta: Record<string, string>; sent: number; ok: boolean; err: boolean }
 export type Replaced = { vol: string; path: string; id: string }
-type Undo = (r: Replaced[]) => Action
+type Undo = (r: Replaced[]) => ToastAction
 type Group = { jobs: Job[]; ctl: AbortController; refresh: () => void; undo?: Undo }
 
 const LIMIT = 3

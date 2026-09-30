@@ -833,7 +833,7 @@ test('new folder and rename show at once, then settle or roll back with the serv
   await page.keyboard.press('Enter')
   await expect(row(page, 'faster')).toHaveCount(1, { timeout: 300 })
   await expect(page.locator('.toast', { hasText: t.renamed('faster') })).toBeVisible()
-  expect(existsSync(join(server.vol, 'faster'))).toBe(true)
+  await expect.poll(() => existsSync(join(server.vol, 'faster'))).toBe(true)
 
   await page.keyboard.press('n')
   await page.getByLabel(t.folderName).fill('docs')
@@ -877,7 +877,7 @@ test('a folder deleted or renamed before its mkdir returns stays that way', asyn
   await expect(page.locator('.toast', { hasText: t.renamed('b2') })).toBeVisible()
   await expect(row(page, 'b2')).toHaveCount(1)
   await expect(row(page, 'b1')).toHaveCount(0)
-  expect([existsSync(join(server.vol, 'b1')), existsSync(join(server.vol, 'b2'))]).toEqual([false, true])
+  await expect.poll(() => [existsSync(join(server.vol, 'b1')), existsSync(join(server.vol, 'b2'))]).toEqual([false, true])
 })
 
 test('a listing taken before a delete settles does not bring the row back, and undo still does', async ({ page, server }) => {
@@ -901,6 +901,49 @@ test('a listing taken before a delete settles does not bring the row back, and u
   await page.locator('main').press('ControlOrMeta+z')
   await expect(page.locator('.toast', { hasText: t.undone })).toBeVisible()
   await expect(row(page, 'stale.txt')).toHaveCount(1)
+})
+
+test('delete keys act only in the list and undo restores a batch in one request, even after the toast', async ({ page, server }) => {
+  for (const n of ['k1.txt', 'k2.txt', 'k3.txt']) writeFileSync(join(server.vol, n), n)
+  await login(page)
+  for (const n of ['k1.txt', 'k2.txt', 'k3.txt']) await row(page, n).locator('input[type=checkbox]').check()
+  await page.getByRole('link', { name: t.recent, exact: true }).focus()
+  await page.keyboard.press('Delete')
+  await page.keyboard.press('Backspace')
+  await expect(row(page, 'k1.txt')).toHaveCount(1)
+  await row(page, 'k1.txt').focus()
+  await page.keyboard.press('Delete')
+  await expect(row(page, 'k1.txt')).toHaveCount(0)
+  const toast = page.locator('.toast', { hasText: t.trashed(t.what(['', '', ''])) })
+  await toast.getByRole('button', { name: t.close }).click()
+  await expect(toast).toHaveCount(0)
+  const restores: string[] = []
+  page.on('request', (r) => r.url().endsWith('/api/trash/restore') && restores.push(r.postData() ?? ''))
+  await page.locator('main').press('ControlOrMeta+z')
+  await expect(page.locator('.toast', { hasText: t.undone })).toBeVisible()
+  for (const n of ['k1.txt', 'k2.txt', 'k3.txt']) await expect(row(page, n)).toHaveCount(1)
+  expect(restores).toHaveLength(1)
+  expect(JSON.parse(restores[0]).ids).toHaveLength(3)
+})
+
+test('ctrl+z during a pending rename undoes the rename, not the action before it', async ({ page, server }) => {
+  for (const n of ['r1.txt', 'r2.txt']) writeFileSync(join(server.vol, n), n)
+  await login(page)
+  await row(page, 'r1.txt').locator('button.more').click()
+  await page.getByRole('menuitem', { name: t.remove, exact: true }).click()
+  await expect(page.locator('.toast', { hasText: t.trashed(t.what(['r1.txt'])) })).toBeVisible()
+  await page.route('**/api/mv', async (r) => (await new Promise((x) => setTimeout(x, 800)), r.continue()))
+  await row(page, 'r2.txt').locator('button.more').click()
+  await page.getByRole('menuitem', { name: t.rename, exact: true }).click()
+  await page.getByLabel(t.newName).fill('r3.txt')
+  await page.keyboard.press('Enter')
+  await expect(row(page, 'r3.txt')).toHaveCount(1)
+  await page.locator('main').press('ControlOrMeta+z')
+  await expect(page.locator('.toast', { hasText: t.undone })).toBeVisible()
+  await expect(row(page, 'r2.txt')).toHaveCount(1)
+  await expect(row(page, 'r3.txt')).toHaveCount(0)
+  await expect(row(page, 'r1.txt')).toHaveCount(0)
+  expect([existsSync(join(server.vol, 'r1.txt')), existsSync(join(server.vol, 'r2.txt'))]).toEqual([false, true])
 })
 
 test('a delete counts items that are already gone as done and rolls back a failed request', async ({ page, server }) => {

@@ -3,7 +3,7 @@
   import CircleCheck from '@lucide/svelte/icons/circle-check'
   import CircleAlert from '@lucide/svelte/icons/circle-alert'
   import Info from '@lucide/svelte/icons/info'
-  import { toasts, dismiss, hold, onLeave } from '../lib/toast.svelte'
+  import { toasts, dismiss, hold, onLeave, act } from '../lib/toast.svelte'
   import { t } from '../lib/i18n'
 
   const icons = { success: CircleCheck, error: CircleAlert, info: Info }
@@ -47,8 +47,7 @@
         aria-describedby={`toast-${x.id}`}
         aria-keyshortcuts={a.keys}
         onclick={() => {
-          dismiss(x.id)
-          a.run()
+          act(x.id, a)
         }}>{a.label}</button
       >
     {/each}
