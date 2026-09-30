@@ -121,6 +121,7 @@ const jobCodes: Record<string, number> = { exists: 409, notfound: 404, nospace: 
 
 export const api = {
   me: () => req<Me>('GET', '/api/me'),
+  loginInfo: () => req<{ single: boolean }>('GET', '/api/login'),
   login: (name: string, password: string) => req<void>('POST', '/api/login', { name, password }),
   logout: () => req<void>('POST', '/api/logout'),
   ls: (vol: string, path: string, signal?: AbortSignal, onchunk?: (entries: Entry[]) => void) => list(`/api/ls?${q({ vol, path })}`, signal, onchunk),

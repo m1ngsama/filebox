@@ -34,6 +34,9 @@ type entries struct {
 
 func TestLogin(t *testing.T) {
 	f := newTestApp(t)
+	if w := f.do("GET", "/api/login", nil, "X-No-Auth", "1"); w.Code != 200 || strings.TrimSpace(w.Body.String()) != `{"single":true}` {
+		t.Fatalf("login info %d %s", w.Code, w.Body)
+	}
 	w := f.do("POST", "/api/login", body(`{"password":"nope-nope"}`), "X-No-Auth", "1")
 	if w.Code != 401 {
 		t.Fatalf("bad pw = %d", w.Code)
@@ -49,6 +52,9 @@ func TestLogin(t *testing.T) {
 		t.Fatalf("unknown api route %d %s", w.Code, w.Body)
 	}
 	f.App.DB.SetPassword("bob", "h")
+	if w := f.do("GET", "/api/login", nil, "X-No-Auth", "1"); strings.TrimSpace(w.Body.String()) != `{"single":false}` {
+		t.Fatalf("login info with two users %s", w.Body)
+	}
 	if w := f.do("POST", "/api/login", body(`{"password":"pw-pw-pw-pw"}`), "X-No-Auth", "1"); w.Code != 401 {
 		t.Fatalf("nameless login with two users = %d", w.Code)
 	}

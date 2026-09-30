@@ -15,6 +15,7 @@
   let passkeys = $state(false)
   let show = $state(false)
   let busy = $state(false)
+  let single = $state(true)
   let user = $state<HTMLInputElement>()
   let pass = $state<HTMLInputElement>()
   let autofill = false
@@ -22,14 +23,23 @@
   let since = 0
   let abort = () => {}
 
-  onMount(() => (name ? pass : user)?.focus())
+  onMount(() => {
+    pass?.focus()
+    api.loginInfo().then(
+      (r) => {
+        single = r.single
+        if (!single && !name && !password && document.activeElement === pass) tick().then(() => user?.focus())
+      },
+      () => (single = false),
+    )
+  })
 
   async function submit(e: SubmitEvent) {
     e.preventDefault()
     busy = true
     try {
-      await api.login(name.trim(), password)
-      save('user', name.trim())
+      await api.login(single ? '' : name.trim(), password)
+      if (!single) save('user', name.trim())
       onok()
     } catch (err) {
       error = err instanceof HttpError && err.status === 429 ? err.message : t.wrongLogin
@@ -90,14 +100,17 @@
   <label for="login-name" class="sr-only">{t.username}</label>
   <input
     id="login-name"
+    class:sr-only={single}
     bind:this={user}
     bind:value={name}
     placeholder={t.username}
-    autocomplete="username webauthn"
+    autocomplete={single ? 'username' : 'username webauthn'}
     onfocus={refreshAutofill}
     autocapitalize="none"
     spellcheck="false"
-    required
+    tabindex={single ? -1 : undefined}
+    aria-hidden={single || undefined}
+    required={!single}
   />
   <div class="password">
     <label for="login-password" class="sr-only">{t.password}</label>
@@ -107,7 +120,8 @@
       type={show ? 'text' : 'password'}
       bind:value={password}
       placeholder={t.password}
-      autocomplete="current-password"
+      autocomplete={single ? 'current-password webauthn' : 'current-password'}
+      onfocus={refreshAutofill}
       aria-invalid={!!error}
       aria-describedby={error ? 'login-error' : undefined}
       required

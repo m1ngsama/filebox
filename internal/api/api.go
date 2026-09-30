@@ -59,6 +59,7 @@ type API struct {
 }
 
 func (a *API) Register(mux *http.ServeMux) {
+	mux.HandleFunc("GET /api/login", a.loginInfo)
 	mux.HandleFunc("POST /api/login", a.login)
 	h := func(pattern string, fn http.HandlerFunc) { mux.Handle(pattern, a.Auth.RequireSession(fn)) }
 	h("POST /api/logout", a.logout)
@@ -123,6 +124,15 @@ func (a *API) login(w http.ResponseWriter, r *http.Request) {
 		auth.SetCookie(w, r, auth.CookieName, tok, "/", auth.SessionTTL)
 		w.WriteHeader(204)
 	}
+}
+
+func (a *API) loginInfo(w http.ResponseWriter, r *http.Request) {
+	ns, err := a.DB.UserNames()
+	if err != nil {
+		httpx.Error(w, err)
+		return
+	}
+	httpx.JSON(w, 200, map[string]bool{"single": len(ns) == 1})
 }
 
 func (a *API) logout(w http.ResponseWriter, r *http.Request) {

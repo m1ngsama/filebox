@@ -60,9 +60,11 @@ async function login(page: Page, l: Table = t) {
 }
 
 async function signIn(page: Page, l: Table = t) {
-  await expect(page.getByLabel(l.username)).toBeVisible()
+  await expect(page.getByLabel(l.password, { exact: true })).toBeFocused()
   expect(await unlabeled(page)).toBe(0)
-  await page.getByLabel(l.username).fill('admin')
+  await expect(page.getByLabel(l.username)).toHaveAttribute('autocomplete', 'username')
+  await expect(page.getByLabel(l.username)).toHaveAttribute('aria-hidden', 'true')
+  await expect(page.getByLabel(l.username)).toHaveCSS('clip-path', 'inset(50%)')
   await page.getByLabel(l.password, { exact: true }).fill('pw-pw-pw-pw')
   await page.getByRole('button', { name: l.login, exact: true }).click()
   await expect(page).toHaveURL(/\/files\/v\/$/)
@@ -124,7 +126,6 @@ async function shareDocs(page: Page, mode: 'read' | 'upload' | 'drop', password 
 
 test('wrong password is rejected', async ({ page }) => {
   await page.goto('/')
-  await page.getByPlaceholder(t.username).fill('admin')
   await page.getByPlaceholder(t.password).fill('nope-nope')
   await page.getByRole('button', { name: t.showPassword }).click()
   await expect(page.getByLabel(t.password, { exact: true })).toHaveAttribute('type', 'text')
@@ -135,9 +136,20 @@ test('wrong password is rejected', async ({ page }) => {
 
 test('the login page stays quiet about passkeys until they are used', async ({ page }) => {
   await page.goto('/')
-  await expect(page.getByLabel(t.username)).toBeFocused()
+  await expect(page.getByLabel(t.password, { exact: true })).toBeFocused()
   await page.waitForTimeout(500)
   await expect(page.locator('.login .error')).toHaveCount(0)
+})
+
+test('with a second user the login asks for a name again', async ({ page, server }) => {
+  execFileSync(BIN, ['passwd', '-data', join(server.vol, '../data'), '-user', 'bob'], { input: 'pw-bob-pw-bob\n', stdio: ['pipe', 'ignore', 'ignore'] })
+  await page.goto('/')
+  await expect(page.getByLabel(t.username)).toBeFocused()
+  await expect(page.getByLabel(t.username)).not.toHaveAttribute('aria-hidden')
+  await page.getByLabel(t.username).fill('bob')
+  await page.getByLabel(t.password, { exact: true }).fill('pw-bob-pw-bob')
+  await page.getByRole('button', { name: t.login, exact: true }).click()
+  await expect(page).toHaveURL(/\/files\/v\/$/)
 })
 
 test('browse and preview', async ({ page }) => {
@@ -784,7 +796,6 @@ test('passkey registration and login', async ({ page, context, server }) => {
   const name = 'e2e / key'
   const row = page.locator('.rows li', { hasText: name })
   await page.goto(server.url.replace('127.0.0.1', 'localhost'))
-  await page.getByPlaceholder(t.username).fill('admin')
   await page.getByPlaceholder(t.password).fill('pw-pw-pw-pw')
   await page.getByRole('button', { name: t.login, exact: true }).click()
   await page.getByRole('link', { name: t.settings }).click()
@@ -845,7 +856,7 @@ test('signing out another device sends it back to login', async ({ page, browser
   await expect(rows).toHaveCount(1)
   await expect(page.getByRole('button', { name: t.signOutOthers })).toHaveCount(0)
   await other.getByRole('link', { name: t.trash, exact: true }).click()
-  await expect(other.getByLabel(t.username)).toBeVisible()
+  await expect(other.getByLabel(t.password, { exact: true })).toBeVisible()
   await other.close()
 })
 
@@ -1886,7 +1897,7 @@ test('logout works on a plain-HTTP origin without Cache Storage', async ({ brows
     await login(page)
     expect(await page.evaluate(() => [isSecureContext, 'caches' in globalThis])).toEqual([false, false])
     await page.getByRole('button', { name: t.logout }).click()
-    await expect(page.getByLabel(t.username)).toBeVisible()
+    await expect(page.getByLabel(t.password, { exact: true })).toBeVisible()
     expect((await page.request.get('/api/me')).status()).toBe(401)
     expect(errors).toEqual([])
     await page.close()
