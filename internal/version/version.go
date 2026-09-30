@@ -419,17 +419,11 @@ func (s *Store) recover(v *vol.Volume) error {
 	if err != nil {
 		return err
 	}
-	known := map[string]bool{}
-	for _, x := range xs {
-		if _, err := v.Root.Lstat(File(x.ID)); errors.Is(err, fs.ErrNotExist) {
-			slog.Warn("version file missing, dropping its row", "vol", v.Name, "id", x.ID)
-			s.forget(v, x.ID)
-			continue
-		}
-		known[x.ID] = true
-	}
 	f, err := v.Root.Open(vol.VersionsDir)
 	if errors.Is(err, fs.ErrNotExist) {
+		if len(xs) > 0 {
+			slog.Warn("versions folder missing, keeping its rows in case the disk is not mounted", "vol", v.Name, "rows", len(xs))
+		}
 		return nil
 	}
 	if err != nil {
@@ -443,6 +437,15 @@ func (s *Store) recover(v *vol.Volume) error {
 	present := map[string]bool{}
 	for _, n := range names {
 		present[n] = true
+	}
+	known := map[string]bool{}
+	for _, x := range xs {
+		if !present[x.ID] {
+			slog.Warn("version file missing, dropping its row", "vol", v.Name, "id", x.ID)
+			s.forget(v, x.ID)
+			continue
+		}
+		known[x.ID] = true
 	}
 	for _, n := range names {
 		id, isSidecar := strings.CutSuffix(n, sidecar)

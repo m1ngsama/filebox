@@ -345,3 +345,17 @@ func TestGuardRunsBeforeCapture(t *testing.T) {
 		t.Fatal("guard did not run before a failing capture")
 	}
 }
+
+func TestRecoverKeepsRowsWhenTheStoreIsMissing(t *testing.T) {
+	e := setup(t)
+	e.capture(t, "a.txt", "a")
+	aside := filepath.Join(t.TempDir(), "versions")
+	os.Rename(filepath.Join(e.dir, vol.VersionsDir), aside)
+	if err := e.s.Recover(e.vols); err != nil || e.count(t, "a.txt") != 1 {
+		t.Fatalf("rows dropped while the versions folder was missing: %v", err)
+	}
+	os.Rename(aside, filepath.Join(e.dir, vol.VersionsDir))
+	if err := e.s.Recover(e.vols); err != nil || e.count(t, "a.txt") != 1 {
+		t.Fatalf("after the folder came back: %v", err)
+	}
+}
