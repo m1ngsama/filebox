@@ -219,8 +219,7 @@ func (a *API) mkdir(w http.ResponseWriter, r *http.Request) {
 	a.Index.Touch(v, rel)
 	e, err := Stat(v.Root, rel)
 	if err != nil {
-		httpx.Error(w, err)
-		return
+		e = Entry{Name: path.Base(rel), Dir: true, Mtime: time.Now().UnixMilli()}
 	}
 	httpx.JSON(w, 201, e)
 }
