@@ -448,13 +448,16 @@ button.quiet { border-color: transparent; background: none; color: var(--muted);
 .token-new dl { display: flex; flex-direction: column; gap: var(--space-1); margin: 0; }
 .token-new dt { margin-top: var(--space-1); font-size: var(--text-xs); color: var(--muted); }
 .token-new dd { margin: 0; }
-.token-new code { display: block; flex: 1; min-width: 0; padding: var(--space-1-5) var(--space-2); border-radius: var(--radius-sm); background: var(--bg); font: var(--text-sm) ui-monospace, SFMono-Regular, Menlo, monospace; overflow-wrap: anywhere; }
+:is(.token-new, #connect) code { display: block; flex: 1; min-width: 0; padding: var(--space-1-5) var(--space-2); border-radius: var(--radius-sm); background: var(--bg); font: var(--text-sm) ui-monospace, SFMono-Regular, Menlo, monospace; overflow-wrap: anywhere; }
 .shared-files { list-style: none; margin: 0; padding: 0; max-height: 120px; overflow: auto; font-size: var(--text-sm); }
 .shared-files li { display: flex; justify-content: space-between; gap: var(--space-3); }
 .shared-files li span:first-child { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .warn-note { color: var(--danger); font-size: var(--text-sm); }
 .activity-filters { display: flex; flex-wrap: wrap; gap: var(--space-2); }
 .code-line { display: flex; align-items: center; gap: var(--space-1); }
+.clients { display: flex; flex-direction: column; gap: var(--space-1); margin: 0; font-size: var(--text-sm); }
+.clients dt { font-weight: 600; margin-top: var(--space-2); }
+.clients dd { margin: 0; overflow-wrap: anywhere; }
 
 .public { position: relative; display: flex; flex-direction: column; height: 100dvh; padding: env(safe-area-inset-top) 0 env(safe-area-inset-bottom); }
 .viewer.inline { position: relative; inset: auto; z-index: auto; flex: 1; min-height: 0; border-radius: var(--radius-lg); }

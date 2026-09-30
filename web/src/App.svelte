@@ -101,7 +101,7 @@
             {:else if parts[0] === 'shares'}
               <Lazy load={() => import('./routes/Shares.svelte')} />
             {:else if parts[0] === 'settings'}
-              <Lazy load={() => import('./routes/Settings.svelte')} vols={me.vols} />
+              <Lazy load={() => import('./routes/Settings.svelte')} vols={me.vols} origin={me.origin} />
             {:else if parts[0] === 'trash'}
               <Lazy load={() => import('./routes/Trash.svelte')} vol={parts[1] ?? me.vols[0]} vols={me.vols} />
             {/if}

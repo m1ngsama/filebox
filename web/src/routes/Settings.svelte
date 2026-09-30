@@ -19,7 +19,7 @@
   import { toast } from '../lib/toast.svelte'
   import { theme, setTheme, type Theme } from '../lib/theme'
 
-  let { vols }: { vols: string[] } = $props()
+  let { vols, origin }: { vols: string[]; origin?: string } = $props()
 
   let tokens = $state<Token[] | null>(null)
   let tokensError = $state('')
@@ -40,10 +40,11 @@
   let removing = $state<Passkey | null>(null)
   let mode = $state(theme())
   const language = langPref()
-  const dav = `${location.origin}/dav/`
+  const dav = $derived(`${origin || location.origin}/dav/`)
   const vol = $derived(encodeURIComponent(vols[0] ?? ''))
   const sections = $derived([
     ['appearance', t.appearance],
+    ['connect', t.connect],
     ['sessions', t.sessions],
     ...(passkeysOn ? [['passkeys', t.passkeys]] : []),
     ['tokens', t.appPasswords],
@@ -136,6 +137,18 @@
           {/each}
         </div>
       </div>
+    </section>
+
+    <section class="card-section" id="connect" aria-labelledby="connect-title">
+      {@render head('connect', t.connect, t.connectHint)}
+      <div class="code-line"><code>{dav}</code><CopyButton text={dav} label={t.copy} done={t.copied} /></div>
+      <dl class="clients">
+        {#each t.clients as [name, how] (name)}<dt>{name}</dt><dd>{how}</dd>{/each}
+        <dt>rclone</dt>
+        <dd><code>rclone config create filebox webdav url={dav} vendor=other user=filebox pass=$(rclone obscure {t.appPasswordArg})</code></dd>
+        <dt>{t.iosShortcut}</dt>
+        <dd>{t.iosShortcutHow(`${dav}${vol}/`)}</dd>
+      </dl>
     </section>
 
     <section class="card-section" id="sessions" aria-labelledby="sessions-title">

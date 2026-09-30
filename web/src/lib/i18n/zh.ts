@@ -333,6 +333,18 @@ const zh = {
   newToken: '新建应用密码',
   tokenOnce: '这个密码只显示这一次，请现在复制保存。',
   webdavURL: 'WebDAV 地址',
+  connect: '连接',
+  connectHint: '用 WebDAV 把 filebox 挂载成电脑或手机上的网络磁盘。用户名随意填写，密码用下面新建的应用密码。',
+  clients: [
+    ['macOS 访达', '在访达中按 ⌘K，输入上面的地址，选择“注册用户”后登录。'],
+    ['Windows', '在文件资源管理器中右键点“此电脑”，选择“映射网络驱动器”，文件夹填上面的地址。Windows 只在 HTTPS 连接下接受这种登录。'],
+    ['iPhone 和 iPad', '打开“文件”App，点右上角的“…”，选择“连接服务器”，输入上面的地址。'],
+    ['Android', '用支持 WebDAV 的文件管理器（例如 Material Files）添加 WebDAV 存储，填入上面的地址。'],
+  ] as [string, string][],
+  appPasswordArg: '应用密码',
+  iosShortcut: 'iPhone 分享上传',
+  iosShortcutHow: (url: string) =>
+    `iPhone 的共享菜单不能直接上传到网页应用，可以用快捷指令代替。新建一个快捷指令，在详细信息里打开“在共享表单中显示”；添加“获取 URL 内容”操作，URL 填 ${url} 加上“快捷指令输入”的名称，方法选 PUT，请求体选“文件”并传入“快捷指令输入”；再添加标头 Authorization，值填“Basic ”加上“:应用密码”的 Base64 编码。之后在任意 App 的共享菜单里选这个快捷指令就能上传。`,
   webdavLogin: '用户名随意填写，密码填上面的应用密码。',
   curlUpload: '命令行上传',
   curlDownload: '命令行下载',

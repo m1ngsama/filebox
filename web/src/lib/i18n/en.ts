@@ -333,6 +333,18 @@ export default (locale: string) => {
     newToken: 'New app password',
     tokenOnce: 'This password is shown only once. Copy it now.',
     webdavURL: 'WebDAV URL',
+    connect: 'Connect',
+    connectHint: 'Mount filebox as a network drive on your computer or phone over WebDAV. Use any username, and an app password from below as the password.',
+    clients: [
+      ['macOS Finder', 'Press ⌘K in Finder, enter the address above, choose Registered User and sign in.'],
+      ['Windows', 'In File Explorer, right-click This PC, choose Map network drive and enter the address above as the folder. Windows accepts this sign-in only over HTTPS.'],
+      ['iPhone and iPad', 'In the Files app, tap … at the top right, choose Connect to Server and enter the address above.'],
+      ['Android', 'Add a WebDAV storage with the address above in a file manager that supports WebDAV, such as Material Files.'],
+    ] as [string, string][],
+    appPasswordArg: 'APP-PASSWORD',
+    iosShortcut: 'Upload from the iPhone share sheet',
+    iosShortcutHow: (url: string) =>
+      `iOS can’t share files to a web app, so use a shortcut instead. Create a shortcut and turn on Show in Share Sheet in its details. Add a Get Contents of URL action with the URL ${url} followed by the Shortcut Input’s name, set Method to PUT and Request Body to File with the Shortcut Input, and add an Authorization header whose value is “Basic ” followed by the Base64 encoding of “:app-password”. Then pick the shortcut from any app’s share sheet to upload.`,
     webdavLogin: 'Use any username, and the app password above as the password.',
     curlUpload: 'Upload from the command line',
     curlDownload: 'Download from the command line',

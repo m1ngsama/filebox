@@ -12,7 +12,7 @@ export class HttpError extends Error {
 }
 
 export type Entry = { name: string; dir: boolean; size: number; mtime: number }
-export type Me = { name: string; vols: string[] }
+export type Me = { name: string; vols: string[]; origin?: string }
 export type RecentFile = Entry & Loc
 export type Favorite = RecentFile & { missing: boolean }
 export type Usage = { name: string; fs?: string; used: number; free: number; total: number }

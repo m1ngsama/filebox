@@ -1603,6 +1603,21 @@ test('settings sections have headings, a sub-nav and quiet destructive buttons',
   await expect(page.getByRole('heading', { name: t.appPasswords })).toBeInViewport()
 })
 
+test('settings always show the WebDAV address from the configured origin with per-client steps', async ({ page, context, server }) => {
+  await context.grantPermissions(['clipboard-read', 'clipboard-write'])
+  await login(page)
+  await page.goto('/settings')
+  const card = page.getByRole('region', { name: t.connect })
+  const dav = `http://localhost:${new URL(server.url).port}/dav/`
+  await expect(card.locator('.code-line code')).toHaveText(dav)
+  await expect(card.locator('.clients dt')).toHaveText([...t.clients.map(([n]) => n), 'rclone', t.iosShortcut])
+  await expect(card.locator('.clients dd').last()).toContainText(`${dav}v/`)
+  await card.getByRole('button', { name: t.copy }).click()
+  expect(await page.evaluate(() => navigator.clipboard.readText())).toBe(dav)
+  await page.getByRole('navigation', { name: t.settings }).getByRole('link', { name: t.connect }).click()
+  await expect(card).toBeInViewport()
+})
+
 test('app passwords that fail to load show the error, not an empty list', async ({ page }) => {
   await login(page)
   await page.route('**/api/tokens', (r) => r.fulfill({ status: 500, body: '{"error":"boom"}' }))
