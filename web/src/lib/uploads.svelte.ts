@@ -213,14 +213,15 @@ function idle() {
   ticker = 0
   clearTimeout(debounce)
   flush()
-  let meta: Record<string, string> | undefined
   const names: string[] = []
+  const places = new Set<string>()
+  let meta: Record<string, string> | undefined
   for (let i = uploads.length - 1; i >= 0; i--) {
     const u = uploads[i]
     if (u.state !== 'done') continue
-    const m = groups.get(u.id)?.jobs[0].meta
-    meta ??= m
-    if (m?.vol === meta?.vol && m?.dir === meta?.dir) names.push(u.name)
+    meta = groups.get(u.id)?.jobs[0].meta
+    places.add(`${meta?.vol}\0${meta?.dir}`)
+    names.push(u.name)
     groups.delete(u.id)
     uploads.splice(i, 1)
   }
@@ -228,9 +229,8 @@ function idle() {
   for (const u of failed.slice(0, Math.max(0, failed.length - KEEP_FAILED))) forget(u)
   Object.assign(totals, { files: 0, ok: 0, bytes: 0, sent: 0, speed: 0 })
   if (uploaded) {
-    finished.last = { n: uploaded, vol: meta?.vol, dir: meta?.dir === '/' ? '' : (meta?.dir ?? ''), names: names.reverse() }
-    clearTimeout(fading)
-    fading = setTimeout(() => (finished.last = null), 8000)
+    finished.last = { n: names.length, vol: places.size === 1 ? meta?.vol : undefined, dir: meta?.dir === '/' ? '' : (meta?.dir ?? ''), names: names.reverse() }
+    linger(true)
   }
   if (uploaded && replaced.length) toast(t.uploadedReplaced(uploaded, replaced.length), { actions: [undoer?.(replaced)] })
   uploaded = 0
@@ -270,6 +270,11 @@ export function retry(item: Item) {
   }
   settle(item)
   pump()
+}
+
+export function linger(on: boolean) {
+  clearTimeout(fading)
+  if (on) fading = setTimeout(() => (finished.last = null), 8000)
 }
 
 export function clearFailed() {

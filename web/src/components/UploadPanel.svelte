@@ -5,7 +5,7 @@
   import ChevronUp from '@lucide/svelte/icons/chevron-up'
   import CircleCheck from '@lucide/svelte/icons/circle-check'
   import FileIcon from './FileIcon.svelte'
-  import { uploads, totals, finished, cancel, retry, clearFailed } from '../lib/uploads.svelte'
+  import { uploads, totals, finished, cancel, retry, clearFailed, linger } from '../lib/uploads.svelte'
   import { filesURL } from '../lib/api'
   import { navigate } from '../lib/router.svelte'
   import { size } from '../lib/format'
@@ -29,6 +29,12 @@
       : [finished.last && t.uploaded(finished.last.n), failed && t.uploadsFailed(failed)].filter(Boolean).join(' · '),
   )
 
+  function close(e: MouseEvent) {
+    const inside = (e.currentTarget as HTMLElement).contains(document.activeElement)
+    clearFailed()
+    if (inside) document.querySelector<HTMLElement>('[role=grid] [tabindex="0"], main')?.focus()
+  }
+
   function view() {
     const f = finished.last
     if (!f?.vol) return
@@ -38,14 +44,27 @@
 </script>
 
 {#if uploads.length || finished.last}
-  <aside class="uploads" class:collapsed={collapsed || !uploads.length} aria-label={t.uploads} bind:offsetHeight={h}>
+  <aside
+    class="uploads"
+    class:collapsed={collapsed || !uploads.length}
+    aria-label={t.uploads}
+    bind:offsetHeight={h}
+    onpointerenter={() => linger(false)}
+    onpointerleave={() => finished.last && linger(true)}
+    onfocusin={() => linger(false)}
+    onfocusout={(e) => finished.last && !e.currentTarget.contains(e.relatedTarget as Node) && linger(true)}
+  >
     <header>
-      <button class="up-title" aria-expanded={uploads.length ? !collapsed : undefined} onclick={() => (open = collapsed)}>
-        <span>{title}</span>
-        {#if !uploads.length}{:else if collapsed}<ChevronUp size={18} />{:else}<ChevronDown size={18} />{/if}
-      </button>
+      {#if uploads.length}
+        <button class="up-title" aria-expanded={!collapsed} onclick={() => (open = collapsed)}>
+          <span>{title}</span>
+          {#if collapsed}<ChevronUp size={18} />{:else}<ChevronDown size={18} />{/if}
+        </button>
+      {:else}
+        <p class="up-title"><span>{title}</span></p>
+      {/if}
       {#if !active && finished.last?.vol}<button class="ghost up-view" onclick={view}>{t.show}</button>{/if}
-      {#if !active}<button class="icon-btn" aria-label={t.close} onclick={clearFailed}><X size={18} /></button>{/if}
+      {#if !active}<button class="icon-btn" aria-label={t.close} onclick={close}><X size={18} /></button>{/if}
     </header>
     {#if active}<progress class="up-total" max={totals.bytes || 1} value={totals.sent}></progress>{/if}
     {#if !collapsed}
@@ -75,3 +94,4 @@
     {/if}
   </aside>
 {/if}
+<p class="sr-only" role="status">{finished.last ? t.uploaded(finished.last.n) : ''}</p>

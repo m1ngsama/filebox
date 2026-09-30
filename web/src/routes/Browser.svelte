@@ -180,6 +180,7 @@
     )
     if (want !== here || signal?.aborted) return false
     entries = overlay([...list], started)
+    listed = started
     error = err
     streaming = false
     announce = ''
@@ -243,14 +244,21 @@
     }
   })
 
+  let asked = 0
+  let listed = 0
   $effect(() => {
     const names = new URLSearchParams(route.search).getAll('select')
-    if (!names.length || at !== here || streaming) return
+    if (!names.length) return void (asked = 0)
+    if (at !== here || streaming) return
+    entries
     untrack(async () => {
+      asked ||= ++clock
+      const hit = names.filter((n) => entries.some((e) => e.name === n))
+      if (hit.length < names.length && listed < asked) return void refresh()
+      asked = 0
       filter = query = ''
       searching = false
       await tick()
-      const hit = names.filter((n) => entries.some((e) => e.name === n))
       if (hit.length) {
         selected.clear()
         for (const n of hit) selected.add(n)

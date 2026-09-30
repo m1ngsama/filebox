@@ -223,7 +223,7 @@ export default (locale: string) => {
     undone: 'Undone',
     undoFailed: (what: string) => `Couldn’t undo ${what}`,
     failedItem: (name: string, msg: string) => `${name}: ${msg}`,
-    uploaded: (n: number) => `Uploaded ${count(n, 'file')}`,
+    uploaded: (n: number) => `Uploaded ${count(n, 'item')}`,
     uploadedReplaced: (n: number, m: number) => `Uploaded ${count(n, 'file')}. ${count(m, 'replaced file')} moved to the trash.`,
     shareCreated: 'Share link created',
     shareCreatedCopied: 'Share link created and copied to the clipboard',

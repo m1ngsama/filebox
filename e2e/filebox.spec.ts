@@ -1286,7 +1286,7 @@ test.describe('with an English browser', () => {
       { name: 'b.txt', mimeType: 'text/plain', buffer: Buffer.from('b') },
     ])
     await expect(page.locator('.uploads', { hasText: en.uploaded(2) })).toHaveCount(1)
-    expect(en.uploaded(2)).toBe('Uploaded 2 files')
+    expect(en.uploaded(2)).toBe('Uploaded 2 items')
     await expect(row(page, 'a.txt').locator('.mtime')).toHaveText(en.justNow)
     await expect(row(page, 'a.txt').locator('.size')).toHaveText('1 B')
     expect(await page.locator('body').innerText()).not.toMatch(han)
@@ -1632,6 +1632,25 @@ test('uploads run three at a time under a header with totals and leave the list 
   expect(readFileSync(join(server.vol, 'p4.txt'), 'utf8')).toBe('p4')
 })
 
+test('show right after an upload selects the new files once the listing catches up', async ({ page }) => {
+  await login(page)
+  await page.route(
+    (u) => u.pathname === '/api/ls',
+    async (r) => {
+      const res = await r.fetch()
+      await new Promise((x) => setTimeout(x, 600))
+      await r.fulfill({ response: res })
+    },
+  )
+  await fileInput(page).setInputFiles(['s1.txt', 's2.txt'].map((name) => ({ name, mimeType: 'text/plain', buffer: Buffer.from(name) })))
+  const panel = page.locator('.uploads')
+  await expect(panel).toContainText(t.uploaded(2))
+  await expect(page.getByRole('status').filter({ hasText: t.uploaded(2) })).toHaveCount(1)
+  await panel.getByRole('button', { name: t.show }).click()
+  await expect(row(page, 's1.txt')).toHaveAttribute('aria-selected', 'true')
+  await expect(row(page, 's2.txt')).toHaveAttribute('aria-selected', 'true')
+})
+
 test('undo after replacing one name twice brings back the original', async ({ page, server }) => {
   writeFileSync(join(server.vol, 'x.txt'), 'old')
   await login(page)
@@ -1781,8 +1800,11 @@ test('a folder upload rolls up into one row', async ({ page, server }) => {
   await expect(panel.locator('li')).toContainText('album')
   await expect(panel.locator('li')).toContainText('0/3')
   release()
-  await expect(page.locator('.uploads', { hasText: t.uploaded(3) })).toHaveCount(1)
+  await expect(page.locator('.uploads', { hasText: t.uploaded(1) })).toHaveCount(1)
   expect(readFileSync(join(server.vol, 'album/sub/3.txt'), 'utf8')).toBe('sub/3.txt')
+  await panel.getByRole('button', { name: t.show }).click()
+  await expect(row(page, 'album')).toHaveAttribute('aria-selected', 'true')
+  await page.keyboard.press('Escape')
 
   let first = ''
   const deletes: string[] = []
