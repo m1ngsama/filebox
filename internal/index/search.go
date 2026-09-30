@@ -107,10 +107,22 @@ func (x *Index) hits(ctx context.Context, sql string, args ...any) ([]Hit, error
 }
 
 func cjk(r rune) bool {
-	return unicode.In(r, unicode.Han, unicode.Hiragana, unicode.Katakana, unicode.Hangul)
+	return r == 'ー' || r == 'ｰ' || unicode.In(r, unicode.L, unicode.Nl) && unicode.In(r, unicode.Han, unicode.Hiragana, unicode.Katakana, unicode.Hangul)
+}
+
+func mark(r rune) bool { return unicode.In(r, unicode.Mn, unicode.Me) }
+
+func bare(s string) string {
+	return strings.Map(func(r rune) rune {
+		if mark(r) {
+			return -1
+		}
+		return r
+	}, s)
 }
 
 func CJK(s string) bool {
+	s = bare(s)
 	for _, r := range s {
 		if !cjk(r) {
 			return false
@@ -123,6 +135,9 @@ func grams(s string) string {
 	var b strings.Builder
 	prev := rune(-1)
 	for _, r := range s {
+		if mark(r) {
+			continue
+		}
 		switch {
 		case cjk(r) && prev >= 0:
 			b.WriteRune(prev)
@@ -160,8 +175,8 @@ func (x *Index) searchContent(ctx context.Context, c *content, q Query) ([]Conte
 	phrase := `"` + strings.ReplaceAll(q.Text, `"`, `""`) + `"`
 	table, match, short := "contents_fts", phrase, utf8.RuneCountInString(q.Text) < 3
 	if short {
-		table = "contents_cjk"
-		if utf8.RuneCountInString(q.Text) == 1 {
+		table, match = "contents_cjk", `"`+bare(q.Text)+`"`
+		if utf8.RuneCountInString(bare(q.Text)) == 1 {
 			match += "*"
 		}
 	}

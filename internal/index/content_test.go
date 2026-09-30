@@ -482,10 +482,37 @@ func TestSearchContentCancels(t *testing.T) {
 }
 
 func TestGrams(t *testing.T) {
-	for in, want := range map[string]string{"": "", "abc": "", "本": "本", "本书 AB尝试。好": "本书 书 尝试 试 好", "カナ한글": "カナ ナ한 한글 글"} {
+	for in, want := range map[string]string{"": "", "abc": "", "本": "本", "本书 AB尝试。好": "本书 书 尝试 试 好", "カナ한글": "カナ ナ한 한글 글", "コーヒー": "コー ーヒ ヒー ー", "ｺｰﾋｰ": "ｺｰ ｰﾋ ﾋｰ ｰ", "葛\U000E0100城": "葛城 城", "神\uFE00社": "神社 社", "か\u3099き": "かき き", "⺮竹": "竹", "⼈人": "人", "二〇": "二〇 〇", "々": "々"} {
 		if got := grams(in); got != want {
 			t.Errorf("grams(%q) = %q, want %q", in, got, want)
 		}
+	}
+}
+
+func TestCJK(t *testing.T) {
+	for in, want := range map[string]bool{"书": true, "ー": true, "コー": true, "葛\U000E0100": true, "⺮": false, "⼈": false, "。": false, "\u3099": false, "a": false, "": false, "书a": false} {
+		if got := CJK(in); got != want {
+			t.Errorf("CJK(%q) = %v", in, got)
+		}
+	}
+}
+
+func TestSearchContentJoinedCJK(t *testing.T) {
+	e := setup(t)
+	t0 := time.Unix(1_700_000_000, 0)
+	e.write(t, "a.txt", "一杯のコーヒーを飲む", t0)
+	e.write(t, "b.txt", "奈良の葛\U000E0100城市", t0)
+	e.write(t, "c.txt", "⺮竹林", t0)
+	e.scan(t)
+	e.open(t)
+	e.pass(t)
+	for q, want := range map[string]string{"コー": "v:a.txt", "ーヒ": "v:a.txt", "葛城": "v:b.txt", "葛\U000E0100": "v:b.txt"} {
+		if got := e.findText(t, Query{Text: q}); len(got) != 1 || got[want] == nil {
+			t.Errorf("%q: %#v", q, got)
+		}
+	}
+	if got := e.findText(t, Query{Text: "⺮竹"}); len(got) != 0 {
+		t.Errorf("radical query matched %#v", got)
 	}
 }
 

@@ -25,7 +25,7 @@ const (
 	contentBatch  = 256
 	contentLimit  = 20
 	snippetWords  = 64
-	contentSchema = 2
+	contentSchema = 3
 	retryAfter    = 24 * 60 * 60
 	maxTries      = 2
 )
