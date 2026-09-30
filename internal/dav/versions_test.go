@@ -351,3 +351,23 @@ func TestDavPutAcrossMountsWritesNewFilesDirectly(t *testing.T) {
 		t.Fatalf("an overwrite across a mount was not staged: %q", b)
 	}
 }
+
+func TestDavDirectWriteNeverTruncatesAFileThatAppeared(t *testing.T) {
+	e := setup(t)
+	real := sameDevice
+	sameDevice = func(a, b fs.FileInfo) bool {
+		os.WriteFile(filepath.Join(e.dir, "race.txt"), []byte("appeared"), 0o644)
+		return false
+	}
+	t.Cleanup(func() { sameDevice = real })
+	res, _ := e.req(t, e.rw, "PUT", "/dav/v/race.txt", "mine")
+	if res.StatusCode != 201 {
+		t.Fatalf("PUT %d", res.StatusCode)
+	}
+	if b, _ := os.ReadFile(filepath.Join(e.dir, "race.txt")); string(b) != "mine" {
+		t.Fatalf("live %q", b)
+	}
+	if got := e.versions(t, "race.txt"); len(got) != 1 || got[0] != "appeared" {
+		t.Fatalf("the file that appeared was not kept: %q", got)
+	}
+}

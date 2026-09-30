@@ -176,12 +176,18 @@ func (f *FS) OpenFile(ctx context.Context, name string, flag int, perm os.FileMo
 	if flag == os.O_RDWR && f.ix != nil {
 		flag = os.O_RDONLY
 	}
-	if pb, ok := ctx.Value(putKey{}).(*putBody); ok && flag&os.O_TRUNC != 0 && rel != "." {
+	pb, put := ctx.Value(putKey{}).(*putBody)
+	direct := put && flag&os.O_TRUNC != 0 && rel != "."
+	if direct {
 		if file, err := f.stage(ctx, pb, v, rel, perm); file != nil || err != nil {
 			return file, err
 		}
+		flag = flag&^os.O_TRUNC | os.O_CREATE | os.O_EXCL
 	}
 	fh, err := v.Root.OpenFile(rel, flag, perm)
+	if direct && errors.Is(err, fs.ErrExist) {
+		return f.stage(ctx, pb, v, rel, perm)
+	}
 	if err != nil {
 		return nil, err
 	}
