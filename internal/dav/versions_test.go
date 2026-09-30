@@ -213,6 +213,11 @@ func TestDavOverwrittenFolderGoesToTrash(t *testing.T) {
 	if b, _ := os.ReadFile(filepath.Join(e.dir, "folder")); string(b) != "a" {
 		t.Fatalf("destination %q", b)
 	}
+	e.req(t, e.rw, "MKCOL", "/dav/v/other", "")
+	res, _ = e.req(t, e.rw, "COPY", "/dav/v/folder", "", "Destination", e.srv.URL+"/dav/v/other", "Overwrite", "T")
+	if got := e.trash(t); res.StatusCode != 204 || len(got) != 2 || got["folder"] == "" || got["other"] == "" {
+		t.Fatalf("COPY %d, trash %v", res.StatusCode, got)
+	}
 }
 
 func (e *env) staged(t *testing.T) []os.DirEntry {
@@ -369,5 +374,67 @@ func TestDavDirectWriteNeverTruncatesAFileThatAppeared(t *testing.T) {
 	}
 	if got := e.versions(t, "race.txt"); len(got) != 1 || got[0] != "appeared" {
 		t.Fatalf("the file that appeared was not kept: %q", got)
+	}
+}
+
+func (e *env) trash(t *testing.T) map[string]string {
+	t.Helper()
+	out := map[string]string{}
+	des, _ := os.ReadDir(filepath.Join(e.dir, vol.TrashDir))
+	for _, de := range des {
+		b, err := os.ReadFile(filepath.Join(e.dir, vol.TrashDir, de.Name(), ".origin"))
+		if err != nil {
+			t.Fatal(err)
+		}
+		out[string(b)] = de.Name()
+	}
+	return out
+}
+
+func TestDavDeleteGoesToTrash(t *testing.T) {
+	e := setup(t)
+	e.req(t, e.rw, "PUT", "/dav/v/a.txt", "a")
+	e.req(t, e.rw, "MKCOL", "/dav/v/dir", "")
+	e.req(t, e.rw, "MKCOL", "/dav/v/dir/sub", "")
+	e.req(t, e.rw, "PUT", "/dav/v/dir/sub/b.txt", "b")
+	for _, p := range []string{"/dav/v/a.txt", "/dav/v/dir/"} {
+		if res, _ := e.req(t, e.rw, "DELETE", p, ""); res.StatusCode != 204 {
+			t.Fatalf("DELETE %s: %d", p, res.StatusCode)
+		}
+	}
+	got := e.trash(t)
+	if len(got) != 2 || got["a.txt"] == "" || got["dir"] == "" {
+		t.Fatalf("trash %v", got)
+	}
+	if b, _ := os.ReadFile(filepath.Join(e.dir, vol.TrashDir, got["dir"], "dir/sub/b.txt")); string(b) != "b" {
+		t.Fatalf("trashed folder content %q", b)
+	}
+	if _, err := os.Lstat(filepath.Join(e.dir, "dir")); err == nil {
+		t.Fatal("folder still live")
+	}
+	if res, _ := e.req(t, e.rw, "DELETE", "/dav/v/a.txt", ""); res.StatusCode != 404 {
+		t.Fatalf("second DELETE %d", res.StatusCode)
+	}
+}
+
+func TestDavDeleteJunkSkipsTrash(t *testing.T) {
+	e := setup(t)
+	e.req(t, e.rw, "MKCOL", "/dav/v/d", "")
+	e.req(t, e.rw, "MKCOL", "/dav/v/.Trashes", "")
+	e.req(t, e.rw, "MKCOL", "/dav/v/._keep", "")
+	names := []string{"._a.jpg", ".DS_Store", "Thumbs.db", "desktop.ini", "d/.DS_Store", "d/THUMBS.DB"}
+	for _, n := range names {
+		e.req(t, e.rw, "PUT", "/dav/v/"+n, "junk")
+	}
+	for _, n := range append(names, ".Trashes", "._keep") {
+		if res, _ := e.req(t, e.rw, "DELETE", "/dav/v/"+n, ""); res.StatusCode != 204 {
+			t.Fatalf("DELETE %s: %d", n, res.StatusCode)
+		}
+		if _, err := os.Lstat(filepath.Join(e.dir, n)); err == nil {
+			t.Fatalf("%s still there", n)
+		}
+	}
+	if got := e.trash(t); len(got) != 1 || got["._keep"] == "" {
+		t.Fatalf("trash %v", got)
 	}
 }

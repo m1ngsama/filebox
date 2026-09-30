@@ -295,8 +295,24 @@ func (f *FS) RemoveAll(ctx context.Context, name string) error {
 	if ow, ok := ctx.Value(overwriteKey{}).(*overwrite); ok && ow.undo == nil && path.Clean("/"+ow.dst) == path.Clean("/"+name) {
 		return f.setAside(ctx, ow, v, rel)
 	}
+	fi, err := v.Root.Lstat(rel)
+	if err != nil {
+		return err
+	}
 	defer f.ix.Touch(v, rel)
-	return v.Root.RemoveAll(rel)
+	if junk(fi) {
+		return v.Root.RemoveAll(rel)
+	}
+	_, err = api.Trash(v, rel, time.Now())
+	return err
+}
+
+func junk(fi fs.FileInfo) bool {
+	n := fi.Name()
+	if fi.IsDir() {
+		return n == ".Trashes"
+	}
+	return n == ".DS_Store" || strings.HasPrefix(n, "._") || strings.EqualFold(n, "Thumbs.db") || strings.EqualFold(n, "desktop.ini")
 }
 
 func (f *FS) setAside(ctx context.Context, ow *overwrite, v *vol.Volume, rel string) error {

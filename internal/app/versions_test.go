@@ -1,6 +1,7 @@
 package app
 
 import (
+	"encoding/base64"
 	"slices"
 	"strings"
 	"testing"
@@ -136,5 +137,32 @@ func TestVersionsInvisible(t *testing.T) {
 	}
 	if got := zipNames(t, f.do("GET", "/s/"+tok+"/zip", nil, "X-No-Auth", "1").Body.Bytes()); slices.ContainsFunc(got, func(n string) bool { return strings.Contains(n, "filebox") }) {
 		t.Fatalf("share zip %v", got)
+	}
+}
+
+func TestDavDeleteRestoresWithVersions(t *testing.T) {
+	f := newTestApp(t)
+	auth := "Basic " + base64.StdEncoding.EncodeToString([]byte("me:"+f.Bearer))
+	dav := func(method, p, content string) int {
+		return f.do(method, "/dav/v/"+p, strings.NewReader(content), "X-No-Auth", "1", "Authorization", auth).Code
+	}
+	dav("MKCOL", "notes", "")
+	dav("PUT", "notes/a.txt", "one")
+	dav("PUT", "notes/a.txt", "two")
+	if len(f.versions(t, "notes/a.txt")) != 1 {
+		t.Fatal("no version before delete")
+	}
+	if code := dav("DELETE", "notes", ""); code != 204 {
+		t.Fatalf("DELETE %d", code)
+	}
+	items := decode[struct{ Items []struct{ ID, Path string } }](t, f.do("GET", "/api/trash?vol=v", nil)).Items
+	if len(items) != 1 || items[0].Path != "notes" {
+		t.Fatalf("trash %+v", items)
+	}
+	if w := f.do("POST", "/api/trash/restore", body(`{"vol":"v","id":"`+items[0].ID+`"}`)); w.Code != 204 {
+		t.Fatalf("restore %d", w.Code)
+	}
+	if len(f.versions(t, "notes/a.txt")) != 1 {
+		t.Fatal("version lost across trash and restore")
 	}
 }
