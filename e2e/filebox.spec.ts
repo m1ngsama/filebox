@@ -1080,16 +1080,20 @@ test('ctrl+z on a focused undo button keeps focus and lets later toasts expire',
 })
 
 test('an undo toast outlives newer plain toasts', async ({ page, server }) => {
-  writeFileSync(join(server.vol, 'keep.txt'), 'k')
+  for (const n of ['keep.txt', 's1.txt', 's2.txt', 's3.txt']) writeFileSync(join(server.vol, n), n)
   await login(page)
   await row(page, 'keep.txt').locator('input[type=checkbox]').check()
   await page.locator('.list-head').getByRole('button', { name: t.remove, exact: true }).click()
-  await expect(page.locator('.toast').getByRole('button', { name: t.undo })).toHaveCount(1)
-  for (let i = 0; i < 3; i++) {
-    await fileInput(page).setInputFiles({ name: `n${i}.txt`, mimeType: 'text/plain', buffer: Buffer.from('n') })
-    await expect(page.locator('.uploads', { hasText: t.uploaded(1) })).not.toHaveCount(0)
+  const undo = page.locator('.toast').getByRole('button', { name: t.undo })
+  await expect(undo).toHaveCount(1)
+  for (const n of ['s1.txt', 's2.txt', 's3.txt']) {
+    await row(page, n).locator('button.more').click()
+    await page.getByRole('menuitem', { name: t.star, exact: true }).click()
+    await expect(page.locator('.toast', { hasText: t.starred(t.what([n])) })).toHaveCount(1)
   }
-  await expect(page.locator('.toast').getByRole('button', { name: t.undo })).toHaveCount(1)
+  await expect(page.locator('.toast')).toHaveCount(3)
+  await expect(undo).toHaveCount(1)
+  await expect(page.locator('.toast', { hasText: t.starred(t.what(['s1.txt'])) })).toHaveCount(0)
 })
 
 test('a partial undo restores what it can and names what it could not', async ({ page, server }) => {
