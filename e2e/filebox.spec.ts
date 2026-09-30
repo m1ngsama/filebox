@@ -1004,6 +1004,25 @@ test('a pending delete stays hidden after leaving the folder and coming back', a
   expect(existsSync(join(server.vol, 'a.txt'))).toBe(false)
 })
 
+test('a hung request does not hold up unrelated changes and rolls back after 30 s', async ({ page, server }) => {
+  test.setTimeout(90_000)
+  writeFileSync(join(server.vol, 'r.txt'), 'r')
+  await login(page)
+  await page.route('**/api/mkdir', () => {})
+  await row(page, 'docs').focus()
+  await page.keyboard.press('n')
+  await page.getByLabel(t.folderName).fill('hang')
+  await page.keyboard.press('Enter')
+  await expect(row(page, 'hang')).toHaveCount(1)
+  await page.keyboard.press('Escape')
+  await row(page, 'r.txt').locator('input[type=checkbox]').check()
+  await page.locator('.list-head').getByRole('button', { name: t.remove, exact: true }).click()
+  await expect(row(page, 'r.txt')).toHaveCount(0)
+  await expect.poll(() => existsSync(join(server.vol, 'r.txt')), { timeout: 3000 }).toBe(false)
+  await expect(page.locator('.toast.error')).toHaveText(t.timedOut, { timeout: 40_000 })
+  await expect(row(page, 'hang')).toHaveCount(0)
+})
+
 test('a delete counts items that are already gone as done and rolls back a failed request', async ({ page, server }) => {
   writeFileSync(join(server.vol, 'gone-a.txt'), 'a')
   writeFileSync(join(server.vol, 'gone-b.txt'), 'b')

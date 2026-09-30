@@ -4,6 +4,19 @@
   type Op = { key: string; name: string; entry: Row | null; settled: number }
   let ops: Op[] = []
   let clock = 0
+
+  type Job = { paths: string[]; ok: Promise<boolean> }
+  let jobs: Job[] = []
+  const overlaps = (a: string, b: string) => a === b || a.startsWith(`${b}/`) || b.startsWith(`${a}/`)
+
+  function queue<T>(paths: string[], f: (signal: AbortSignal) => Promise<T>) {
+    const deps = jobs.filter((j) => j.paths.some((p) => paths.some((q) => overlaps(p, q))))
+    const run = Promise.all(deps.map((d) => d.ok)).then(() => f(AbortSignal.timeout(30_000)))
+    const job = { paths, ok: run.then(() => true, () => false) }
+    jobs.push(job)
+    job.ok.then(() => (jobs = jobs.filter((j) => j !== job)))
+    return run
+  }
 </script>
 
 <script lang="ts">
@@ -104,7 +117,6 @@
 
   let listing: Entry[] = []
   let listingKey = ''
-  let chain: Promise<unknown> = Promise.resolve()
 
   function overlay(list: Entry[], started: number, key: string) {
     listing = list
@@ -157,12 +169,6 @@
     const to = back[0] ?? next
     if (to) reveal = { name: to }
     refresh()
-  }
-
-  function serial<T>(f: () => Promise<T>) {
-    const p = chain.then(f, f)
-    chain = p.catch(() => {})
-    return p
   }
 
   async function refresh() {
@@ -484,7 +490,7 @@
     const mine = begin([[n, { name: n, dir: true, size: 0, mtime: Date.now() }]])
     pick(n)
     const p = join(n)
-    serial(() => api.mkdir(vol, p)).then(
+    queue([`${vol}/${p}`], (s) => api.mkdir(vol, p, s)).then(
       (e) => {
         mine[0].entry = e
         settle(mine)
@@ -502,7 +508,7 @@
       [n, { ...e, name: n }],
     ])
     pick(n)
-    const pending = serial(() => api.mv(m.from, m.to))
+    const pending = queue([m.from, m.to].map((l) => `${l.vol}/${l.path}`), (s) => api.mv(m.from, m.to, s))
     const id = toast(t.renamed(n), { actions: [undo(() => pending.then(() => reverse([m])))] })
     pending.then(
       () => {
@@ -525,7 +531,7 @@
     selected.clear()
     if (next) reveal = { name: next }
     if (details && names.includes(details.name)) closeDetails()
-    const pending = serial(() => api.rm(v, paths))
+    const pending = queue(paths.map((p) => `${v}/${p}`), (s) => api.rm(v, paths, s))
     const id = toast(t.trashed(t.what(names)), { actions: [undo(async () => restore(v, (await pending).trashed))], ms: narrow.current ? 2 ** 31 - 1 : undefined })
     try {
       const r = await pending

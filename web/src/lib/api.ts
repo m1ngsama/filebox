@@ -36,13 +36,17 @@ export type ShareInfo =
 export const session = { lost: () => {} }
 
 async function req<T>(method: string, url: string, body?: unknown, signal?: AbortSignal): Promise<T> {
-  const r = await fetch(url, {
-    method,
-    signal,
-    headers: body === undefined ? {} : { 'Content-Type': 'application/json' },
-    body: body === undefined ? undefined : JSON.stringify(body),
-  })
-  return settle<T>(r, url)
+  try {
+    const r = await fetch(url, {
+      method,
+      signal,
+      headers: body === undefined ? {} : { 'Content-Type': 'application/json' },
+      body: body === undefined ? undefined : JSON.stringify(body),
+    })
+    return await settle<T>(r, url)
+  } catch (e) {
+    throw (e as Error).name === 'TimeoutError' ? new HttpError(0, t.timedOut) : e
+  }
 }
 
 async function settle<T>(r: Response, url: string): Promise<T> {
@@ -167,11 +171,11 @@ export const api = {
   favorites: () => req<{ entries: Favorite[] }>('GET', '/api/favorites'),
   star: (vol: string, paths: string[], star: boolean) => req<void>('POST', '/api/favorites', { vol, paths, star }),
   recent: () => req<{ entries: Omit<RecentFile, 'dir'>[]; scanning: boolean }>('GET', '/api/recent'),
-  mkdir: (vol: string, path: string) => req<Entry>('POST', '/api/mkdir', { vol, path }),
-  mv: (src: Loc, dst: Loc) => req<{ job: string } | undefined>('POST', '/api/mv', { src, dst }),
+  mkdir: (vol: string, path: string, signal?: AbortSignal) => req<Entry>('POST', '/api/mkdir', { vol, path }, signal),
+  mv: (src: Loc, dst: Loc, signal?: AbortSignal) => req<{ job: string } | undefined>('POST', '/api/mv', { src, dst }, signal),
   cp: (src: Loc, dst: Loc) => req<{ job: string }>('POST', '/api/cp', { src, dst }),
-  rm: (vol: string, paths: string[]) =>
-    req<{ trashed: { path: string; id: string }[]; failed: { path: string; status: number; error: string }[] }>('POST', '/api/rm', { vol, paths }),
+  rm: (vol: string, paths: string[], signal?: AbortSignal) =>
+    req<{ trashed: { path: string; id: string }[]; failed: { path: string; status: number; error: string }[] }>('POST', '/api/rm', { vol, paths }, signal),
   async move(from: Loc, to: Loc, onprogress?: (s: JobStatus) => void) {
     const r = await api.mv(from, to)
     if (r?.job) await api.waitJob(r.job, onprogress)

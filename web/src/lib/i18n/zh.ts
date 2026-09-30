@@ -348,6 +348,7 @@ const zh = {
     507: '磁盘空间不足',
   } satisfies Record<Status, string>,
   serverError: '服务器出错，请稍后再试',
+  timedOut: '服务器没有及时响应，请检查网络后重试',
 }
 
 export type { Expiry, ActivityKind, EventKind, Status }

@@ -348,5 +348,6 @@ export default (locale: string) => {
       507: 'Not enough disk space',
     } satisfies Record<Status, string>,
     serverError: 'Server error. Try again later.',
+    timedOut: 'The server didn’t respond in time. Check your connection and try again.',
   } satisfies Table
 }
