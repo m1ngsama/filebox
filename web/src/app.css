@@ -102,7 +102,7 @@ p.error::before { content: ''; flex: none; width: 1em; height: 1lh; background: 
 .usage-bar { height: 4px; border-radius: var(--radius-full); background: linear-gradient(to right, var(--accent) var(--p), var(--line) var(--p)); }
 .nav-foot { border-top: 1px solid var(--line); padding-top: var(--space-2) !important; }
 .nav-toggle { display: none; }
-.skip { position: fixed; top: var(--space-2); left: var(--space-2); z-index: 80; padding: var(--space-2) var(--space-3); border-radius: var(--radius-md); background: var(--panel); box-shadow: var(--shadow); font-weight: 600; translate: 0 -200%; }
+.skip { position: fixed; top: calc(env(safe-area-inset-top) + var(--space-2)); left: var(--space-2); z-index: 80; padding: var(--space-2) var(--space-3); border-radius: var(--radius-md); background: var(--panel); box-shadow: var(--shadow); font-weight: 600; translate: 0 -200%; }
 .skip:focus { translate: none; }
 .scrim { position: fixed; inset: 0; z-index: 40; border: 0; padding: 0; border-radius: 0; }
 .scrim { background: var(--scrim); animation: appear var(--dur-2) var(--ease-out); }
