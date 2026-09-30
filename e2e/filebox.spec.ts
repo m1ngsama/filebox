@@ -7,8 +7,9 @@ import { crc32, deflateSync } from 'node:zlib'
 import { networkInterfaces, tmpdir } from 'node:os'
 import { join } from 'node:path'
 import t, { type Table } from '../web/src/lib/i18n/zh'
-import en from '../web/src/lib/i18n/en'
+import english from '../web/src/lib/i18n/en'
 
+const en = english('en-US')
 const BIN = join(import.meta.dirname, '../bin/filebox')
 
 function freePort() {
@@ -987,6 +988,11 @@ test.describe('with an English browser', () => {
     await expect.poll(async () => (await (await page.request.get(`/api/jobs/${job}`)).json()).state).toBe('done')
     await page.getByRole('link', { name: en.recent, exact: true }).click()
     await expect(page.locator('.group-head')).toHaveText([en.today, en.earlier])
+  })
+
+  test('English lists follow the regional locale', async () => {
+    expect(english('en-US').list(['a', 'b', 'c'])).toBe('a, b, and c')
+    expect(english('en-GB').list(['a', 'b', 'c'])).toBe('a, b and c')
   })
 
   test('dates stay in the UI language', async ({ page }) => {

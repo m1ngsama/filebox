@@ -18,5 +18,5 @@ const prefs = navigator.languages?.length ? navigator.languages : [navigator.lan
 const pref = langPref()
 export const lang: Lang = pref !== 'auto' ? pref : prefs.find((l) => /^(zh|en)\b/i.test(l))?.slice(0, 2).toLowerCase() === 'zh' ? 'zh' : 'en'
 export const locale = prefs.find((l) => l.slice(0, 2).toLowerCase() === lang) ?? (lang === 'zh' ? 'zh-CN' : 'en')
-export const t: Table = lang === 'en' ? (await import('./en')).default : zh
+export const t: Table = lang === 'en' ? (await import('./en')).default(locale) : zh
 document.documentElement.lang = lang === 'zh' ? 'zh-CN' : 'en'
