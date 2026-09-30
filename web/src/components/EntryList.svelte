@@ -311,7 +311,7 @@
 
 {#snippet label(n: string)}
   {@const [a, b] = ends(n)}
-  <span class="mid"><span>{a}</span>{#if b}<span>{b}</span>{/if}</span>
+  <bdi class="mid"><span>{a}</span>{#if b}<span>{b}</span>{/if}</bdi>
 {/snippet}
 
 {#snippet check(e: Entry, cls: string)}
@@ -394,7 +394,7 @@
                     onpointercancel={release}
                   >
                     {@render check(e, 'card-check')}
-                    <button class="card-open" data-look={e.dir ? 'dir' : look(e.name)} onclick={() => tap(i)} title={e.name}>
+                    <button class="card-open" data-look={e.dir ? 'dir' : look(e.name)} onclick={() => tap(i)} title={e.name} aria-label={e.name}>
                       {#if s}
                         <img src={s} alt="" draggable="false" loading="lazy" decoding="async" onerror={() => miss(e)} {@attach cancel} />
                         {#if look(e.name) === 'video'}<span class="card-badge"><Play size={icon.sm} /></span>{/if}
@@ -450,7 +450,7 @@
                   {#if s}<img src={s} alt="" draggable="false" loading="lazy" decoding="async" onerror={() => miss(e)} {@attach cancel} />{:else}<FileIcon name={e.name} dir={e.dir} />{/if}
                 </span>
                 <span class="cell name-cell" role="gridcell">
-                  <button class="name" onclick={() => tap(n)} title={e.name}>{@render label(e.name)}</button>
+                  <button class="name" onclick={() => tap(n)} title={e.name} aria-label={e.name}>{@render label(e.name)}</button>
                   {#if narrow.current}
                     <span class="hint sub">{#if gone}{@render trail(e)} · {gone}{:else}{e.dir ? '' : `${size(e.size)} · `}{ago(e.mtime)}{#if loc}{' · '}{@render trail(e)}{/if}{/if}</span>
                   {:else if loc}

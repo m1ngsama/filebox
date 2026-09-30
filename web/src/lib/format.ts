@@ -95,11 +95,15 @@ export const look = (n: string) => (icons.get(ext(n)) ?? kind(n)) as Look
 
 export const visual = (n: string) => /^(image|video)$/.test(kind(n))
 
+const graphemes = new Intl.Segmenter(locale, { granularity: 'grapheme' })
+const split = (s: string) => Array.from(graphemes.segment(s), (x) => x.segment)
+
 export function ends(n: string): [string, string] {
-  const c = [...n]
-  const d = n.lastIndexOf('.')
-  const k = (d > 0 ? n.length - d : 0) + 4
-  return c.length > k + 1 ? [c.slice(0, -k).join(''), c.slice(-k).join('')] : [n, '']
+  const c = split(n)
+  const x = /(\.tar)?\.[^.]+$/i.exec(n)
+  const e = x && x.index > 0 ? split(x[0]).length : 0
+  const k = Math.min(c.length - 1, e + 4)
+  return k > 0 && (e || c.length > 4) ? [c.slice(0, -k).join(''), c.slice(-k).join('')] : [n, '']
 }
 
 export const parent = (p: string) => (p.includes('/') ? p.slice(0, p.lastIndexOf('/')) : '')

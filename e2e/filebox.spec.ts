@@ -1702,6 +1702,32 @@ test.describe('on a phone', () => {
     expect(t2.x + t2.width).toBeLessThanOrEqual(n.x + n.width)
   })
 
+  test('truncated names split between whole graphemes and keep right-to-left names in order', async ({ page, server }) => {
+    const names: [string, string][] = [
+      ['party👨‍👩‍👧‍👦 family photo.jpg', 'hoto.jpg'],
+      ['flags🇯🇵🇰🇷🇨🇳mix.png', '🇨🇳mix.png'],
+      ['مستند_طويل_جدا_لاختبار_القطع_في_المنتصف.pdf', 'نتصف.pdf'],
+      ['nightly-backup-2026-09-30.tar.gz', '9-30.tar.gz'],
+      ['photos-from-the-summer-of-2024', '2024'],
+      ['👨‍👩‍👧‍👦👨‍👩‍👧‍👦👨‍👩‍👧‍👦👨‍👩‍👧‍👦👨‍👩‍👧‍👦👨‍👩‍👧‍👦', '👨‍👩‍👧‍👦👨‍👩‍👧‍👦👨‍👩‍👧‍👦👨‍👩‍👧‍👦'],
+    ]
+    mkdirSync(join(server.vol, 'intl'))
+    for (const [n] of names) writeFileSync(join(server.vol, 'intl', n), 'x')
+    await login(page)
+    await page.goto('/files/v/intl/')
+    for (const [n, tail] of names) {
+      const name = row(page, tail).locator('button.name')
+      await expect(name).toHaveAccessibleName(n)
+      const [h, tl] = await name.locator('.mid > span').allTextContents()
+      expect([h + tl, tl]).toEqual([n, tail])
+      expect(h).not.toMatch(/[\u200d\u{1f1e6}-\u{1f1ff}]$/u)
+    }
+    const ar = row(page, 'نتصف.pdf').locator('.mid')
+    await expect(ar).toHaveCSS('direction', 'rtl')
+    const [head, tail] = [(await ar.locator('span').first().boundingBox())!, (await ar.locator('span').last().boundingBox())!]
+    expect(tail.x + tail.width).toBeLessThanOrEqual(head.x + 1)
+  })
+
   test('touch targets are at least 44 px', async ({ page, server }) => {
     writeFileSync(join(server.vol, 'docs', 'x.txt'), 'x')
     await login(page)
