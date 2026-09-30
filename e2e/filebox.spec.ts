@@ -365,7 +365,7 @@ test('comics open in the lightbox, read right to left and reopen at the last pag
   await expect(page.getByRole('dialog', { name: 'vol 2.cbr' })).toContainText(t.noPreview)
 })
 
-test('EPUB opens in the reader, turns pages, blocks its scripts and reopens where it stopped', async ({ page, server }) => {
+test('EPUB opens in the reader, turns pages and reopens where it stopped', async ({ page, server }) => {
   writeFileSync(join(server.vol, 'docs', 'book.epub'), epub())
   await login(page)
   await row(page, 'docs').locator('button.name').click()
@@ -373,11 +373,13 @@ test('EPUB opens in the reader, turns pages, blocks its scripts and reopens wher
   const text = () => page.frames().find((f) => f.url().startsWith('blob:'))?.locator('h1').first().textContent().catch(() => null) ?? null
   await row(page, 'book.epub').locator('button.name').click()
   const view = page.getByRole('dialog', { name: 'book.epub' })
-  await expect(view.locator('foliate-paginator')).toBeAttached()
+  const reader = page.frameLocator('iframe.book')
+  await expect(view.locator('iframe.book')).toHaveAttribute('src', '/reader#vol=v&p=docs%2Fbook.epub')
+  await expect(reader.locator('foliate-paginator')).toBeAttached()
   await expect.poll(text).toBe('第1章')
   await expect.poll(spot).toBe('[0,0]')
   const turned = async () => {
-    await view.getByRole('button', { name: t.nextPage }).click()
+    await reader.getByRole('button', { name: t.nextPage }).click()
     return spot()
   }
   await expect.poll(turned, { timeout: 10_000 }).not.toBe('[0,0]')
@@ -388,14 +390,61 @@ test('EPUB opens in the reader, turns pages, blocks its scripts and reopens wher
   }
   await expect.poll(pressed).not.toBe(first)
   const at = await spot()
-  expect(await page.title()).not.toBe('pwned')
   await page.keyboard.press('Escape')
   await expect(page.getByRole('dialog')).toHaveCount(0)
   await row(page, 'book.epub').locator('button.name').click()
-  await expect(view.locator('foliate-paginator')).toBeAttached()
+  await expect(reader.locator('foliate-paginator')).toBeAttached()
   await expect.poll(text).toBe('第1章')
   await page.waitForTimeout(500)
   expect(await spot()).toBe(at)
+})
+
+test('a hostile book runs no script, reaches no API and frames no page', async ({ page, server }) => {
+  writeFileSync(join(server.vol, 'docs', 'evil.js'), `top.document.documentElement.setAttribute('data-pwned', 'ran')`)
+  const chapter =
+    '<?xml version="1.0" encoding="utf-8"?><html xmlns="http://www.w3.org/1999/xhtml"><head><title>c</title>' +
+    `<script src="${'/raw/v/docs/evil.js'}"></` +
+    'script><script>document.documentElement.setAttribute("data-inline", "ran")</' +
+    'script></head><body><h1>第1章</h1>' +
+    '<img src="/api/me" onerror="top.document.documentElement.setAttribute(\'data-onerror\', \'ran\')"/>' +
+    '<a id="js" href="javascript:top.document.documentElement.setAttribute(\'data-href\', \'ran\')">go</a>' +
+    '<iframe src="/files/v/"></iframe></body></html>'
+  writeFileSync(
+    join(server.vol, 'docs', 'evil.epub'),
+    zip([
+      ['mimetype', 'application/epub+zip'],
+      ['META-INF/container.xml', '<?xml version="1.0"?><container version="1.0" xmlns="urn:oasis:names:tc:opendocument:xmlns:container"><rootfiles><rootfile full-path="OEBPS/content.opf" media-type="application/oebps-package+xml"/></rootfiles></container>'],
+      [
+        'OEBPS/content.opf',
+        '<?xml version="1.0"?><package xmlns="http://www.idpf.org/2007/opf" version="3.0" unique-identifier="id"><metadata xmlns:dc="http://purl.org/dc/elements/1.1/"><dc:identifier id="id">x</dc:identifier><dc:title>x</dc:title><dc:language>zh</dc:language></metadata>' +
+          '<manifest><item id="c1" href="c1.xhtml" media-type="application/xhtml+xml"/></manifest><spine><itemref idref="c1"/></spine></package>',
+      ],
+      ['OEBPS/c1.xhtml', chapter],
+    ]),
+  )
+  const hits: string[] = []
+  const fromBook = (r: { frame: () => { url: () => string } }) => r.frame().url().startsWith('blob:')
+  page.on('request', (r) => (fromBook(r) || /evil\.js/.test(r.url())) && hits.push(new URL(r.url()).pathname))
+  await login(page)
+  await row(page, 'docs').locator('button.name').click()
+  await row(page, 'evil.epub').locator('button.name').click()
+  const book = page.frameLocator('iframe.book').locator('foliate-paginator')
+  await expect(book).toBeAttached()
+  await expect.poll(() => page.frames().find((f) => f.url().startsWith('blob:'))?.locator('h1').textContent().catch(() => null) ?? null).toBe('第1章')
+  await page.frames().find((f) => f.url().startsWith('blob:'))?.locator('#js').click({ timeout: 2000 }).catch(() => {})
+  await page.waitForTimeout(1500)
+  expect(await page.evaluate(() => ({ ...document.documentElement.dataset }))).toEqual({})
+  expect(hits).toEqual([])
+  expect(page.frames().map((f) => f.url()).filter((u) => u.includes('/files/v/') && !u.endsWith('/docs/'))).toEqual([])
+  const js = await page.request.get('/raw/v/docs/evil.js')
+  expect(js.headers()['content-type']).toBe('text/plain; charset=utf-8')
+  expect(js.headers()['x-content-type-options']).toBe('nosniff')
+  const reader = await page.request.get('/reader')
+  const csp = reader.headers()['content-security-policy']
+  expect(csp).toContain('/assets/')
+  expect(csp).not.toContain("script-src 'self'")
+  expect(csp).toContain('frame-src blob:')
+  expect((await page.request.get('/files/v/')).headers()['content-security-policy']).toContain("frame-ancestors 'none'")
 })
 
 test.describe('on iOS', () => {

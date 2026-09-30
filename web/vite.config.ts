@@ -27,11 +27,11 @@ export default defineConfig(({ mode }) => ({
   plugins: [svelte(), precompress()],
   build: {
     outDir: 'dist',
-    emptyOutDir: mode !== 'share',
+    emptyOutDir: mode === 'index',
     target: 'es2022',
     rolldownOptions: {
-      input: mode === 'share' ? 'share.html' : 'index.html',
-      output: { codeSplitting: { groups: [{ name: mode === 'share' ? 'share' : 'app', tags: ['$initial'] }] } },
+      input: mode === 'index' ? 'index.html' : `${mode}.html`,
+      output: { codeSplitting: { groups: [{ name: mode === 'index' ? 'app' : mode, tags: ['$initial'] }] } },
     },
   },
   server: { proxy: Object.fromEntries(['/api', '/raw', '/thumb', '/upload', '/s/'].map((p) => [p, api])) },

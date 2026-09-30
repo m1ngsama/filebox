@@ -31,6 +31,25 @@
   let rtl = $state(false)
   const folder = $derived('rtl:' + src.slice(0, src.lastIndexOf('/')))
   const pageURL: Src = (e, as) => (as === 'dl' ? url(entry, 'dl') : `${url(entry, 'zip-entry')}&e=${encodeURIComponent(e.name)}`)
+  let frame = $state<HTMLIFrameElement>()
+  const reader = $derived.by(() => {
+    if (k !== 'book') return ''
+    const u = new URL(url(entry, 'zip-entries'), location.origin)
+    const tok = u.pathname.startsWith('/s/') ? u.pathname.split('/')[2] : ''
+    const p = u.searchParams.get('p') ?? ''
+    return '/reader#' + new URLSearchParams(tok ? { share: tok, p } : { vol: u.searchParams.get('vol') ?? '', p })
+  })
+
+  function fromReader(e: MessageEvent) {
+    if (e.origin !== location.origin || !frame || e.source !== frame.contentWindow) return
+    const kind = (e.data as { fb?: string } | null)?.fb
+    if (kind === 'ready') {
+      ready()
+      frame.focus()
+    }
+    else if (kind === 'fail') failed()
+    else if (kind === 'close') onclose()
+  }
   const LIMIT = 1 << 20
   const tracks = $derived(
     k === 'video' && siblings
@@ -191,7 +210,7 @@
   }
 </script>
 
-<svelte:window onkeydown={key} />
+<svelte:window onkeydown={key} onmessage={fromReader} />
 
 {#if k === 'image' || (k === 'comic' && pages?.length)}
   {#await import('./Lightbox.svelte')}
@@ -279,9 +298,7 @@
     {:else if k === 'pdf'}
       <iframe src={src} title={entry.name} onload={ready}></iframe>
     {:else if k === 'book'}
-      {#await import('./Reader.svelte') then { default: Reader }}
-        {#key src}<Reader list={url(entry, 'zip-entries')} entry={url(entry, 'zip-entry')} {spot} onready={ready} onfail={failed} />{/key}
-      {/await}
+      <iframe class="book" src={reader} title={entry.name} bind:this={frame} onerror={failed}></iframe>
     {:else if k === 'text'}
       {#if html !== null}
         <article class="doc" class:code={!md} tabindex="-1">{@html html}</article>

@@ -6,7 +6,8 @@
   import { load, save } from '../lib/storage'
   import { t } from '../lib/i18n'
 
-  let { list, entry, spot, onready, onfail }: { list: string; entry: string; spot: string; onready: () => void; onfail: () => void } = $props()
+  let { list, entry, spot, onready, onfail, onclose }: { list: string; entry: string; spot: string; onready: () => void; onfail: () => void; onclose: () => void } =
+    $props()
 
   type View = HTMLElement & {
     open: (b: unknown) => void
@@ -24,6 +25,7 @@
 
   function key(e: KeyboardEvent) {
     if (e.metaKey || e.ctrlKey || e.altKey) return
+    if (e.key === 'Escape') return onclose()
     const d = { ArrowRight: rtl ? -1 : 1, ArrowLeft: rtl ? 1 : -1, PageDown: 1, PageUp: -1, ' ': e.shiftKey ? -1 : 1 }[e.key]
     if (!d) return
     e.preventDefault()
@@ -103,9 +105,8 @@
 
 <style>
   .reader {
-    position: relative;
-    width: 100%;
-    height: 100%;
+    position: fixed;
+    inset: 0;
     background: var(--panel);
   }
   .reader :global(foliate-paginator),

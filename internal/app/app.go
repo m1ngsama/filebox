@@ -30,9 +30,12 @@ import (
 	"github.com/m1ngsama/filebox/internal/vol"
 )
 
-// EPUB sections render in blob: iframes that inherit this policy, so it must keep blocking their scripts.
-const spaCSP = "default-src 'self'; img-src 'self' blob: data:; media-src 'self' blob:; style-src 'self' 'unsafe-inline' blob:; " +
-	"font-src 'self' blob: data:; frame-src 'self' blob:; object-src 'none'; base-uri 'none'; frame-ancestors 'self'; form-action 'self'"
+const spaCSP = "default-src 'self'; img-src 'self' blob: data:; media-src 'self' blob:; " +
+	"frame-src 'self'; object-src 'none'; base-uri 'none'; frame-ancestors 'none'; form-action 'self'"
+
+// A book's sections render in blob: iframes that inherit this document's policy, so script-src must exclude /raw and /s.
+const readerCSP = "default-src 'none'; style-src %s/assets/ 'unsafe-inline' blob:; img-src blob: data:; font-src blob: data:; " +
+	"media-src blob:; connect-src 'self'; frame-src blob:; object-src 'none'; base-uri 'none'; frame-ancestors 'self'; form-action 'none'"
 
 type App struct {
 	Vols     *vol.Set
@@ -63,6 +66,7 @@ func (a *App) Handler() http.Handler {
 	mux.HandleFunc("POST /share-target", func(w http.ResponseWriter, r *http.Request) {
 		http.Redirect(w, r, "/?share-target", http.StatusSeeOther)
 	})
+	mux.Handle("GET /reader", a.spa("reader.html"))
 	mux.Handle("GET /s/{token}", a.spa("share.html"))
 	mux.Handle("GET /s/{token}/{$}", a.spa("share.html"))
 	mux.Handle("/", a.spa("index.html"))
@@ -193,10 +197,14 @@ func acceptEncodings(h string) map[string]bool {
 
 var inlineScript = regexp.MustCompile(`(?s)<script>(.*?)</script>`)
 
-func spaPolicy(index []byte) string {
-	csp := spaCSP
+// The reader's scripts must come from /assets/ alone, which no host source but a path-bearing one can express.
+func spaPolicy(page string, index []byte) string {
+	csp, self := spaCSP, "'self'"
+	if page == "reader.html" {
+		csp, self = readerCSP, "%s/assets/"
+	}
 	if m := inlineScript.FindAllSubmatch(index, -1); m != nil {
-		csp += "; script-src 'self'"
+		csp += "; script-src " + self
 		for _, s := range m {
 			sum := sha256.Sum256(s[1])
 			csp += " 'sha256-" + base64.StdEncoding.EncodeToString(sum[:]) + "'"
@@ -205,10 +213,12 @@ func spaPolicy(index []byte) string {
 	return csp
 }
 
+var badHost = regexp.MustCompile(`[^A-Za-z0-9.:\[\]-]`)
+
 func (a *App) spa(page string) http.Handler {
 	files := http.FileServerFS(a.Web)
 	index, indexErr := fs.ReadFile(a.Web, page)
-	csp := spaPolicy(index)
+	csp := spaPolicy(page, index)
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodGet && r.Method != http.MethodHead {
 			httpx.Fail(w, 405, "method not allowed")
@@ -241,7 +251,16 @@ func (a *App) spa(page string) http.Handler {
 		}
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
 		w.Header().Set("Cache-Control", "no-cache")
-		w.Header().Set("Content-Security-Policy", csp)
+		policy := csp
+		if strings.Contains(policy, "%s") {
+			host := r.Host
+			if host == "" || badHost.MatchString(host) {
+				httpx.Fail(w, 400, "bad host")
+				return
+			}
+			policy = strings.ReplaceAll(policy, "%s", host)
+		}
+		w.Header().Set("Content-Security-Policy", policy)
 		w.Write(index)
 	})
 }

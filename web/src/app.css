@@ -333,6 +333,7 @@ textarea { resize: vertical; }
 .viewer video { max-width: 100%; max-height: 100%; }
 .viewer video.audio-only { width: min(100%, 480px); height: 54px; }
 .viewer iframe { width: 100%; height: 100%; border: 0; background: var(--panel); }
+.viewer .body:has(> iframe.book) { padding: 0; }
 .viewer pre { align-self: stretch; width: 100%; margin: 0; white-space: pre-wrap; word-break: break-all; background: var(--viewer-code); padding: var(--space-3); border-radius: var(--radius-sm); }
 .viewer .spinner { position: absolute; top: 50%; left: 50%; width: 32px; height: 32px; margin: -16px; border: 3px solid var(--viewer-hover); border-top-color: var(--viewer-fg); border-radius: 50%; animation: spin 0.8s linear infinite, appear 0.2s 0.15s both; }
 .viewer-error { display: flex; flex-direction: column; align-items: center; gap: var(--space-3); text-align: center; max-width: 360px; }

@@ -4,7 +4,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "vite build && vite build --mode share && touch dist/.gitkeep",
+    "build": "vite build --mode index && vite build --mode share && vite build --mode reader && touch dist/.gitkeep",
     "check": "svelte-check --fail-on-warnings"
   },
   "devDependencies": {

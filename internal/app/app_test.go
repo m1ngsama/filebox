@@ -52,6 +52,7 @@ func newTestApp(t *testing.T) *fixture {
 	web := fstest.MapFS{
 		"index.html":           {Data: []byte("<!doctype html>app")},
 		"share.html":           {Data: []byte("<!doctype html>share")},
+		"reader.html":          {Data: []byte("<!doctype html><script>var t=1</script>reader")},
 		"sw.js":                {Data: []byte("self")},
 		"manifest.webmanifest": {Data: []byte("{}")},
 		"assets/app-1.js":      {Data: []byte("js")},
@@ -83,6 +84,10 @@ func (f *fixture) do(method, url string, body io.Reader, hdr ...string) *httptes
 	for i := 0; i+1 < len(hdr); i += 2 {
 		if hdr[i] == "X-No-Auth" {
 			noAuth = true
+			continue
+		}
+		if hdr[i] == "X-Host" {
+			r.Host = hdr[i+1]
 			continue
 		}
 		if hdr[i] == "X-Remote-Addr" {
@@ -178,12 +183,38 @@ func TestSPA(t *testing.T) {
 }
 
 func TestSPAPolicyHashesInlineScripts(t *testing.T) {
-	if got := spaPolicy([]byte(`<script type="module" src="/a.js"></script>`)); got != spaCSP {
+	if got := spaPolicy("index.html", []byte(`<script type="module" src="/a.js"></script>`)); got != spaCSP {
 		t.Fatalf("no inline script: %q", got)
 	}
-	got := spaPolicy([]byte("<head><script>alert(1)</script></head>"))
+	got := spaPolicy("index.html", []byte("<head><script>alert(1)</script></head>"))
 	if !strings.HasSuffix(got, "; script-src 'self' 'sha256-bhHHL3z2vDgxUt0W3dWQOrprscmda2Y5pLsLg4GF+pI='") {
 		t.Fatalf("inline script: %q", got)
+	}
+}
+
+func TestReaderPolicy(t *testing.T) {
+	f := newTestApp(t)
+	w := f.do("GET", "/reader", nil)
+	csp := w.Header().Get("Content-Security-Policy")
+	if w.Code != 200 || !strings.Contains(csp, "script-src example.com/assets/ 'sha256-") {
+		t.Fatalf("reader %d %q", w.Code, csp)
+	}
+	for _, s := range []string{"default-src 'none'", "img-src blob: data:", "frame-src blob:", "frame-ancestors 'self'", "connect-src 'self'"} {
+		if !strings.Contains(csp, s) {
+			t.Errorf("reader policy misses %q: %q", s, csp)
+		}
+	}
+	for _, s := range []string{"'self'/assets", "script-src 'self'", "'unsafe-eval'"} {
+		if strings.Contains(csp, s) {
+			t.Errorf("reader policy has %q: %q", s, csp)
+		}
+	}
+	if w := f.do("GET", "/reader", nil, "X-Host", "evil host"); w.Code != 400 {
+		t.Fatalf("bad host = %d", w.Code)
+	}
+	spa := f.do("GET", "/files/v/", nil).Header().Get("Content-Security-Policy")
+	if spa != spaCSP || !strings.Contains(spa, "frame-ancestors 'none'") || strings.Contains(spa, "'unsafe-inline'") {
+		t.Errorf("spa policy: %q", spa)
 	}
 }
 
