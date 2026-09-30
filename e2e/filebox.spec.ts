@@ -1724,6 +1724,32 @@ test.describe('on a phone', () => {
     await tall(page.locator('.nav a, .nav-item'))
   })
 
+  test('surfaces animate in with the motion tokens and stay still under reduced motion', async ({ page, server }) => {
+    writeFileSync(join(server.vol, 'docs', 'x.txt'), 'x')
+    await login(page)
+    await row(page, 'docs').locator('button.name').tap()
+    const motion = (l: Locator) => l.evaluate((e) => { const s = getComputedStyle(e); return [s.animationName, s.animationDuration] })
+    await page.getByRole('button', { name: t.new, exact: true }).tap()
+    expect(await motion(page.locator('.bottom-sheet'))).toEqual(['rise', '0.18s'])
+    await page.getByRole('dialog').getByRole('button', { name: t.newFolder }).tap()
+    expect(await motion(page.locator('.dialog'))).toEqual(['enter', '0.18s'])
+    await page.keyboard.press('Escape')
+    await page.getByRole('button', { name: t.more, exact: true }).tap()
+    expect(await motion(page.getByRole('menu'))).toEqual(['enter', '0.12s'])
+    await page.keyboard.press('Escape')
+
+    await page.emulateMedia({ reducedMotion: 'reduce' })
+    await page.getByRole('button', { name: t.new, exact: true }).tap()
+    expect((await motion(page.locator('.bottom-sheet')))[1]).toBe('0s')
+    await page.keyboard.press('Escape')
+    const cdp = await page.context().newCDPSession(page)
+    const b = (await row(page, 'x.txt').boundingBox())!
+    await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ x: b.x + b.width / 2, y: b.y + b.height / 2 }] })
+    await expect(row(page, 'x.txt')).toHaveClass(/pressing/)
+    expect((await motion(row(page, 'x.txt')))[0]).toBe('none')
+    await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] })
+  })
+
   test('the more sheet stars a multi-selection', async ({ page, server }) => {
     for (const n of ['p1.txt', 'p2.txt']) writeFileSync(join(server.vol, 'docs', n), n)
     await login(page)
