@@ -2,15 +2,11 @@ package extract
 
 import (
 	"archive/zip"
-	"bufio"
 	"bytes"
 	"context"
-	"encoding/binary"
-	"encoding/xml"
 	"errors"
 	"io"
 	"log/slog"
-	"net/url"
 	"os"
 	"os/exec"
 	"path"
@@ -301,128 +297,16 @@ func markup(w *text, r io.Reader) error {
 	}
 }
 
-type container struct {
-	Rootfiles []struct {
-		Path string `xml:"full-path,attr"`
-	} `xml:"rootfiles>rootfile"`
-}
-
-type opf struct {
-	Items []struct {
-		ID   string `xml:"id,attr"`
-		Href string `xml:"href,attr"`
-	} `xml:"manifest>item"`
-	Spine []struct {
-		IDRef string `xml:"idref,attr"`
-	} `xml:"spine>itemref"`
-}
-
-// zip.NewReader loads every central directory header whatever the end record claims, starting at either offset it may pick, so count from both.
-func entries(f io.ReaderAt, size int64) int {
-	tail := make([]byte, min(size, 22+65535))
-	if _, err := f.ReadAt(tail, size-int64(len(tail))); err != nil {
-		return -1
-	}
-	i := len(tail) - 22
-	for ; i >= 0; i-- {
-		if string(tail[i:i+4]) == "PK\x05\x06" && i+22+int(binary.LittleEndian.Uint16(tail[i+20:])) <= len(tail) {
-			break
-		}
-	}
-	if i < 0 {
-		return -1
-	}
-	le := binary.LittleEndian
-	if le.Uint16(tail[i+10:]) == 0xffff || le.Uint32(tail[i+12:]) == 0xffffffff || le.Uint32(tail[i+16:]) == 0xffffffff {
-		return -1
-	}
-	records, dirSize, dirOff := int64(le.Uint16(tail[i+10:])), int64(le.Uint32(tail[i+12:])), int64(le.Uint32(tail[i+16:]))
-	if records*46 > size || records*46 > dirSize {
-		return -1
-	}
-	eocd := size - int64(len(tail)) + int64(i)
-	n := 0
-	for _, start := range []int64{eocd - dirSize, dirOff} {
-		if start < 0 || start >= size {
-			continue
-		}
-		n = max(n, headers(f, start, size))
-	}
-	return n
-}
-
-func headers(f io.ReaderAt, start, size int64) int {
-	le := binary.LittleEndian
-	r := bufio.NewReader(io.NewSectionReader(f, start, size-start))
-	var h [46]byte
-	n := 0
-	for ; n <= maxEntries; n++ {
-		if _, err := io.ReadFull(r, h[:]); err != nil || le.Uint32(h[:]) != 0x02014b50 {
-			return n
-		}
-		if _, err := r.Discard(int(le.Uint16(h[28:])) + int(le.Uint16(h[30:])) + int(le.Uint16(h[32:]))); err != nil {
-			return n
-		}
-	}
-	return n
-}
-
 func epub(w *text, f io.ReaderAt, size int64) error {
-	if n := entries(f, size); n < 0 || n > maxEntries {
-		return ErrSkipped
-	}
-	z, err := zip.NewReader(f, size)
+	z, err := Zip(f, size)
 	if err != nil {
-		return ErrSkipped
+		return err
 	}
-	if len(z.File) > maxEntries {
-		return ErrSkipped
-	}
-	files := make(map[string]*zip.File, len(z.File))
-	for _, e := range z.File {
-		files[e.Name] = e
-	}
-	budget := int64(maxUnpacked)
-	read := func(e *zip.File) io.ReadCloser {
-		if e == nil || e.CompressedSize64 == 0 && e.UncompressedSize64 > 0 ||
-			e.CompressedSize64 > 0 && e.UncompressedSize64/e.CompressedSize64 > maxRatio || budget <= 0 {
-			return nil
-		}
-		r, err := e.Open()
-		if err != nil {
-			return nil
-		}
-		return struct {
-			io.Reader
-			io.Closer
-		}{&counted{r, &budget}, r}
-	}
+	b := newBook(z, maxUnpacked)
 	var order []*zip.File
-	var c container
-	if r := read(files["META-INF/container.xml"]); r != nil {
-		xml.NewDecoder(r).Decode(&c)
-		r.Close()
-	}
-	if len(c.Rootfiles) > 0 {
-		if r := read(files[c.Rootfiles[0].Path]); r != nil {
-			var o opf
-			d := xml.NewDecoder(r)
-			d.Strict = false
-			d.Decode(&o)
-			r.Close()
-			dir := path.Dir(c.Rootfiles[0].Path)
-			hrefs := map[string]string{}
-			for _, it := range o.Items {
-				hrefs[it.ID] = it.Href
-			}
-			for _, s := range o.Spine {
-				if h, ok := hrefs[s.IDRef]; ok {
-					h, _, _ = strings.Cut(h, "#")
-					if e := files[path.Join(dir, unescape(h))]; e != nil {
-						order = append(order, e)
-					}
-				}
-			}
+	for _, h := range b.spine() {
+		if e := b.files[h]; e != nil {
+			order = append(order, e)
 		}
 	}
 	if len(order) == 0 {
@@ -433,7 +317,7 @@ func epub(w *text, f io.ReaderAt, size int64) error {
 		}
 	}
 	for _, e := range order {
-		r := read(e)
+		r := b.read(e)
 		if r == nil {
 			continue
 		}
@@ -445,28 +329,4 @@ func epub(w *text, f io.ReaderAt, size int64) error {
 		w.brk()
 	}
 	return nil
-}
-
-func unescape(h string) string {
-	if u, err := url.PathUnescape(h); err == nil {
-		return u
-	}
-	return h
-}
-
-type counted struct {
-	r io.Reader
-	n *int64
-}
-
-func (c *counted) Read(p []byte) (int, error) {
-	if *c.n <= 0 {
-		return 0, io.EOF
-	}
-	if int64(len(p)) > *c.n {
-		p = p[:*c.n]
-	}
-	n, err := c.r.Read(p)
-	*c.n -= int64(n)
-	return n, err
 }
