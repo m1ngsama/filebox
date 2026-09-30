@@ -326,3 +326,17 @@ func TestRecover(t *testing.T) {
 		t.Fatalf("adopted version not restorable: %v", err)
 	}
 }
+
+func TestGuardRunsBeforeCapture(t *testing.T) {
+	e := setup(t)
+	id := e.capture(t, "old.txt", "0123456789")
+	e.now = e.now.Add(time.Hour)
+	e.s.Usage = func(*vol.Volume) (vol.Usage, error) { return vol.Usage{Total: 1000, Free: 95}, nil }
+	os.Mkdir(filepath.Join(e.dir, "d"), 0o755)
+	if _, err := e.s.Capture(e.v, "d", Upload, 1); err == nil {
+		t.Fatal("captured a folder")
+	}
+	if _, err := os.Stat(filepath.Join(e.dir, vol.VersionsDir, id)); !errors.Is(err, fs.ErrNotExist) || e.count(t, "old.txt") != 0 {
+		t.Fatal("guard did not run before a failing capture")
+	}
+}

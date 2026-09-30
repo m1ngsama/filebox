@@ -73,6 +73,7 @@ func ValidID(id string) bool { return validID.MatchString(id) }
 func (s *Store) Capture(v *vol.Volume, rel, source string, user int64) (string, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	s.guard(v, s.now().UnixMilli())
 	id, err := s.capture(v, rel, source, user)
 	if err == nil {
 		s.prune(v, rel)
