@@ -1080,6 +1080,58 @@ test('ctrl+z forgets an undo that was closed or followed by another change, and 
   await expect(row(page, 'k3.txt')).toHaveCount(1)
 })
 
+test('a delete and a new folder during a streamed listing survive every chunk and the final list', async ({ page, server }) => {
+  test.setTimeout(120_000)
+  const dir = join(server.vol, 'huge')
+  mkdirSync(dir)
+  for (let i = 0; i < 20000; i++) closeSync(openSync(join(dir, `h-${String(i).padStart(5, '0')}.txt`), 'w'))
+  await page.addInitScript(() => {
+    const f = window.fetch
+    window.fetch = async (...a: Parameters<typeof fetch>) => {
+      const r = await f(...a)
+      const u = String(a[0] instanceof Request ? a[0].url : a[0])
+      if (!u.includes('/api/ls') || !u.includes('huge') || !r.body) return r
+      const rd = r.body.getReader()
+      const body = new ReadableStream({
+        async pull(c) {
+          const { value, done } = await rd.read()
+          if (done) return c.close()
+          for (let i = 0; i < value.length; i += 16384) {
+            await new Promise((x) => setTimeout(x, 120))
+            c.enqueue(value.slice(i, i + 16384))
+          }
+        },
+      })
+      return new Response(body, { status: r.status, headers: r.headers })
+    }
+  })
+  await login(page)
+  await row(page, 'huge').locator('button.name').click()
+  await expect(page.locator('.loading-count')).toHaveCount(1, { timeout: 30_000 })
+  await expect(page.locator('.row').nth(2)).toBeVisible()
+  const victim = (await page.locator('.row').nth(2).locator('button.name').textContent())!.trim()
+  await row(page, victim).locator('input[type=checkbox]').check()
+  await page.keyboard.press('Delete')
+  await page.locator('.row').first().locator('button.name').focus()
+  await page.keyboard.press('Escape')
+  await page.waitForTimeout(350)
+  await page.keyboard.press('n')
+  await page.getByLabel(t.folderName).fill('0-new')
+  await page.keyboard.press('Enter')
+  const seen: boolean[] = []
+  while (await page.locator('.loading-count').count()) {
+    seen.push((await row(page, victim).count()) > 0)
+    await page.waitForTimeout(50)
+  }
+  expect(seen.length).toBeGreaterThan(3)
+  expect(seen.some(Boolean)).toBe(false)
+  await page.locator('.scroller').evaluate((el) => el.scrollTo(0, 0))
+  await expect(row(page, '0-new')).toHaveCount(1)
+  await expect(row(page, victim)).toHaveCount(0)
+  expect(existsSync(join(dir, victim))).toBe(false)
+  expect(existsSync(join(dir, '0-new'))).toBe(true)
+})
+
 test('a delete counts items that are already gone as done and rolls back a failed request', async ({ page, server }) => {
   writeFileSync(join(server.vol, 'gone-a.txt'), 'a')
   writeFileSync(join(server.vol, 'gone-b.txt'), 'b')
