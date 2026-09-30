@@ -3,6 +3,8 @@
   import X from '@lucide/svelte/icons/x'
   import Download from '@lucide/svelte/icons/download'
   import CircleAlert from '@lucide/svelte/icons/circle-alert'
+  import ChevronLeft from '@lucide/svelte/icons/chevron-left'
+  import ChevronRight from '@lucide/svelte/icons/chevron-right'
   import type { Entry, Src } from '../lib/api'
   import { kind, look, thumbable, subtitleOf, subtitleLang } from '../lib/format'
   import { load, save } from '../lib/storage'
@@ -20,6 +22,13 @@
   const k = $derived(kind(entry.name))
   const src = $derived(url(entry))
   const images = $derived(k === 'image' ? entries.filter((e) => !e.dir && kind(e.name) === 'image') : [])
+  const list = $derived(inline ? [] : entries.filter((e) => !e.dir && kind(e.name)))
+  const at = $derived(list.indexOf(entry))
+  const step = (d: number) => at >= 0 && list[at + d] && (entry = list[at + d])
+  let pages = $state<Entry[] | null>(null)
+  let rtl = $state(false)
+  const folder = $derived('rtl:' + src.slice(0, src.lastIndexOf('/')))
+  const pageURL: Src = (e, as) => (as === 'dl' ? url(entry, 'dl') : `${url(entry, 'zip-entry')}&e=${encodeURIComponent(e.name)}`)
   const LIMIT = 1 << 20
   const tracks = $derived(
     k === 'video' && siblings
@@ -46,6 +55,31 @@
     audioOnly = false
     status = k === 'audio' || !k ? 'ready' : 'loading'
   })
+
+  $effect(() => {
+    if (k !== 'comic') return
+    let stale = false
+    pages = null
+    rtl = load(folder) === '1'
+    fetch(url(entry, 'zip-entries'))
+      .then((r) => (r.ok ? r.json() : Promise.reject()))
+      .then(
+        ({ entries }: { entries: { name: string; size: number }[] }) => {
+          if (stale) return
+          pages = entries.map((e) => ({ name: e.name, size: e.size, dir: false, mtime: 0 }))
+          if (!pages.length) status = 'error'
+        },
+        () => !stale && (status = 'error'),
+      )
+    return () => {
+      stale = true
+    }
+  })
+
+  function flip() {
+    rtl = !rtl
+    save(folder, rtl ? '1' : '')
+  }
 
   $effect(() => {
     if (k !== 'text') return
@@ -88,8 +122,10 @@
   })
 
   function key(e: KeyboardEvent) {
-    if (k === 'image' || inline) return
+    if (k === 'image' || (k === 'comic' && pages?.length) || inline || e.defaultPrevented) return
     if (e.key === 'Escape') onclose()
+    else if ((e.key === 'ArrowLeft' || e.key === 'ArrowRight') && k !== 'book' && !e.metaKey && !e.ctrlKey && !e.altKey && !(e.target instanceof HTMLMediaElement))
+      step(e.key === 'ArrowRight' ? 1 : -1)
     else if (e.key === 'Tab' && root) {
       const f = [...root.querySelectorAll<HTMLElement>('a[href], button, video, audio, iframe, pre, article')].filter((x) => x.offsetParent)
       const i = f.indexOf(document.activeElement as HTMLElement)
@@ -104,7 +140,7 @@
   let zoomed = $state(false)
 
   function touchstart(e: TouchEvent) {
-    const one = e.touches.length === 1 && k !== 'text' && k !== 'pdf' && !zoomed && !inline
+    const one = e.touches.length === 1 && k !== 'text' && k !== 'pdf' && k !== 'book' && !zoomed && !inline
     start = one ? { x: e.touches[0].clientX, y: e.touches[0].clientY } : null
     off = { x: 0, y: 0 }
   }
@@ -113,16 +149,21 @@
     if (!start || e.touches.length !== 1) return touchcancel()
     const dx = e.touches[0].clientX - start.x
     const dy = e.touches[0].clientY - start.y
-    off = { x: 0, y: Math.abs(dx) > Math.abs(dy) ? 0 : Math.max(0, dy) }
+    swipe = Math.abs(dx) > Math.abs(dy) ? dx : 0
+    off = { x: 0, y: swipe ? 0 : Math.max(0, dy) }
   }
 
   function touchend() {
     const { y } = off
+    const x = swipe
     touchcancel()
     if (y > 100) onclose()
+    else if (Math.abs(x) > 80) step(x < 0 ? 1 : -1)
   }
 
+  let swipe = 0
   function touchcancel() {
+    swipe = 0
     start = null
     off = { x: 0, y: 0 }
   }
@@ -150,11 +191,23 @@
 
 <svelte:window onkeydown={key} />
 
-{#if k === 'image'}
+{#if k === 'image' || (k === 'comic' && pages?.length)}
   {#await import('./Lightbox.svelte')}
     <div class="viewer" role="dialog" aria-modal="true" aria-label={entry.name}><div class="spinner" role="status" aria-label={t.loading}></div></div>
   {:then { default: Lightbox }}
-    <Lightbox bind:entry {images} {url} {onclose} />
+    {#if k === 'image'}
+      <Lightbox bind:entry {images} {url} {onclose} onedge={list.length > images.length ? step : undefined} />
+    {:else if pages}
+      {#key rtl}
+        <Lightbox
+          entry={pages[Math.min(Number(load(spot)) || 0, pages.length - 1)]}
+          images={pages}
+          url={pageURL}
+          {onclose}
+          book={{ title: entry.name, rtl, onpage: (i) => save(spot, String(i)), onrtl: flip }}
+        />
+      {/key}
+    {/if}
   {/await}
 {:else}
 <div
@@ -173,6 +226,10 @@
   {#if !inline}
     <header>
       <span class="title">{entry.name}</span>
+      {#if list.length > 1}
+        <button class="icon-btn" onclick={() => step(-1)} disabled={at <= 0} aria-label={t.prevFile}><ChevronLeft size={20} /></button>
+        <button class="icon-btn" onclick={() => step(1)} disabled={at < 0 || at >= list.length - 1} aria-label={t.nextFile}><ChevronRight size={20} /></button>
+      {/if}
       <a class="icon-btn" href={url(entry, 'dl')} download aria-label={t.download}><Download size={20} /></a>
       <button class="icon-btn" onclick={onclose} aria-label={t.close} bind:this={closer}><X size={20} /></button>
     </header>
@@ -187,7 +244,7 @@
     {#if status === 'error'}
       <div class="viewer-error" role="alert">
         <CircleAlert size={40} aria-hidden="true" />
-        <p>{k === 'video' ? t.cantPlay : t.previewFailed}</p>
+        <p>{k === 'video' ? t.cantPlay : k === 'comic' && pages ? t.noPages : t.previewFailed}</p>
         <a class="button primary" href={url(entry, 'dl')} download><Download size={18} />{t.download}</a>
       </div>
     {:else if k === 'video'}
@@ -220,7 +277,7 @@
       {:else if text !== null}<pre tabindex="-1">{text}</pre>{/if}
       {#if plain}<p class="hint">{plain === 'large' ? t.tooLarge : t.tooComplex}</p>{/if}
       {#if partial}<p class="hint">{t.truncated}</p>{/if}
-    {:else}
+    {:else if k !== 'comic'}
       <div class="viewer-error">
         <p>{t.noPreview}</p>
         <a class="button primary" href={url(entry, 'dl')} download><Download size={18} />{t.download}</a>

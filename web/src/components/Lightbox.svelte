@@ -7,7 +7,15 @@
   import { size, date, thumbable } from '../lib/format'
   import { t } from '../lib/i18n'
 
-  let { entry = $bindable(), images, url, onclose }: { entry: Entry; images: Entry[]; url: Src; onclose: () => void } = $props()
+  type Book = { title: string; rtl: boolean; onpage: (i: number) => void; onrtl: () => void }
+  let {
+    entry = $bindable(),
+    images,
+    url,
+    onclose,
+    onedge,
+    book,
+  }: { entry: Entry; images: Entry[]; url: Src; onclose: () => void; onedge?: (d: 1 | -1) => void; book?: Book } = $props()
 
   type Meta = Partial<Record<keyof typeof t.meta, string>> & { width?: number; height?: number }
   let info = $state(false)
@@ -50,15 +58,19 @@
   })
 
   onMount(() => {
-    const at = images.findIndex((e) => e.name === entry.name)
-    const data = images.map((e) => ({ src: url(e), alt: e.name, msrc: thumbable(e.name) ? url(e, 'thumb') : undefined, width: 0, height: 0 }))
+    const n = images.length
+    const pos = (i: number) => (book?.rtl ? n - 1 - i : i)
+    const item = (i: number) => images[pos(i)]
+    const at = images.indexOf(entry)
+    const data = images.map((_, i) => item(i)).map((e) => ({ src: url(e), alt: e.name, msrc: !book && thumbable(e.name) ? url(e, 'thumb') : undefined, width: 0, height: 0 }))
     let done = false
     const pswp = new PhotoSwipe({
       dataSource: data,
-      index: Math.max(0, at),
+      index: pos(Math.max(0, at)),
       bgOpacity: 1,
       wheelToZoom: true,
-      loop: images.length > 1,
+      loop: n > 1 && !onedge && !book,
+      counter: !book,
       showHideAnimationType: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'none' : 'fade',
       preloaderDelay: 150,
       indexIndicatorSep: ' / ',
@@ -91,7 +103,7 @@
       el.setAttribute('role', 'alert')
       const a = document.createElement('a')
       a.className = 'button primary'
-      a.href = url(images[c.index], 'dl')
+      a.href = url(item(c.index), 'dl')
       a.download = ''
       a.textContent = t.download
       el.append(document.createElement('br'), a)
@@ -104,8 +116,16 @@
         order: 6,
         appendTo: 'bar',
         className: 'fb-name',
-        onInit: (el) => pswp.on('change', () => (el.textContent = images[pswp.currIndex].name)),
+        onInit: (el) => pswp.on('change', () => (el.textContent = book ? book.title : item(pswp.currIndex).name)),
       })
+      if (book)
+        pswp.ui?.registerElement({
+          name: 'page',
+          order: 7,
+          appendTo: 'bar',
+          className: 'fb-page',
+          onInit: (el) => pswp.on('change', () => (el.textContent = t.page(pos(pswp.currIndex) + 1, n))),
+        })
       pswp.ui?.registerElement({
         name: 'download',
         order: 8,
@@ -115,10 +135,20 @@
         html: icon('<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="m7 10 5 5 5-5"/><path d="M12 15V3"/>'),
         onInit: (el) => {
           el.setAttribute('download', '')
-          pswp.on('change', () => el.setAttribute('href', url(images[pswp.currIndex], 'dl')))
+          pswp.on('change', () => el.setAttribute('href', url(item(pswp.currIndex), 'dl')))
         },
       })
-      pswp.ui?.registerElement({
+      if (book)
+        pswp.ui?.registerElement({
+          name: 'rtl',
+          order: 9,
+          isButton: true,
+          title: t.rtl,
+          html: icon('<path d="M8 3 4 7l4 4"/><path d="M4 7h16"/><path d="m16 21 4-4-4-4"/><path d="M20 17H4"/>'),
+          onInit: (el) => el.setAttribute('aria-pressed', String(book.rtl)),
+          onClick: () => book.onrtl(),
+        })
+      else pswp.ui?.registerElement({
         name: 'info',
         order: 9,
         isButton: true,
@@ -129,12 +159,33 @@
     })
 
     pswp.on('change', () => {
-      entry = images[pswp.currIndex]
-      pswp.element?.setAttribute('aria-label', entry.name)
+      entry = item(pswp.currIndex)
+      book?.onpage(pos(pswp.currIndex))
+      pswp.element?.setAttribute('aria-label', book ? book.title : entry.name)
+      if (onedge) queueMicrotask(() => pswp.element?.querySelectorAll<HTMLButtonElement>('.pswp__button--arrow').forEach((b) => (b.disabled = false)))
     })
+    if (onedge) {
+      const edge = (d: 1 | -1) => (d > 0 ? pswp.currIndex === n - 1 : pswp.currIndex === 0)
+      for (const d of [1, -1] as const) {
+        const go = d > 0 ? pswp.next.bind(pswp) : pswp.prev.bind(pswp)
+        pswp[d > 0 ? 'next' : 'prev'] = () => (edge(d) ? onedge(d) : go())
+      }
+      let from: { x: number; i: number } | null = null
+      pswp.on('pointerDown', (e) => (from = { x: e.originalEvent.clientX, i: pswp.currIndex }))
+      pswp.on('pointerUp', (e) => {
+        const dx = from && from.i === pswp.currIndex && (pswp.currSlide?.currZoomLevel ?? 1) <= (pswp.currSlide?.zoomLevels.fit ?? 1) ? e.originalEvent.clientX - from.x : 0
+        from = null
+        if (dx < -80 && edge(1)) onedge(1)
+        else if (dx > 80 && edge(-1)) onedge(-1)
+      })
+    }
     pswp.on('keydown', (e) => {
       const k = e.originalEvent
-      if (k.key === 'i' && !k.metaKey && !k.ctrlKey && !k.altKey) info = !info
+      if (onedge && n === 1 && (k.key === 'ArrowRight' || k.key === 'ArrowLeft')) {
+        e.preventDefault()
+        k.preventDefault()
+        onedge(k.key === 'ArrowRight' ? 1 : -1)
+      } else if (k.key === 'i' && !book && !k.metaKey && !k.ctrlKey && !k.altKey) info = !info
       else if (k.key === 'Escape' && info) {
         e.preventDefault()
         info = false
@@ -143,16 +194,20 @@
     pswp.on('bindEvents', () => {
       host = pswp.element
       pswp.element?.setAttribute('aria-modal', 'true')
-      pswp.element?.setAttribute('aria-label', entry.name)
+      if (onedge) pswp.element?.classList.add('fb-edges')
+      pswp.element?.setAttribute('aria-label', book ? book.title : entry.name)
       pswp.element?.querySelector<HTMLElement>('.pswp__button--close')?.focus()
     })
     pswp.on('destroy', () => {
+      if (done) return
       done = true
       onclose()
     })
     pswp.init()
     return () => {
-      if (!done) pswp.destroy()
+      if (done) return
+      done = true
+      pswp.destroy()
     }
   })
 </script>
@@ -175,6 +230,9 @@
     --pswp-bg: var(--viewer-bg);
     --pswp-placeholder-bg: transparent;
   }
+  :global(.pswp--one-slide.fb-edges .pswp__button--arrow) {
+    display: block;
+  }
   :global(.pswp__top-bar) {
     padding-top: env(safe-area-inset-top);
     align-items: center;
@@ -190,7 +248,8 @@
     white-space: nowrap;
     pointer-events: auto;
   }
-  :global(.pswp__counter) {
+  :global(.pswp__counter),
+  :global(.fb-page) {
     order: 0;
     margin: 0 8px;
     color: var(--viewer-fg);
@@ -202,10 +261,16 @@
     background: none;
   }
   :global(.pswp__button--download),
-  :global(.pswp__button--info) {
+  :global(.pswp__button--info),
+  :global(.pswp__button--rtl) {
     display: grid;
     place-items: center;
     color: var(--pswp-icon-color);
+  }
+  :global(.pswp__button--rtl[aria-pressed='true']) {
+    color: var(--viewer-fg);
+    background: var(--viewer-hover);
+    border-radius: 50%;
   }
   :global(.pswp .fb-icn) {
     position: static;

@@ -210,6 +210,7 @@ p.error::before { content: ''; flex: none; width: 1em; height: 1lh; background: 
 .ficon.video, [data-look='video'] { --k: light-dark(#b0368a, #ee7cc8); }
 .ficon.audio, [data-look='audio'] { --k: light-dark(#8a4fd0, #b995f2); }
 .ficon.pdf, [data-look='pdf'] { --k: light-dark(#c42b2b, #ff7474); }
+.ficon.book, .ficon.comic, [data-look='book'], [data-look='comic'] { --k: light-dark(#2f6db5, #7fb2f0); }
 .ficon.code, [data-look='code'] { --k: light-dark(#8a6400, #e0b44c); }
 .ficon.archive, [data-look='archive'] { --k: light-dark(#8a5a32, #d6a47a); }
 .ficon.sheet, [data-look='sheet'] { --k: light-dark(#23803c, #6fcf85); }
