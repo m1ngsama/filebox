@@ -7,7 +7,7 @@ import (
 	"io/fs"
 	"net/http"
 	"os"
-	"path"
+	"runtime"
 	"strconv"
 	"strings"
 
@@ -18,16 +18,24 @@ import (
 
 const maxZipEntry = 64 << 20
 
-func clean(name string) bool {
-	return name != "" && !strings.HasPrefix(name, "/") && !strings.Contains(name, "\\") && path.Clean(name) == name &&
-		name != ".." && !strings.HasPrefix(name, "../")
-}
+// Parsing a central directory is memory-heavy, so only NumCPU requests may hold a reader at once.
+var readers = make(chan struct{}, runtime.NumCPU())
 
-func openZip(w http.ResponseWriter, root *os.Root, rel string) (*zip.Reader, fs.FileInfo, func(), bool) {
+func valid(name string) bool { return fs.ValidPath(name) && !strings.Contains(name, "\\") }
+
+func openZip(w http.ResponseWriter, r *http.Request, root *os.Root, rel string) (*zip.Reader, *os.File, fs.FileInfo, func(), bool) {
+	select {
+	case readers <- struct{}{}:
+	case <-r.Context().Done():
+		httpx.Fail(w, 503, "busy")
+		return nil, nil, nil, nil, false
+	}
+	release := func() { <-readers }
 	f, err := root.Open(rel)
 	if err != nil {
+		release()
 		httpx.Error(w, err)
-		return nil, nil, nil, false
+		return nil, nil, nil, nil, false
 	}
 	st, err := f.Stat()
 	if err == nil && !st.Mode().IsRegular() {
@@ -39,15 +47,16 @@ func openZip(w http.ResponseWriter, root *os.Root, rel string) (*zip.Reader, fs.
 	}
 	if err != nil {
 		f.Close()
+		release()
 		httpx.Fail(w, 415, "not a readable zip archive")
-		return nil, nil, nil, false
+		return nil, nil, nil, nil, false
 	}
-	return z, st, func() { f.Close() }, true
+	return z, f, st, func() { f.Close(); release() }, true
 }
 
 // ZipEntries lists an archive's images in natural order, or with ?all every file in archive order.
 func ZipEntries(w http.ResponseWriter, r *http.Request, root *os.Root, rel string) {
-	z, _, done, ok := openZip(w, root, rel)
+	z, _, _, done, ok := openZip(w, r, root, rel)
 	if !ok {
 		return
 	}
@@ -62,7 +71,7 @@ func ZipEntries(w http.ResponseWriter, r *http.Request, root *os.Root, rel strin
 	}
 	out := []item{}
 	for _, e := range list {
-		if clean(e.Name) && !e.FileInfo().IsDir() {
+		if valid(e.Name) && !e.FileInfo().IsDir() {
 			out = append(out, item{e.Name, e.UncompressedSize64})
 		}
 	}
@@ -72,11 +81,11 @@ func ZipEntries(w http.ResponseWriter, r *http.Request, root *os.Root, rel strin
 // ZipEntry streams one archive entry named by ?e, as its image type or as an inert download.
 func ZipEntry(w http.ResponseWriter, r *http.Request, root *os.Root, rel string) {
 	name := r.URL.Query().Get("e")
-	if !clean(name) {
+	if !valid(name) {
 		httpx.Fail(w, 400, "bad entry")
 		return
 	}
-	z, st, done, ok := openZip(w, root, rel)
+	z, src, st, done, ok := openZip(w, r, root, rel)
 	if !ok {
 		return
 	}
@@ -92,30 +101,50 @@ func ZipEntry(w http.ResponseWriter, r *http.Request, root *os.Root, rel string)
 		httpx.Error(w, fs.ErrNotExist)
 		return
 	}
-	rc, err := extract.Open(e, maxZipEntry)
-	if err != nil {
+	if e.UncompressedSize64 > maxZipEntry {
 		httpx.Fail(w, 413, "entry too large")
 		return
 	}
-	defer rc.Close()
 	h := w.Header()
 	tag := fmt.Sprintf(`"%x-%x-%x"`, st.Size(), st.ModTime().UnixNano(), e.CRC32)
 	h.Set("ETag", tag)
-	h.Set("Cache-Control", "private, max-age=3600")
-	if r.Header.Get("If-None-Match") == tag {
-		w.WriteHeader(304)
-		return
-	}
+	h.Set("Cache-Control", "private, no-cache")
 	ct := extract.ImageType(name)
 	if ct == "" {
 		ct = "application/octet-stream"
 	}
 	h.Set("Content-Type", ct)
 	serve.SafeHeaders(h, ct)
+	if e.Method == zip.Store {
+		if off, err := e.DataOffset(); err == nil {
+			http.ServeContent(w, r, "", st.ModTime(), io.NewSectionReader(src, off, int64(e.UncompressedSize64)))
+			return
+		}
+	}
+	h.Set("Accept-Ranges", "none")
+	if match(r.Header.Get("If-None-Match"), tag) {
+		w.WriteHeader(304)
+		return
+	}
+	rc, err := extract.Open(e, maxZipEntry)
+	if err != nil {
+		httpx.Fail(w, 413, "entry too large")
+		return
+	}
+	defer rc.Close()
 	h.Set("Content-Length", strconv.FormatUint(e.UncompressedSize64, 10))
 	if r.Method != http.MethodHead {
 		io.Copy(w, rc)
 	}
+}
+
+func match(header, tag string) bool {
+	for _, t := range strings.Split(header, ",") {
+		if strings.TrimSpace(t) == tag || strings.TrimSpace(t) == "*" {
+			return true
+		}
+	}
+	return false
 }
 
 func (a *API) zipEntries(w http.ResponseWriter, r *http.Request) {

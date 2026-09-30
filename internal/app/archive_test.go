@@ -51,6 +51,7 @@ func TestZipEntries(t *testing.T) {
 		[2]string{"p10.jpg", "ten"}, [2]string{"p2.jpg", "two"}, [2]string{"../evil.jpg", "x"}, [2]string{"/abs.jpg", "x"},
 		[2]string{"page.html", "<script>alert(1)</script>"}, [2]string{"art.svg", "<svg onload=alert(1)/>"}, [2]string{"__MACOSX/._p2.jpg", "x"}))
 	f.write(t, "manga/big.cbz", cbz(t, true, [2]string{"huge.jpg", strings.Repeat("x", 64<<20+1)}))
+	f.write(t, "manga/stored.cbz", cbz(t, true, [2]string{"p1.jpg", "0123456789"}))
 	f.write(t, "manga/bomb.cbz", cbz(t, false, [2]string{"zeros.jpg", strings.Repeat("\x00", 16<<20)}))
 	f.write(t, "manga/fake.cbz", "not a zip")
 	f.write(t, "secret.cbz", cbz(t, false, [2]string{"s.jpg", "secret"}))
@@ -71,7 +72,8 @@ func TestZipEntries(t *testing.T) {
 		t.Fatalf("all %v", got)
 	}
 	w = f.do("GET", "/api/zip-entry?"+q("manga/vol 1.cbz", "e", "p2.jpg"), nil)
-	if w.Code != 200 || w.Body.String() != "two" || w.Header().Get("Content-Type") != "image/jpeg" || w.Header().Get("X-Content-Type-Options") != "nosniff" {
+	if w.Code != 200 || w.Body.String() != "two" || w.Header().Get("Content-Type") != "image/jpeg" ||
+		w.Header().Get("X-Content-Type-Options") != "nosniff" || w.Header().Get("Cache-Control") != "private, no-cache" {
 		t.Fatalf("entry %d %q %v", w.Code, w.Body, w.Header())
 	}
 	if etag := w.Header().Get("ETag"); f.do("GET", "/api/zip-entry?"+q("manga/vol 1.cbz", "e", "p2.jpg"), nil, "If-None-Match", etag).Code != 304 {
@@ -95,6 +97,10 @@ func TestZipEntries(t *testing.T) {
 	}
 	if w := f.do("GET", "/api/zip-entry?"+q("manga/bomb.cbz", "e", "zeros.jpg"), nil); w.Code != 413 {
 		t.Errorf("ratio bomb: %d", w.Code)
+	}
+	w = f.do("GET", "/api/zip-entry?"+q("manga/stored.cbz", "e", "p1.jpg"), nil, "Range", "bytes=2-5")
+	if w.Code != 206 || w.Body.String() != "2345" || w.Header().Get("Accept-Ranges") != "bytes" {
+		t.Fatalf("range over a stored entry %d %q %v", w.Code, w.Body, w.Header())
 	}
 	if w := f.do("GET", "/api/zip-entries?"+q("manga/vol 1.cbz"), nil, "X-No-Auth", "1"); w.Code != 401 {
 		t.Fatalf("anonymous listing %d", w.Code)

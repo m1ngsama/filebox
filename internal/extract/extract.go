@@ -29,6 +29,7 @@ const (
 	MaxDocument  = 512 << 20
 	maxPages     = 2000
 	maxEntries   = 10000
+	maxDirectory = 16 << 20
 	maxRatio     = 100
 	maxUnpacked  = 64 << 20
 	markupBudget = 16 << 20

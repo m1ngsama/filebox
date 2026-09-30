@@ -269,7 +269,7 @@ func entries(f io.ReaderAt, size int64) int {
 		return -1
 	}
 	records, dirSize, dirOff := int64(le.Uint16(tail[i+10:])), int64(le.Uint32(tail[i+12:])), int64(le.Uint32(tail[i+16:]))
-	if records*46 > size || records*46 > dirSize {
+	if records*46 > size || records*46 > dirSize || dirSize > maxDirectory {
 		return -1
 	}
 	eocd := size - int64(len(tail)) + int64(i)
@@ -283,16 +283,21 @@ func entries(f io.ReaderAt, size int64) int {
 	return n
 }
 
+// zip.NewReader keeps every name, extra field and comment in memory, so their total is capped too.
 func headers(f io.ReaderAt, start, size int64) int {
 	le := binary.LittleEndian
 	r := bufio.NewReader(io.NewSectionReader(f, start, size-start))
 	var h [46]byte
-	n := 0
+	n, held := 0, int64(0)
 	for ; n <= maxEntries; n++ {
 		if _, err := io.ReadFull(r, h[:]); err != nil || le.Uint32(h[:]) != 0x02014b50 {
 			return n
 		}
-		if _, err := r.Discard(int(le.Uint16(h[28:])) + int(le.Uint16(h[30:])) + int(le.Uint16(h[32:]))); err != nil {
+		fields := int64(le.Uint16(h[28:])) + int64(le.Uint16(h[30:])) + int64(le.Uint16(h[32:]))
+		if held += fields + 46; held > maxDirectory {
+			return maxEntries + 1
+		}
+		if _, err := r.Discard(int(fields)); err != nil {
 			return n
 		}
 	}

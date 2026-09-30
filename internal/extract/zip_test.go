@@ -3,8 +3,10 @@ package extract
 import (
 	"archive/zip"
 	"bytes"
+	"encoding/binary"
 	"errors"
 	"io"
+	"runtime"
 	"slices"
 	"testing"
 )
@@ -103,5 +105,38 @@ func TestOpenGuards(t *testing.T) {
 		if _, err := Zip(bytes.NewReader(bomb), int64(len(bomb))); !errors.Is(err, ErrSkipped) {
 			t.Fatalf("bomb opened: %v", err)
 		}
+	}
+}
+
+// A directory whose records carry 64 KiB of extra field and comment each: zip.NewReader would hold all of it.
+func TestDirectoryFields(t *testing.T) {
+	var b bytes.Buffer
+	h := make([]byte, 46)
+	binary.LittleEndian.PutUint32(h, 0x02014b50)
+	binary.LittleEndian.PutUint16(h[28:], 8)
+	binary.LittleEndian.PutUint16(h[30:], 65535)
+	binary.LittleEndian.PutUint16(h[32:], 65535)
+	pad := make([]byte, 8+65535+65535)
+	const n = 2000
+	for range n {
+		b.Write(h)
+		b.Write(pad)
+	}
+	end := make([]byte, 22)
+	binary.LittleEndian.PutUint32(end, 0x06054b50)
+	binary.LittleEndian.PutUint16(end[8:], n)
+	binary.LittleEndian.PutUint16(end[10:], n)
+	binary.LittleEndian.PutUint32(end[12:], uint32(b.Len()))
+	b.Write(end)
+	book := b.Bytes()
+	var before, after runtime.MemStats
+	runtime.GC()
+	runtime.ReadMemStats(&before)
+	if _, err := Zip(bytes.NewReader(book), int64(len(book))); !errors.Is(err, ErrSkipped) {
+		t.Fatalf("opened a %d MiB directory: %v", len(book)>>20, err)
+	}
+	runtime.ReadMemStats(&after)
+	if n := after.TotalAlloc - before.TotalAlloc; n > 1<<20 {
+		t.Fatalf("allocated %d bytes before rejecting", n)
 	}
 }
