@@ -1,4 +1,6 @@
-import { t } from './i18n'
+import { locale, t } from './i18n'
+
+const decimals = [0, 1].map((d) => new Intl.NumberFormat(locale, { minimumFractionDigits: d, maximumFractionDigits: d, useGrouping: false }))
 
 export function size(n: number): string {
   const u = ['B', 'KB', 'MB', 'GB', 'TB']
@@ -7,13 +9,13 @@ export function size(n: number): string {
     n /= 1024
     i++
   }
-  return `${i ? n.toFixed(n < 10 ? 1 : 0) : n} ${u[i]}`
+  return `${decimals[i && n < 10 ? 1 : 0].format(n)} ${u[i]}`
 }
 
 export type Sort = 'name' | 'size' | 'mtime'
 export const sorts: [Sort, string][] = [['name', t.name], ['size', t.size], ['mtime', t.mtime]]
 export const flip = (sort: Sort, desc: boolean, k: Sort) => (sort === k ? !desc : k !== 'name')
-const collator = new Intl.Collator(navigator.language, { numeric: true })
+const collator = new Intl.Collator(locale, { numeric: true })
 
 type Row = { name: string; dir: boolean; size: number; mtime: number }
 const keys = new WeakMap<Row[], { rank: Int32Array; lower: string[] }>()
@@ -44,10 +46,10 @@ export function arrange<T extends Row>(list: T[], filter: string, sort: Sort, de
     .map((i) => list[i])
 }
 
-const dtf = new Intl.DateTimeFormat('zh-CN', { dateStyle: 'short', timeStyle: 'short' })
+const dtf = new Intl.DateTimeFormat(locale, { dateStyle: 'short', timeStyle: 'short' })
 export const date = (ms: number) => dtf.format(ms)
 
-const rtf = new Intl.RelativeTimeFormat('zh-CN', { numeric: 'auto' })
+const rtf = new Intl.RelativeTimeFormat(locale, { numeric: 'auto' })
 const steps: [Intl.RelativeTimeFormatUnit, number][] = [['minute', 60], ['hour', 24], ['day', 30], ['month', 12], ['year', Infinity]]
 
 export function ago(ms: number) {
@@ -101,8 +103,8 @@ const thumbs = new Set('jpg jpeg png gif webp bmp tif tiff heic heif avif pdf cr
 export const thumbable = (n: string) => thumbs.has(ext(n))
 
 type WeekLocale = Intl.Locale & { getWeekInfo?: () => { firstDay: number }; weekInfo?: { firstDay: number } }
-const locale = new Intl.Locale(navigator.language) as WeekLocale
-const weekStart = ((locale.getWeekInfo?.() ?? locale.weekInfo)?.firstDay ?? 1) % 7
+const week = new Intl.Locale(locale) as WeekLocale
+const weekStart = ((week.getWeekInfo?.() ?? week.weekInfo)?.firstDay ?? 1) % 7
 
 export function days(now = new Date()) {
   const d = new Date(now)

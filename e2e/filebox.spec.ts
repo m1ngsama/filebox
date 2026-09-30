@@ -974,6 +974,21 @@ test.describe('with an English browser', () => {
     await anon.close()
   })
 
+  test('recent groups, relative times and dates use English formats', async ({ page, server }) => {
+    const old = join(server.vol, 'old.txt')
+    writeFileSync(old, 'o')
+    utimesSync(old, new Date('2020-01-02T03:04:00'), new Date('2020-01-02T03:04:00'))
+    await login(page, en)
+    const mtime = row(page, 'old.txt').locator('.mtime')
+    await expect(mtime).toHaveText(/^\d+ years ago$/)
+    await expect(mtime).toHaveAttribute('title', /^1\/2\/20, 3:04\sAM$/)
+    const r = await page.request.post('/api/cp', { data: { src: { vol: 'v', path: 'old.txt' }, dst: { vol: 'v', path: 'docs/old.txt' } } })
+    const { job } = await r.json()
+    await expect.poll(async () => (await (await page.request.get(`/api/jobs/${job}`)).json()).state).toBe('done')
+    await page.getByRole('link', { name: en.recent, exact: true }).click()
+    await expect(page.locator('.group-head')).toHaveText([en.today, en.earlier])
+  })
+
   test('dates stay in the UI language', async ({ page }) => {
     await login(page, en)
     await page.goto('/settings')
