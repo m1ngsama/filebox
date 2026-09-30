@@ -1728,6 +1728,34 @@ test.describe('on a phone', () => {
     expect(tail.x + tail.width).toBeLessThanOrEqual(head.x + 1)
   })
 
+  test('links and primary buttons show touch feedback while pressed', async ({ page, server }) => {
+    await login(page)
+    await row(page, 'docs').locator('button.name').tap()
+    const bg = async (l: Locator) => {
+      const b = (await l.boundingBox())!
+      await page.mouse.move(b.x + b.width / 2, b.y + b.height / 2)
+      await page.mouse.down()
+      const c = await l.evaluate((e) => getComputedStyle(e).backgroundColor)
+      await page.mouse.move(0, 0)
+      await page.mouse.up()
+      return c
+    }
+    const up = page.getByRole('link', { name: t.upTo('v') })
+    const idle = await up.evaluate((e) => getComputedStyle(e).backgroundColor)
+    expect(await bg(up)).not.toBe(idle)
+    const fab = page.getByRole('button', { name: t.new, exact: true })
+    const accent = await fab.evaluate((e) => getComputedStyle(e).backgroundColor)
+    const pressed = await bg(fab)
+    expect(pressed).not.toBe(accent)
+    const hover = await page.evaluate(() => {
+      const d = document.body.appendChild(Object.assign(document.createElement('div'), { style: 'background: var(--hover)' }))
+      const c = getComputedStyle(d).backgroundColor
+      d.remove()
+      return c
+    })
+    expect(pressed).not.toBe(hover)
+  })
+
   test('touch targets are at least 44 px', async ({ page, server }) => {
     writeFileSync(join(server.vol, 'docs', 'x.txt'), 'x')
     await login(page)

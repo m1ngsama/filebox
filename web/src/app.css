@@ -493,7 +493,9 @@ button.busy::before { content: ''; width: 14px; height: 14px; border: 2px solid 
   .toast .icon-btn:hover { color: inherit; opacity: 1; }
 }
 @media (hover: none), (pointer: coarse) {
-  button:active:not(:disabled), .icon-btn:active, .nav a:active, .row:active:not(.sel), .card:active:not(.sel), .sheet-item:active { background: var(--hover); }
+  button:not(.primary, .danger-fill):active:not(:disabled), a.button:not(.primary):active, .icon-btn:active, .nav a:active, .up:active, .crumbs a:active, .sub a:active, a.chip:active, .settings-nav a:active, .row:active:not(.sel), .card:active:not(.sel), .sheet-item:active { background: var(--hover); }
+  button.primary:active:not(:disabled), a.button.primary:active { background: color-mix(in srgb, var(--accent) 88%, var(--fg)); }
+  button.danger-fill:active:not(:disabled) { background: color-mix(in srgb, var(--danger) 88%, var(--fg)); }
   .viewer .icon-btn:active, .toast .icon-btn:active, .toast-action:active:not(:disabled) { background: var(--viewer-hover); }
   .scrim:active:not(:disabled) { background: var(--scrim); }
 }
