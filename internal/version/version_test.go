@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
+	"syscall"
 	"testing"
 	"time"
 
@@ -383,5 +384,50 @@ func TestExpireVersionsOfDeletedFiles(t *testing.T) {
 	e.s.Prune(e.vols)
 	if e.count(t, "back.txt") != 0 {
 		t.Error("back.txt versions kept after it was gone for the whole period")
+	}
+}
+
+func TestReplaceLinksThenRenamesOver(t *testing.T) {
+	for _, fallback := range []bool{false, true} {
+		e := setup(t)
+		if fallback {
+			link = func(*os.Root, string, string) error { return &os.LinkError{Op: "link", Err: syscall.EXDEV} }
+			t.Cleanup(func() { link = (*os.Root).Link })
+		}
+		e.write(t, "a.txt", "old")
+		before, _ := os.Stat(filepath.Join(e.dir, "a.txt"))
+		e.write(t, ".filebox/tmp/new", "new")
+		id, err := e.s.Replace(e.v, ".filebox/tmp/new", "a.txt", WebDAV, 1)
+		if err != nil || id == "" {
+			t.Fatalf("fallback %v: %q %v", fallback, id, err)
+		}
+		kept, _ := os.Stat(filepath.Join(e.dir, vol.VersionsDir, id))
+		if e.read("a.txt") != "new" || e.read(vol.VersionsDir+"/"+id) != "old" || !os.SameFile(before, kept) {
+			t.Fatalf("fallback %v: live %q, version %q", fallback, e.read("a.txt"), e.read(vol.VersionsDir+"/"+id))
+		}
+		if _, err := os.Stat(filepath.Join(e.dir, ".filebox/tmp/new")); !errors.Is(err, fs.ErrNotExist) {
+			t.Fatalf("fallback %v: temp file left", fallback)
+		}
+		e.write(t, "a.txt", "newer")
+		if _, prev, err := e.s.Restore(e.v, id, 1); err != nil || prev == "" || e.read("a.txt") != "old" || e.read(vol.VersionsDir+"/"+prev) != "newer" {
+			t.Fatalf("fallback %v: restore %v", fallback, err)
+		}
+	}
+}
+
+func TestReplaceFailureKeepsLiveFile(t *testing.T) {
+	e := setup(t)
+	e.write(t, "a.txt", "old")
+	if _, err := e.s.Replace(e.v, ".filebox/tmp/missing", "a.txt", WebDAV, 1); err == nil {
+		t.Fatal("replaced from a missing temp file")
+	}
+	if e.read("a.txt") != "old" || e.count(t, "a.txt") != 0 {
+		t.Fatal("failed replace touched the live file or kept a version")
+	}
+	f, _ := os.Open(filepath.Join(e.dir, vol.VersionsDir))
+	names, _ := f.Readdirnames(-1)
+	f.Close()
+	if len(names) != 0 {
+		t.Fatalf("left behind %v", names)
 	}
 }

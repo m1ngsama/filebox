@@ -243,7 +243,7 @@ func (f *FS) stage(ctx context.Context, pb *putBody, v *vol.Volume, rel string, 
 			v.Root.Remove(tmp)
 			return cmp.Or(closed, errIncomplete)
 		}
-		if err := f.vs.Replace(v, tmp, rel, version.WebDAV, user(ctx)); err != nil {
+		if _, err := f.vs.Replace(v, tmp, rel, version.WebDAV, user(ctx)); err != nil {
 			v.Root.Remove(tmp)
 			return err
 		}

@@ -376,18 +376,14 @@ func (s *Server) finish(u *volume, info handler.FileInfo) (string, error) {
 	err := Target{Vol: u.v, Dir: dir, Base: info.MetaData[keyBase]}.confine(true)
 	name := info.MetaData[keyName]
 	dst := path.Join(dir, name)
-	kept := ""
+	kept, staged := "", path.Join(vol.UploadsDir, info.ID)
 	if err == nil && replaceable(u.v.Root, dst, info.MetaData[keyReplace] == "1") {
-		kept, err = s.Versions.Capture(u.v, dst, version.Upload, userID(info.MetaData[keyOwner]))
+		kept, err = s.Versions.Replace(u.v, staged, dst, version.Upload, userID(info.MetaData[keyOwner]))
 	} else if err == nil {
 		name, err = unique(u.v.Root, dir, name)
 		dst = path.Join(dir, name)
-	}
-	if err == nil {
-		err = vol.Move(u.v.Root, path.Join(vol.UploadsDir, info.ID), dst)
-		if err != nil && kept != "" {
-			s.Versions.Restore(u.v, kept, 0)
-			kept = ""
+		if err == nil {
+			err = vol.Move(u.v.Root, staged, dst)
 		}
 	}
 	if err != nil {

@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io/fs"
 	"log/slog"
+	"os"
 	"path"
 	"regexp"
 	"slices"
@@ -76,14 +77,21 @@ func (s *Store) Capture(v *vol.Volume, rel, source string, user int64) (string, 
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.guard(v, s.now().UnixMilli())
-	id, err := s.capture(v, rel, source, user)
+	id, err := s.capture(v, rel, source, user, false)
 	if err == nil {
 		s.prune(v, rel)
 	}
 	return id, err
 }
 
-func (s *Store) capture(v *vol.Volume, rel, source string, user int64) (string, error) {
+var link = (*os.Root).Link
+
+func noLink(err error) bool {
+	return errors.Is(err, syscall.EXDEV) || errors.Is(err, syscall.EPERM) || errors.Is(err, syscall.ENOTSUP) ||
+		errors.Is(err, syscall.EOPNOTSUPP) || errors.Is(err, syscall.EMLINK)
+}
+
+func (s *Store) capture(v *vol.Volume, rel, source string, user int64, byLink bool) (string, error) {
 	fi, err := v.Root.Lstat(rel)
 	if err != nil {
 		return "", err
@@ -101,14 +109,22 @@ func (s *Store) capture(v *vol.Volume, rel, source string, user int64) (string, 
 	if err := v.Root.WriteFile(File(id)+sidecar, []byte(rel), 0o600); err != nil {
 		return "", err
 	}
-	if err := v.Root.Rename(rel, File(id)); err != nil {
+	keep := v.Root.Rename
+	if byLink {
+		keep = func(from, to string) error { return link(v.Root, from, to) }
+	}
+	if err := keep(rel, File(id)); err != nil {
 		v.Root.Remove(File(id) + sidecar)
 		return "", err
 	}
 	_, err = s.DB.Exec(`INSERT INTO versions (id, vol, path, size, mtime, created, source, user_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
 		id, v.Name, rel, fi.Size(), fi.ModTime().UnixMilli(), now.UnixMilli(), source, user)
 	if err != nil {
-		if vol.Move(v.Root, File(id), rel) == nil {
+		switch {
+		case byLink:
+			v.Root.Remove(File(id))
+			v.Root.Remove(File(id) + sidecar)
+		case vol.Move(v.Root, File(id), rel) == nil:
 			v.Root.Remove(File(id) + sidecar)
 		}
 		return "", err
@@ -173,47 +189,56 @@ func (s *Store) Restore(v *vol.Volume, id string, user int64) (string, string, e
 		if !fi.Mode().IsRegular() {
 			return "", "", fs.ErrExist
 		}
-		if prev, err = s.capture(v, dst, Restore, user); err != nil {
+		if prev, err = s.swap(v, File(id), dst, Restore, user); err != nil {
 			return "", "", err
 		}
 	} else if err := v.Root.MkdirAll(path.Dir(dst), 0o755); err != nil {
 		return "", "", err
-	}
-	if err := vol.Move(v.Root, File(id), dst); err != nil {
-		if prev != "" {
-			s.unwind(v, prev, dst)
-		}
+	} else if err := vol.Move(v.Root, File(id), dst); err != nil {
 		return "", "", err
 	}
 	s.forget(v, id)
 	return dst, prev, nil
 }
 
-func (s *Store) Replace(v *vol.Volume, tmp, rel, source string, user int64) error {
+func (s *Store) swap(v *vol.Volume, from, rel, source string, user int64) (string, error) {
+	s.guard(v, s.now().UnixMilli())
+	id, err := s.capture(v, rel, source, user, true)
+	if err == nil {
+		if err := v.Root.Rename(from, rel); err != nil {
+			s.drop(v, id)
+			return "", err
+		}
+		return id, nil
+	}
+	if !noLink(err) {
+		return "", err
+	}
+	if id, err = s.capture(v, rel, source, user, false); err != nil {
+		return "", err
+	}
+	if err := v.Root.Rename(from, rel); err != nil {
+		s.unwind(v, id, rel)
+		return "", err
+	}
+	return id, nil
+}
+
+func (s *Store) Replace(v *vol.Volume, tmp, rel, source string, user int64) (string, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	kept := ""
-	if fi, err := v.Root.Lstat(rel); err == nil {
-		if fi.IsDir() {
-			return &fs.PathError{Op: "replace", Path: rel, Err: syscall.EISDIR}
-		}
-		if fi.Mode().IsRegular() && fi.Size() > 0 {
-			s.guard(v, s.now().UnixMilli())
-			if kept, err = s.capture(v, rel, source, user); err != nil {
-				return err
-			}
-		}
+	fi, err := v.Root.Lstat(rel)
+	switch {
+	case err == nil && fi.IsDir():
+		return "", &fs.PathError{Op: "replace", Path: rel, Err: syscall.EISDIR}
+	case err != nil || !fi.Mode().IsRegular() || fi.Size() == 0:
+		return "", v.Root.Rename(tmp, rel)
 	}
-	if err := v.Root.Rename(tmp, rel); err != nil {
-		if kept != "" {
-			s.unwind(v, kept, rel)
-		}
-		return err
-	}
-	if kept != "" {
+	id, err := s.swap(v, tmp, rel, source, user)
+	if err == nil {
 		s.prune(v, rel)
 	}
-	return nil
+	return id, err
 }
 
 func (s *Store) Moved(v *vol.Volume, to string) {
