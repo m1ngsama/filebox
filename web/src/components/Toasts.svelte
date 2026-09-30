@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { icon } from '../lib/icon'
   import X from '@lucide/svelte/icons/x'
   import CircleCheck from '@lucide/svelte/icons/circle-check'
   import CircleAlert from '@lucide/svelte/icons/circle-alert'
@@ -39,7 +40,7 @@
 {#snippet item(x: (typeof toasts)[number])}
   {@const Icon = icons[x.kind]}
   <div class={`toast ${x.kind}`} data-id={x.id}>
-    <Icon size={18} aria-hidden="true" />
+    <Icon size={icon.md} aria-hidden="true" />
     <span class="toast-text" id={`toast-${x.id}`} aria-hidden="true">{x.text}</span>
     {#each x.actions as a (a.label)}
       <button
@@ -51,6 +52,6 @@
         }}>{a.label}</button
       >
     {/each}
-    <button class="icon-btn" aria-label={t.close} onclick={() => retract(x.id)}><X size={16} /></button>
+    <button class="icon-btn" aria-label={t.close} onclick={() => retract(x.id)}><X size={icon.sm} /></button>
   </div>
 {/snippet}

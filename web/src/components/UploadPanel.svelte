@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { icon } from '../lib/icon'
   import X from '@lucide/svelte/icons/x'
   import RotateCw from '@lucide/svelte/icons/rotate-cw'
   import ChevronDown from '@lucide/svelte/icons/chevron-down'
@@ -58,20 +59,20 @@
       {#if uploads.length}
         <button class="up-title" aria-expanded={!collapsed} onclick={() => (open = collapsed)}>
           <span>{title}</span>
-          {#if collapsed}<ChevronUp size={18} />{:else}<ChevronDown size={18} />{/if}
+          {#if collapsed}<ChevronUp size={icon.md} />{:else}<ChevronDown size={icon.md} />{/if}
         </button>
       {:else}
         <p class="up-title"><span>{title}</span></p>
       {/if}
       {#if !active && finished.last?.vol}<button class="ghost up-view" onclick={view}>{t.show}</button>{/if}
-      {#if !active}<button class="icon-btn" aria-label={t.close} onclick={close}><X size={18} /></button>{/if}
+      {#if !active}<button class="icon-btn" aria-label={t.close} onclick={close}><X size={icon.md} /></button>{/if}
     </header>
     {#if active}<progress class="up-total" max={totals.bytes || 1} value={totals.sent}></progress>{/if}
     {#if !collapsed}
       <ul>
         {#each rows as u (u.id)}
           <li class={u.state}>
-            <FileIcon name={u.name} dir={u.dir} size={20} />
+            <FileIcon name={u.name} dir={u.dir} size={icon.md} />
             <span class="name" title={u.name}>{u.name}</span>
             {#if u.state === 'error'}
               <span class="meta">{u.error}</span>
@@ -80,11 +81,11 @@
             {/if}
             {#if u.dir}<span class="count">{u.ok}/{u.files}</span>{/if}
             {#if u.state === 'error'}
-              <button class="icon-btn" aria-label={t.retryItem(u.name)} title={t.retry} onclick={() => retry(u)}><RotateCw size={16} /></button>
+              <button class="icon-btn" aria-label={t.retryItem(u.name)} title={t.retry} onclick={() => retry(u)}><RotateCw size={icon.sm} /></button>
             {:else if u.state === 'done'}
-              <CircleCheck size={16} class="up-ok" aria-label={t.uploadDone} />
+              <CircleCheck size={icon.sm} class="up-ok" aria-label={t.uploadDone} />
             {:else}
-              <button class="icon-btn" aria-label={t.cancelItem(u.name)} title={t.cancel} onclick={() => cancel(u)}><X size={16} /></button>
+              <button class="icon-btn" aria-label={t.cancelItem(u.name)} title={t.cancel} onclick={() => cancel(u)}><X size={icon.sm} /></button>
             {/if}
           </li>
         {/each}

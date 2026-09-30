@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { icon } from '../lib/icon'
   import Download from '@lucide/svelte/icons/download'
   import Inbox from '@lucide/svelte/icons/inbox'
   import LogIn from '@lucide/svelte/icons/log-in'
@@ -55,7 +56,7 @@
 <RowList items={events} {error} key={(e) => e.id} label={t.activity}>
   {#snippet row(e)}
     {@const Icon = icons[e.kind as keyof typeof icons] ?? Link}
-    <Icon size={18} class="row-icon" />
+    <Icon size={icon.md} class="row-icon" />
     <div class="row-main">
       <span class="row-title">{(t.events as Record<string, (name: string) => string>)[e.kind]?.(e.kind.startsWith('share_') ? placeOf(e.target) : e.name) ?? e.kind}{e.kind === 'upload' ? ` · ${size(e.size)}` : ''}</span>
       <span class="tags">

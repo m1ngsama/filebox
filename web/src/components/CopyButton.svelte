@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { icon } from '../lib/icon'
   import Copy from '@lucide/svelte/icons/copy'
   import Check from '@lucide/svelte/icons/check'
   import { t } from '../lib/i18n'
@@ -20,5 +21,5 @@
 </script>
 
 <button type="button" class="icon-btn" aria-label={done ? t.copied : label} title={label} onclick={copy}>
-  {#if done}<Check size={18} />{:else}<Copy size={18} />{/if}
+  {#if done}<Check size={icon.md} />{:else}<Copy size={icon.md} />{/if}
 </button>

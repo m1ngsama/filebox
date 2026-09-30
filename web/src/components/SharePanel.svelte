@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { icon } from '../lib/icon'
   import Link from '@lucide/svelte/icons/link'
   import ShareRow from './ShareRow.svelte'
   import { api, shareLink, type Share } from '../lib/api'
@@ -56,7 +57,7 @@
 <ul class="shares">
   {#each shares as s (s.id)}
     <li>
-      <Link size={16} />
+      <Link size={icon.sm} />
       <ShareRow share={s} {dir} onchange={load}>
         <a href={shareLink(s.token)} target="_blank" rel="noreferrer">{shareLink(s.token)}</a>
       </ShareRow>

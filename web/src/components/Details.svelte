@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { icon } from '../lib/icon'
   import { Tabs } from 'bits-ui'
   import X from '@lucide/svelte/icons/x'
   import Star from '@lucide/svelte/icons/star'
@@ -43,11 +44,11 @@
     <div class="details-thumb">
       {#if src}<img {src} alt="" onerror={() => tries++} />{:else}<FileIcon name={entry.name} dir={entry.dir} size={64} />{/if}
     </div>
-    <button class="icon-btn details-close" aria-label={t.close} onclick={onclose}><X size={20} /></button>
+    <button class="icon-btn details-close" aria-label={t.close} onclick={onclose}><X size={icon.md} /></button>
     <div class="details-title">
       <h2 title={entry.name}>{entry.name}</h2>
       <button class="icon-btn" class:on aria-pressed={on} aria-label={t.star} title={on ? t.unstar : t.star} onclick={() => star(vol, [path], !on).catch(fail)}>
-        <Star size={20} />
+        <Star size={icon.md} />
       </button>
     </div>
     <dl>

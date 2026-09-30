@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { icon } from '../lib/icon'
   import { SvelteSet } from 'svelte/reactivity'
   import Download from '@lucide/svelte/icons/download'
   import Upload from '@lucide/svelte/icons/upload'
@@ -169,8 +170,8 @@
 <svelte:window ondragover={(e) => e.preventDefault()} ondrop={(e) => e.preventDefault()} />
 
 {#snippet batch()}
-  <button class="ghost" onclick={() => download([...selected])}><Download size={16} />{t.download}</button>
-  <button class="icon-btn" aria-label={t.clearSelection} onclick={() => selected.clear()}><X size={16} /></button>
+  <button class="ghost" onclick={() => download([...selected])}><Download size={icon.sm} />{t.download}</button>
+  <button class="icon-btn" aria-label={t.clearSelection} onclick={() => selected.clear()}><X size={icon.sm} /></button>
 {/snippet}
 
 <div
@@ -200,7 +201,7 @@
         <nav class="crumbs" aria-label={t.breadcrumb}>
           <a href={here('')} onclick={link} aria-current={crumbs.length ? undefined : 'page'}>{shared.name}</a>
           {#each crumbs as c, i}
-            <ChevronRight size={16} />
+            <ChevronRight size={icon.sm} />
             <a href={here(crumbs.slice(0, i + 1).join('/'))} onclick={link} aria-current={i === crumbs.length - 1 ? 'page' : undefined}>{c}</a>
           {/each}
         </nav>
@@ -209,15 +210,15 @@
       {/if}
       <span class="grow"></span>
       {#if file}
-        <a class="button primary" href={shareRawURL(token, '', true)} download><Download size={18} /><span>{t.download}</span></a>
+        <a class="button primary" href={shareRawURL(token, '', true)} download><Download size={icon.md} /><span>{t.download}</span></a>
       {:else if listed}
         <button class="icon-btn view" aria-label={grid ? t.listView : t.gridView} title={grid ? t.listView : t.gridView} onclick={() => (grid = !grid)}>
-          {#if grid}<List size={20} />{:else}<LayoutGrid size={20} />{/if}
+          {#if grid}<List size={icon.md} />{:else}<LayoutGrid size={icon.md} />{/if}
         </button>
         <a class={shared.mode === 'upload' ? 'button' : 'button primary'} href={shareZipURL(token, p ? [p] : [], folder)} download onclick={() => packing(folder)}
-          ><Download size={18} /><span>{t.downloadAll}</span></a
+          ><Download size={icon.md} /><span>{t.downloadAll}</span></a
         >
-        {#if shared.mode === 'upload'}<button class="primary" onclick={() => picker?.click()}><Upload size={18} /><span>{t.upload}</span></button>{/if}
+        {#if shared.mode === 'upload'}<button class="primary" onclick={() => picker?.click()}><Upload size={icon.md} /><span>{t.upload}</span></button>{/if}
       {/if}
     {/if}
   </header>
@@ -226,7 +227,7 @@
     <div class="public-info">
       {#if shared.note}<p class="public-note">{shared.note}</p>{/if}
       <p class="hint">
-        {#if shared.expires}<span><Clock size={14} />{left > 0 ? t.expiresIn(left) : t.expired}</span>{/if}
+        {#if shared.expires}<span><Clock size={icon.sm} />{left > 0 ? t.expiresIn(left) : t.expired}</span>{/if}
         {#if canUpload && shared.max_upload}<span>{t.maxUpload(size(shared.max_upload))}</span>{/if}
       </p>
     </div>
@@ -266,7 +267,7 @@
         <div class="details-thumb"><FileIcon name={file.name} dir={false} size={72} /></div>
         <h2>{file.name}</h2>
         <p class="hint">{size(file.size)}</p>
-        <a class="button primary" href={shareRawURL(token, '', true)} download><Download size={18} />{t.download}</a>
+        <a class="button primary" href={shareRawURL(token, '', true)} download><Download size={icon.md} />{t.download}</a>
       </div>
     {/if}
     {#if fileKind && (fileKind !== 'image' || imageSrc)}<p class="public-meta hint">{file.name} · {size(file.size)}</p>{/if}
@@ -274,7 +275,7 @@
     <div class="dropbox">
       <Upload size={40} class="ficon" />
       <p>{t.dropTitle}</p>
-      <button class="primary" onclick={() => picker?.click()}><Upload size={18} />{t.chooseFiles}</button>
+      <button class="primary" onclick={() => picker?.click()}><Upload size={icon.md} />{t.chooseFiles}</button>
       <p class="hint">{t.dropHint}</p>
     </div>
   {:else if listed}
@@ -307,8 +308,8 @@
     </section>
     {#if selected.size}
       <div class="sel-tools" role="group" aria-label={t.selected(selected.size)} bind:offsetHeight={barH}>
-        <button onclick={() => download([...selected])}><Download size={20} /><span>{t.download}</span></button>
-        <button onclick={() => selected.clear()}><X size={20} /><span>{t.clearSelection}</span></button>
+        <button onclick={() => download([...selected])}><Download size={icon.md} /><span>{t.download}</span></button>
+        <button onclick={() => selected.clear()}><X size={icon.md} /><span>{t.clearSelection}</span></button>
       </div>
     {/if}
   {/if}

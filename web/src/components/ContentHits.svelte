@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { icon } from '../lib/icon'
   import FileIcon from './FileIcon.svelte'
   import { parent, place } from '../lib/format'
   import { t } from '../lib/i18n'
@@ -14,7 +15,7 @@
     {#each hits as h (`${h.vol}:${h.path}`)}
       <li>
         <button class="hit" onclick={() => onopen(h)} title={place(h.vol, h.path)}>
-          <FileIcon name={h.name} dir={false} size={20} />
+          <FileIcon name={h.name} dir={false} size={icon.md} />
           <span class="head"><span class="name">{h.name}</span><span class="where">{place(h.vol, parent(h.path), 3)}</span></span>
           <span class="snippet">{#each h.snippet as s, i (i)}{#if i % 2}<mark>{s}</mark>{:else}{s}{/if}{/each}</span>
         </button>

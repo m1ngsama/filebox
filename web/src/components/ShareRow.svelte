@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { icon } from '../lib/icon'
   import type { Snippet } from 'svelte'
   import Pencil from '@lucide/svelte/icons/pencil'
   import Trash from '@lucide/svelte/icons/trash'
@@ -25,8 +26,8 @@
 </div>
 <ShareQR text={shareLink(share.token)} />
 <CopyButton text={shareLink(share.token)} />
-<button class="icon-btn" aria-label={t.editShare} title={t.editShare} onclick={() => (editing = true)}><Pencil size={18} /></button>
-<button class="icon-btn danger" aria-label={t.deleteShare} title={t.deleteShare} onclick={() => (removing = true)}><Trash size={18} /></button>
+<button class="icon-btn" aria-label={t.editShare} title={t.editShare} onclick={() => (editing = true)}><Pencil size={icon.md} /></button>
+<button class="icon-btn danger" aria-label={t.deleteShare} title={t.deleteShare} onclick={() => (removing = true)}><Trash size={icon.md} /></button>
 
 {#if editing}
   <ShareEditor {share} {dir} onclose={() => (editing = false)} onsaved={onchange} />

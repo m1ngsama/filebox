@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { icon } from '../lib/icon'
   import KeyRound from '@lucide/svelte/icons/key-round'
   import Fingerprint from '@lucide/svelte/icons/fingerprint'
   import MonitorSmartphone from '@lucide/svelte/icons/monitor-smartphone'
@@ -111,7 +112,7 @@
   </header>
 {/snippet}
 
-{#snippet addKey()}<button onclick={() => (adding = true)}><Plus size={16} />{t.addPasskey}</button>{/snippet}
+{#snippet addKey()}<button onclick={() => (adding = true)}><Plus size={icon.sm} />{t.addPasskey}</button>{/snippet}
 
 <div class="settings-layout">
   <nav class="settings-nav" aria-label={t.settings}>
@@ -141,7 +142,7 @@
       {@render head('sessions', t.sessions, t.sessionsHint)}
       <RowList items={sessions} error={sessionsError} key={(s) => s.id} label={t.sessions}>
         {#snippet row(s)}
-          <MonitorSmartphone size={18} class="row-icon" />
+          <MonitorSmartphone size={icon.md} class="row-icon" />
           <div class="row-main">
             <span class="row-title" title={s.user_agent}>{device(s.user_agent) || t.unknownDevice}</span>
             <span class="tags">
@@ -155,7 +156,7 @@
         {#snippet empty()}{/snippet}
       </RowList>
       {#if sessions && sessions.length > 1}
-        <div><button onclick={() => (signingOut = 'others')}><LogOut size={16} />{t.signOutOthers}</button></div>
+        <div><button onclick={() => (signingOut = 'others')}><LogOut size={icon.sm} />{t.signOutOthers}</button></div>
       {/if}
     </section>
 
@@ -164,7 +165,7 @@
         {@render head('passkeys', t.passkeys, t.passkeysHint, addKey)}
         <RowList items={passkeys} error={passkeysError} key={(k) => k.id}>
           {#snippet row(k)}
-            <Fingerprint size={18} class="row-icon" />
+            <Fingerprint size={icon.md} class="row-icon" />
             <div class="row-main">
               <span class="row-title" title={k.name}>{k.name}</span>
               <span class="tags">
@@ -214,7 +215,7 @@
 
       <RowList items={tokens} error={tokensError} key={(k) => k.id}>
         {#snippet row(k)}
-          <KeyRound size={18} class="row-icon" />
+          <KeyRound size={icon.md} class="row-icon" />
           <div class="row-main">
             <span class="row-title" title={k.label}>{k.label}</span>
             <span class="tags">

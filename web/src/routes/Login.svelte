@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { icon } from '../lib/icon'
   import { onMount, tick } from 'svelte'
   import Eye from '@lucide/svelte/icons/eye'
   import EyeOff from '@lucide/svelte/icons/eye-off'
@@ -126,13 +127,13 @@
       required
     />
     <button type="button" class="icon-btn" aria-label={t.showPassword} aria-pressed={show} onclick={() => (show = !show)}>
-      {#if show}<EyeOff size={18} />{:else}<Eye size={18} />{/if}
+      {#if show}<EyeOff size={icon.md} />{:else}<Eye size={icon.md} />{/if}
     </button>
   </div>
   {#if error}<p class="error" id="login-error" role="alert">{error}</p>{/if}
   <button type="submit" class="primary" disabled={busy}>{t.login}</button>
   {#if passkeys}
     <div class="login-or"><span>{t.or}</span></div>
-    <button type="button" onclick={() => passkey()}><Fingerprint size={18} />{t.passkeyLogin}</button>
+    <button type="button" onclick={() => passkey()}><Fingerprint size={icon.md} />{t.passkeyLogin}</button>
   {/if}
 </form>

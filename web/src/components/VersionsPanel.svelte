@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { icon } from '../lib/icon'
   import Download from '@lucide/svelte/icons/download'
   import RotateCcw from '@lucide/svelte/icons/rotate-ccw'
   import Trash from '@lucide/svelte/icons/trash'
@@ -29,9 +30,9 @@
         <a href={versionURL(vol, x.id)} target="_blank" rel="noreferrer">{date(x.created, crowded(x))}</a>
         <span class="hint">{ago(x.created)} · {size(x.size)} · {t.versionSources[x.source] ?? x.source}</span>
       </div>
-      <a class="icon-btn" href={versionURL(vol, x.id, true)} download aria-label={t.download} title={t.download}><Download size={18} /></a>
-      <button class="icon-btn" aria-label={t.restore} title={t.restore} onclick={() => restore(x)}><RotateCcw size={18} /></button>
-      <button class="icon-btn danger" aria-label={t.deleteVersion} title={t.deleteVersion} onclick={() => (removing = x)}><Trash size={18} /></button>
+      <a class="icon-btn" href={versionURL(vol, x.id, true)} download aria-label={t.download} title={t.download}><Download size={icon.md} /></a>
+      <button class="icon-btn" aria-label={t.restore} title={t.restore} onclick={() => restore(x)}><RotateCcw size={icon.md} /></button>
+      <button class="icon-btn danger" aria-label={t.deleteVersion} title={t.deleteVersion} onclick={() => (removing = x)}><Trash size={icon.md} /></button>
     </li>
   {:else}
     <li class="hint">{t.noVersions}</li>

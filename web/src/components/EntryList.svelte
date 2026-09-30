@@ -4,6 +4,7 @@
 </script>
 
 <script lang="ts">
+  import { icon } from '../lib/icon'
   import { tick, untrack, type Snippet } from 'svelte'
   import { SvelteSet, SvelteMap } from 'svelte/reactivity'
   import { ContextMenu, DropdownMenu } from 'bits-ui'
@@ -278,17 +279,17 @@
   {#each actions(e) as a (a.id)}
     {#if a.danger}<DropdownMenu.Separator class="menu-sep" />{/if}
     <DropdownMenu.Item class={a.danger ? 'menu-item danger' : 'menu-item'} onSelect={() => onaction(a.id, e)}>
-      <a.icon size={16} />{a.label}
+      <a.icon size={icon.sm} />{a.label}
     </DropdownMenu.Item>
   {/each}
 {/snippet}
 
 {#snippet more(e: Entry)}
   {#if narrow.current}
-    <button class="icon-btn more" aria-label={`${e.name} ${t.actions}`} aria-haspopup="dialog" onclick={() => (sheet = e)}><Ellipsis size={18} /></button>
+    <button class="icon-btn more" aria-label={`${e.name} ${t.actions}`} aria-haspopup="dialog" onclick={() => (sheet = e)}><Ellipsis size={icon.md} /></button>
   {:else}
   <DropdownMenu.Root>
-    <DropdownMenu.Trigger class="icon-btn more" aria-label={`${e.name} ${t.actions}`}><Ellipsis size={18} /></DropdownMenu.Trigger>
+    <DropdownMenu.Trigger class="icon-btn more" aria-label={`${e.name} ${t.actions}`}><Ellipsis size={icon.md} /></DropdownMenu.Trigger>
     <DropdownMenu.Portal>
       <DropdownMenu.Content class="menu" preventScroll={false} align="end" sideOffset={4}>{@render items(e)}</DropdownMenu.Content>
     </DropdownMenu.Portal>
@@ -346,7 +347,7 @@
     {#each sorts as [k, label] (k)}
       <button class={`sort ${k}`} aria-pressed={sort === k} onclick={() => by(k)}>
         {label}
-        {#if sort === k}{#if desc}<ArrowDown size={14} />{:else}<ArrowUp size={14} />{/if}{/if}
+        {#if sort === k}{#if desc}<ArrowDown size={icon.sm} />{:else}<ArrowUp size={icon.sm} />{/if}{/if}
       </button>
     {/each}
   {/if}
@@ -396,7 +397,7 @@
                     <button class="card-open" data-look={e.dir ? 'dir' : look(e.name)} onclick={() => tap(i)} title={e.name}>
                       {#if s}
                         <img src={s} alt="" draggable="false" loading="lazy" decoding="async" onerror={() => miss(e)} {@attach cancel} />
-                        {#if look(e.name) === 'video'}<span class="card-badge"><Play size={16} /></span>{/if}
+                        {#if look(e.name) === 'video'}<span class="card-badge"><Play size={icon.sm} /></span>{/if}
                       {:else}
                         <FileIcon name={e.name} dir={e.dir} size={tiles ? 40 : 56} />
                         {#if tiles}<span class="tile-name">{@render label(e.name)}</span>{/if}
@@ -476,7 +477,7 @@
   {@const e = sheet}
   {#await import('./Sheet.svelte') then { default: Sheet }}
     <Sheet title={e.name} sub={e.dir ? date(e.mtime) : `${size(e.size)} · ${date(e.mtime)}`} onclose={() => (sheet = null)}>
-      {#snippet icon()}
+      {#snippet lead()}
         {@const s = src(e)}
         <span class="thumb" data-look={e.dir ? 'dir' : look(e.name)}>{#if s}<img src={s} alt="" />{:else}<FileIcon name={e.name} dir={e.dir} />{/if}</span>
       {/snippet}
@@ -488,7 +489,7 @@
             const x = e
             sheet = null
             onaction(a.id, x)
-          }}><a.icon size={20} />{a.label}</button
+          }}><a.icon size={icon.md} />{a.label}</button
         >
       {/each}
     </Sheet>

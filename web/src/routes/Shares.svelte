@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { icon } from '../lib/icon'
   import Link from '@lucide/svelte/icons/link'
   import Link2 from '@lucide/svelte/icons/link-2'
   import EmptyState from '../components/EmptyState.svelte'
@@ -31,7 +32,7 @@
 
 <RowList items={shares} {error} key={(s) => s.id}>
   {#snippet row(s)}
-    <Link size={18} class="row-icon" />
+    <Link size={icon.md} class="row-icon" />
     <ShareRow share={s} dir={s.dir} onchange={load}>
       <a href={where(s)} onclick={link} title={place(s.vol, s.path)}>{place(s.vol, s.path)}</a>
     </ShareRow>

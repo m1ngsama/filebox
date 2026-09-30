@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { icon } from '../lib/icon'
   import { SvelteSet } from 'svelte/reactivity'
   import HardDrive from '@lucide/svelte/icons/hard-drive'
   import RotateCcw from '@lucide/svelte/icons/rotate-ccw'
@@ -74,11 +75,11 @@
 <div class="toolbar">
   <div class="chips" role="group" aria-label={t.trash}>
     {#each vols as v}
-      <a class="chip" href={`/trash/${encodeURIComponent(v)}`} onclick={link} aria-current={v === vol ? 'page' : undefined}><HardDrive size={14} />{v}</a>
+      <a class="chip" href={`/trash/${encodeURIComponent(v)}`} onclick={link} aria-current={v === vol ? 'page' : undefined}><HardDrive size={icon.sm} />{v}</a>
     {/each}
   </div>
   <span class="grow"></span>
-  <button class="quiet" disabled={!items?.length} onclick={() => (confirm = 'empty')}><TrashIcon size={16} />{t.emptyTrash}</button>
+  <button class="quiet" disabled={!items?.length} onclick={() => (confirm = 'empty')}><TrashIcon size={icon.sm} />{t.emptyTrash}</button>
 </div>
 <p class="hint trash-note">{t.trashNote}</p>
 
@@ -87,9 +88,9 @@
     <label class="hit"><input type="checkbox" checked={all} indeterminate={!all && selected.size > 0} onchange={toggleAll} aria-label={t.selectAll} /></label>
     {#if selected.size}
       <span class="count">{t.selected(selected.size)}</span>
-      <button class="ghost" disabled={busy} onclick={() => restore(picked)}><RotateCcw size={16} />{t.restore}</button>
-      <button class="ghost danger" disabled={busy} onclick={() => (confirm = picked)}><TrashIcon size={16} />{t.deleteForever}</button>
-      <button class="icon-btn" aria-label={t.clearSelection} onclick={() => selected.clear()}><X size={16} /></button>
+      <button class="ghost" disabled={busy} onclick={() => restore(picked)}><RotateCcw size={icon.sm} />{t.restore}</button>
+      <button class="ghost danger" disabled={busy} onclick={() => (confirm = picked)}><TrashIcon size={icon.sm} />{t.deleteForever}</button>
+      <button class="icon-btn" aria-label={t.clearSelection} onclick={() => selected.clear()}><X size={icon.sm} /></button>
     {:else}
       <span class="hint">{t.trashCount(items.length)}</span>
     {/if}
@@ -114,7 +115,7 @@
       </span>
     </div>
     <span class="num">{it.dir ? '' : size(it.size)}</span>
-    <button class="ghost" disabled={busy} onclick={() => restore([it])}><RotateCcw size={16} />{t.restore}</button>
+    <button class="ghost" disabled={busy} onclick={() => restore([it])}><RotateCcw size={icon.sm} />{t.restore}</button>
   {/snippet}
   {#snippet empty()}<EmptyState icon={TrashIcon} title={t.trashEmpty} hint={t.trashEmptyHint} />{/snippet}
 </RowList>

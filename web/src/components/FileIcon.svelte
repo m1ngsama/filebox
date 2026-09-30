@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { icon } from '../lib/icon'
   import Folder from '@lucide/svelte/icons/folder'
   import File from '@lucide/svelte/icons/file'
   import FileImage from '@lucide/svelte/icons/file-image'
@@ -10,7 +11,7 @@
   import FileSpreadsheet from '@lucide/svelte/icons/file-spreadsheet'
   import { look } from '../lib/format'
 
-  let { name, dir, size = 24 }: { name: string; dir: boolean; size?: number } = $props()
+  let { name, dir, size = icon.lg }: { name: string; dir: boolean; size?: number } = $props()
   const icons = { image: FileImage, video: FileVideo, audio: FileMusic, pdf: FileText, text: FileText, code: FileCode, archive: FileArchive, sheet: FileSpreadsheet, '': File }
   const k = $derived(dir ? 'dir' : look(name))
   const Icon = $derived(k === 'dir' ? Folder : icons[k])

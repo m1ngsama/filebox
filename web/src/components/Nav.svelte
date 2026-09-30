@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { icon } from '../lib/icon'
   import Clock from '@lucide/svelte/icons/clock'
   import Star from '@lucide/svelte/icons/star'
   import HardDrive from '@lucide/svelte/icons/hard-drive'
@@ -36,16 +37,16 @@
   <ul>
     {#if vols.length}
       <li>
-        <a href="/recent" onclick={go} aria-current={parts[0] === 'recent' ? 'page' : undefined}><Clock size={18} /><span>{t.recent}</span></a>
+        <a href="/recent" onclick={go} aria-current={parts[0] === 'recent' ? 'page' : undefined}><Clock size={icon.md} /><span>{t.recent}</span></a>
       </li>
       <li>
-        <a href="/favorites" onclick={go} aria-current={parts[0] === 'favorites' ? 'page' : undefined}><Star size={18} /><span>{t.favorites}</span></a>
+        <a href="/favorites" onclick={go} aria-current={parts[0] === 'favorites' ? 'page' : undefined}><Star size={icon.md} /><span>{t.favorites}</span></a>
       </li>
     {/if}
     {#each vols as v}
       <li>
         <a href={`/files/${encodeURIComponent(v)}/`} onclick={go} aria-current={parts[0] === 'files' && cur === v ? 'page' : undefined}>
-          <HardDrive size={18} /><span>{v}</span>
+          <HardDrive size={icon.md} /><span>{v}</span>
         </a>
         {#if usage[v]?.total}
           {@const u = usage[v]}
@@ -60,17 +61,17 @@
   {#if vols.length}
     <ul class="nav-foot">
       <li>
-        <a href="/shares" onclick={go} aria-current={parts[0] === 'shares' ? 'page' : undefined}><Share2 size={18} /><span>{t.myShares}</span></a>
+        <a href="/shares" onclick={go} aria-current={parts[0] === 'shares' ? 'page' : undefined}><Share2 size={icon.md} /><span>{t.myShares}</span></a>
       </li>
       <li>
         <a href={`/trash/${encodeURIComponent(cur ?? vols[0])}`} onclick={go} aria-current={parts[0] === 'trash' ? 'page' : undefined}>
-          <Trash size={18} /><span>{t.trash}</span>
+          <Trash size={icon.md} /><span>{t.trash}</span>
         </a>
       </li>
       <li>
-        <a href="/settings" onclick={go} aria-current={parts[0] === 'settings' ? 'page' : undefined}><Settings size={18} /><span>{t.settings}</span></a>
+        <a href="/settings" onclick={go} aria-current={parts[0] === 'settings' ? 'page' : undefined}><Settings size={icon.md} /><span>{t.settings}</span></a>
       </li>
     </ul>
   {/if}
-  <button class="nav-item" onclick={onlogout}><LogOut size={18} /><span>{t.logout}</span></button>
+  <button class="nav-item" onclick={onlogout}><LogOut size={icon.md} /><span>{t.logout}</span></button>
 </nav>

@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { icon } from '../lib/icon'
   import { Dialog } from 'bits-ui'
   import X from '@lucide/svelte/icons/x'
   import type { Snippet } from 'svelte'
@@ -33,7 +34,7 @@
       >
         <header>
           <Dialog.Title>{title}</Dialog.Title>
-          <Dialog.Close type="button" class="icon-btn" aria-label={t.close}><X size={18} /></Dialog.Close>
+          <Dialog.Close type="button" class="icon-btn" aria-label={t.close}><X size={icon.md} /></Dialog.Close>
         </header>
         {@render children()}
         <footer>{@render footer()}</footer>

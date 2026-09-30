@@ -25,6 +25,7 @@
 </script>
 
 <script lang="ts">
+  import { icon } from '../lib/icon'
   import { tick, untrack } from 'svelte'
   import { SvelteSet } from 'svelte/reactivity'
   import { DropdownMenu } from 'bits-ui'
@@ -657,14 +658,14 @@
 
 {#snippet batch()}
   <button class="ghost" onclick={() => download([...selected])}>
-    <Download size={16} />{t.download}
+    <Download size={icon.sm} />{t.download}
   </button>
-  <button class="ghost" onclick={() => (dialog = { kind: 'move', names: [...selected] })}><FolderInput size={16} />{t.moveOrCopy}</button>
+  <button class="ghost" onclick={() => (dialog = { kind: 'move', names: [...selected] })}><FolderInput size={icon.sm} />{t.moveOrCopy}</button>
   <button class="ghost" onclick={() => toggleStar([...selected], !allStarred)}>
-    {#if allStarred}<StarOff size={16} />{t.unstar}{:else}<Star size={16} />{t.star}{/if}
+    {#if allStarred}<StarOff size={icon.sm} />{t.unstar}{:else}<Star size={icon.sm} />{t.star}{/if}
   </button>
-  <button class="ghost danger" onclick={() => remove([...selected])}><Trash size={16} />{t.remove}</button>
-  <button class="icon-btn" aria-label={t.clearSelection} onclick={() => selected.clear()}><X size={16} /></button>
+  <button class="ghost danger" onclick={() => remove([...selected])}><Trash size={icon.sm} />{t.remove}</button>
+  <button class="icon-btn" aria-label={t.clearSelection} onclick={() => selected.clear()}><X size={icon.sm} /></button>
 {/snippet}
 
 <div class="files-wrap">
@@ -693,24 +694,24 @@
       <NavToggle />
       {#if crumbs.length}
         {@const up = crumbs.length > 1 ? crumbs[crumbs.length - 2] : vol}
-        <a class="up" href={filesURL(vol, parent(path))} onclick={link} aria-label={t.upTo(up)}><ChevronLeft size={20} /><span>{up}</span></a>
+        <a class="up" href={filesURL(vol, parent(path))} onclick={link} aria-label={t.upTo(up)}><ChevronLeft size={icon.md} /><span>{up}</span></a>
       {/if}
       <h1 class="title">{crumbs.length ? crumbs[crumbs.length - 1] : vol}</h1>
       <nav class="crumbs" aria-label={t.breadcrumb}>
         <a href={filesURL(vol, '')} onclick={link} use:target={into({ vol, path: '' })}>{vol}</a>
         {#each crumbs as c, i}
           {@const to = crumbs.slice(0, i + 1).join('/')}
-          <ChevronRight size={16} />
+          <ChevronRight size={icon.sm} />
           <a href={filesURL(vol, to)} onclick={link} use:target={into({ vol, path: to })} aria-current={i === crumbs.length - 1 ? 'page' : undefined}>{c}</a>
         {/each}
       </nav>
       <DropdownMenu.Root>
-        <DropdownMenu.Trigger class="primary new"><Plus size={18} />{t.new}</DropdownMenu.Trigger>
+        <DropdownMenu.Trigger class="primary new"><Plus size={icon.md} />{t.new}</DropdownMenu.Trigger>
         <DropdownMenu.Portal>
           <DropdownMenu.Content class="menu" preventScroll={false} align="start" sideOffset={4}>
             {#each creators as c, i (c.label)}
               {#if i === 2}<DropdownMenu.Separator class="menu-sep" />{/if}
-              <DropdownMenu.Item class="menu-item" onSelect={c.run}><c.icon size={16} />{c.label}</DropdownMenu.Item>
+              <DropdownMenu.Item class="menu-item" onSelect={c.run}><c.icon size={icon.sm} />{c.label}</DropdownMenu.Item>
             {/each}
           </DropdownMenu.Content>
         </DropdownMenu.Portal>
@@ -752,24 +753,24 @@
           {/each}
         </div>
       </div>
-      <button class="icon-btn search-open" aria-label={t.openFilter} onclick={search} bind:this={opener}><Search size={20} /></button>
-      <button class="icon-btn search-close" aria-label={t.closeFilter} onclick={endSearch}><X size={20} /></button>
+      <button class="icon-btn search-open" aria-label={t.openFilter} onclick={search} bind:this={opener}><Search size={icon.md} /></button>
+      <button class="icon-btn search-close" aria-label={t.closeFilter} onclick={endSearch}><X size={icon.md} /></button>
       <button class="icon-btn view" aria-label={grid ? t.listView : t.gridView} title={grid ? t.listView : t.gridView} onclick={() => (grid = !grid)}>
-        {#if grid}<List size={20} />{:else}<LayoutGrid size={20} />{/if}
+        {#if grid}<List size={icon.md} />{:else}<LayoutGrid size={icon.md} />{/if}
       </button>
       <DropdownMenu.Root>
-        <DropdownMenu.Trigger class="icon-btn overflow" aria-label={t.more}><EllipsisVertical size={20} /></DropdownMenu.Trigger>
+        <DropdownMenu.Trigger class="icon-btn overflow" aria-label={t.more}><EllipsisVertical size={icon.md} /></DropdownMenu.Trigger>
         <DropdownMenu.Portal>
           <DropdownMenu.Content class="menu" preventScroll={false} align="end" sideOffset={4}>
             <DropdownMenu.Item class="menu-item" onSelect={() => (grid = !grid)}>
-              {#if grid}<List size={16} />{t.listView}{:else}<LayoutGrid size={16} />{t.gridView}{/if}
+              {#if grid}<List size={icon.sm} />{t.listView}{:else}<LayoutGrid size={icon.sm} />{t.gridView}{/if}
             </DropdownMenu.Item>
             <DropdownMenu.Separator class="menu-sep" />
             <DropdownMenu.Group>
               <DropdownMenu.GroupHeading class="menu-label">{t.sortBy}</DropdownMenu.GroupHeading>
               {#each sorts as [k, label] (k)}
                 <DropdownMenu.Item class="menu-item" aria-current={sort === k || undefined} onSelect={() => sortBy(k)}>
-                  {#if sort !== k}<span class="menu-gap"></span>{:else if desc}<ArrowDown size={16} />{:else}<ArrowUp size={16} />{/if}{label}
+                  {#if sort !== k}<span class="menu-gap"></span>{:else if desc}<ArrowDown size={icon.sm} />{:else}<ArrowUp size={icon.sm} />{/if}{label}
                 </DropdownMenu.Item>
               {/each}
             </DropdownMenu.Group>
@@ -832,7 +833,7 @@
             </EmptyState>
           {:else if !error}
             <EmptyState icon={FolderOpen} title={t.folderEmpty} hint={t.emptyHint}>
-              <button class="primary" onclick={() => files?.click()}><Upload size={16} />{t.upload}</button>
+              <button class="primary" onclick={() => files?.click()}><Upload size={icon.sm} />{t.upload}</button>
             </EmptyState>
           {/if}
         {/snippet}
@@ -841,7 +842,7 @@
     {/if}
 
     {#if dragging}<div class="dropzone">{t.dropHere}</div>{/if}
-    {#if !selected.size && !details}<button class="primary fab" aria-label={t.new} onclick={() => (sheet = 'new')}><Plus size={24} /></button>{/if}
+    {#if !selected.size && !details}<button class="primary fab" aria-label={t.new} onclick={() => (sheet = 'new')}><Plus size={icon.lg} /></button>{/if}
   </section>
 
   {#if details}
@@ -880,11 +881,11 @@
 
 {#if selected.size}
   <div class="sel-tools" role="group" aria-label={t.selected(selected.size)} bind:offsetHeight={barH}>
-    <button onclick={() => download([...selected])}><Download size={20} /><span>{t.download}</span></button>
-    <button onclick={() => (dialog = { kind: 'move', names: [...selected] })}><FolderInput size={20} /><span>{t.moveOrCopy}</span></button>
-    <button disabled={!one} onclick={() => pass('share')}><Share2 size={20} /><span>{t.share}</span></button>
-    <button onclick={() => (sheet = 'more')}><Ellipsis size={20} /><span>{t.more}</span></button>
-    <button class="danger" onclick={() => remove([...selected])}><Trash size={20} /><span>{t.remove}</span></button>
+    <button onclick={() => download([...selected])}><Download size={icon.md} /><span>{t.download}</span></button>
+    <button onclick={() => (dialog = { kind: 'move', names: [...selected] })}><FolderInput size={icon.md} /><span>{t.moveOrCopy}</span></button>
+    <button disabled={!one} onclick={() => pass('share')}><Share2 size={icon.md} /><span>{t.share}</span></button>
+    <button onclick={() => (sheet = 'more')}><Ellipsis size={icon.md} /><span>{t.more}</span></button>
+    <button class="danger" onclick={() => remove([...selected])}><Trash size={icon.md} /><span>{t.remove}</span></button>
   </div>
 {/if}
 
@@ -903,7 +904,7 @@
           onclick={() => {
             sheet = null
             c.run()
-          }}><c.icon size={20} />{c.label}</button
+          }}><c.icon size={icon.md} />{c.label}</button
         >
       {/each}
     </Sheet>

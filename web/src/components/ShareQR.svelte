@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { icon } from '../lib/icon'
   import { Popover } from 'bits-ui'
   import QrCode from '@lucide/svelte/icons/qr-code'
   import { t } from '../lib/i18n'
@@ -7,7 +8,7 @@
 </script>
 
 <Popover.Root>
-  <Popover.Trigger class="icon-btn" aria-label={t.qrCode} title={t.qrCode}><QrCode size={18} /></Popover.Trigger>
+  <Popover.Trigger class="icon-btn" aria-label={t.qrCode} title={t.qrCode}><QrCode size={icon.md} /></Popover.Trigger>
   <Popover.Portal>
     <Popover.Content class="menu qr" sideOffset={6}>
       {#await import('../lib/qr')}
