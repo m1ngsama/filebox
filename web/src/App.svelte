@@ -18,6 +18,7 @@
   let shared = $state(new URLSearchParams(location.search).get('share-target'))
   const parts = $derived(route.path.split('/').filter(Boolean).map(decodeURIComponent))
   const titles: Record<string, string> = { recent: t.recent, favorites: t.favorites, shares: t.myShares, trash: t.trash, settings: t.settings }
+  const heading = $derived(needLogin ? t.login : parts[0] === 'files' ? parts.slice(1).at(-1) : titles[parts[0]])
 
   session.lost = () => {
     me = null
@@ -57,6 +58,8 @@
       navigate(`/files/${encodeURIComponent(me.vols[0])}/`, true)
   })
 </script>
+
+<svelte:head><title>{heading ? `${heading} — ${t.brand}` : t.brand}</title></svelte:head>
 
 {#if error}
   <div class="load-error">

@@ -570,6 +570,23 @@ test('resumable upload survives a dropped connection and a page reload', async (
   expect(await sha(join(server.vol, 'filebox-e2e-200.bin'))).toBe(await sha(src))
 })
 
+test('the tab title names the folder, page or share', async ({ page, browser }) => {
+  await page.goto('/')
+  await expect(page).toHaveTitle(`${t.login} — filebox`)
+  await signIn(page)
+  await expect(page).toHaveTitle('v — filebox')
+  await row(page, 'docs').locator('button.name').click()
+  await expect(page).toHaveTitle('docs — filebox')
+  await page.getByRole('link', { name: t.trash, exact: true }).click()
+  await expect(page).toHaveTitle(`${t.trash} — filebox`)
+  await page.goto('/files/v/')
+  const url = await shareDocs(page, 'read')
+  const anon = await browser.newPage()
+  await anon.goto(new URL(url, page.url()).href)
+  await expect(anon).toHaveTitle('docs')
+  await anon.close()
+})
+
 test('closing details opened from my shares clears the query', async ({ page }) => {
   await login(page)
   await shareDocs(page, 'read')
