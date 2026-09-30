@@ -54,10 +54,13 @@ func (l *locks) Refresh(now time.Time, tok string, d time.Duration) (webdav.Lock
 }
 
 func (l *locks) Unlock(now time.Time, tok string) error {
-	l.mu.Lock()
-	delete(l.m, tok)
-	l.mu.Unlock()
-	return l.LockSystem.Unlock(now, tok)
+	err := l.LockSystem.Unlock(now, tok)
+	if err == nil {
+		l.mu.Lock()
+		delete(l.m, tok)
+		l.mu.Unlock()
+	}
+	return err
 }
 
 func under(p, root string) bool { return p == root || root == "/" || strings.HasPrefix(p, root+"/") }
