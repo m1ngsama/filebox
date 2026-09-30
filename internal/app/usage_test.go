@@ -10,7 +10,7 @@ func TestVolumeUsageAndFolderSize(t *testing.T) {
 			Used, Free, Total uint64
 		}
 	}](t, f.do("GET", "/api/vols", nil)).Vols
-	if len(vs) != 2 || vs[0].Name != "v" || vs[0].Total == 0 || vs[0].Used+vs[0].Free > vs[0].Total || vs[0].Free == 0 {
+	if len(vs) != 2 || vs[0].Name != "v" || vs[0].Total == 0 || vs[0].Used+vs[0].Free != vs[0].Total || vs[0].Free == 0 {
 		t.Fatalf("vols %+v", vs)
 	}
 	f.write(t, "d/a.txt", "abc")

@@ -39,7 +39,8 @@ func (v *Volume) Usage() (Usage, error) {
 		return Usage{}, err
 	}
 	b := uint64(st.Bsize)
-	return Usage{Used: (uint64(st.Blocks) - uint64(st.Bfree)) * b, Free: uint64(st.Bavail) * b, Total: uint64(st.Blocks) * b}, nil
+	used, free := (uint64(st.Blocks)-uint64(st.Bfree))*b, uint64(st.Bavail)*b
+	return Usage{Used: used, Free: free, Total: used + free}, nil
 }
 
 func (v *Volume) Free() (uint64, error) {
