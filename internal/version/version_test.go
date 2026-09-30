@@ -141,6 +141,7 @@ func TestCaptureRefusesSpecialFiles(t *testing.T) {
 func TestVersionsFollowRename(t *testing.T) {
 	e := setup(t)
 	ix := index.New(e.s.DB)
+	ix.Moved = e.s.Moved
 	e.capture(t, "dir/a.txt", "1")
 	e.capture(t, "b.txt", "2")
 	e.write(t, "dir/a.txt", "live")
@@ -153,6 +154,10 @@ func TestVersionsFollowRename(t *testing.T) {
 	ix.Rename(e.v, "moved/a.txt", "b.txt")
 	if e.count(t, "b.txt") != 2 {
 		t.Fatal("renaming onto a name dropped its history")
+	}
+	e.s.DB.Exec(`DELETE FROM versions`)
+	if err := e.s.Recover(e.vols); err != nil || e.count(t, "b.txt") != 2 {
+		t.Fatalf("sidecars did not follow the rename: %v", err)
 	}
 }
 

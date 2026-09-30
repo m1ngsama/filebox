@@ -64,6 +64,7 @@ type Index struct {
 	mu      sync.Mutex
 	touched map[pending]struct{}
 	ready   atomic.Bool
+	Moved   func(v *vol.Volume, to string)
 }
 
 func New(d *db.DB) *Index { return &Index{db: d} }
@@ -96,6 +97,8 @@ func (x *Index) Rename(v *vol.Volume, from, to string) {
 	x.mu.Unlock()
 	if err := x.rename(v.Name, from, to); err != nil {
 		slog.Warn("index rename", "vol", v.Name, "from", from, "to", to, "err", err)
+	} else if x.Moved != nil {
+		x.Moved(v, to)
 	}
 }
 

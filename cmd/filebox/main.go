@@ -119,6 +119,7 @@ func serveCmd(args []string) error {
 		slog.Error("recover versions", "err", err)
 	}
 	up.Versions = vs
+	ix.Moved = vs.Moved
 	go func() {
 		for {
 			up.Sweep(24 * time.Hour)

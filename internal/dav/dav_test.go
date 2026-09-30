@@ -40,7 +40,9 @@ func setup(t *testing.T) *env {
 	ro, _ := a.NewAppToken(uid, "ro", true)
 	mux := http.NewServeMux()
 	vs := &version.Store{DB: d}
-	h := Handler(vols, a, index.New(d), vs)
+	ix := index.New(d)
+	ix.Moved = vs.Moved
+	h := Handler(vols, a, ix, vs)
 	mux.Handle("/dav", h)
 	mux.Handle("/dav/", h)
 	srv := httptest.NewServer(mux)

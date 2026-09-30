@@ -214,6 +214,21 @@ func (s *Store) Replace(v *vol.Volume, tmp, rel, source string, user int64) erro
 	return nil
 }
 
+func (s *Store) Moved(v *vol.Volume, to string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	rows, err := s.DB.Query(`SELECT `+columns+` FROM versions WHERE vol = ? AND (path = ? OR (path > ? AND path < ?))`,
+		v.Name, to, to+"/", to+"0")
+	if err != nil {
+		slog.Warn("versions after rename", "vol", v.Name, "path", to, "err", err)
+		return
+	}
+	xs, _ := scan(rows)
+	for _, x := range xs {
+		v.Root.WriteFile(File(x.ID)+sidecar, []byte(x.Path), 0o600)
+	}
+}
+
 func (s *Store) Revert(v *vol.Volume, id string) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
