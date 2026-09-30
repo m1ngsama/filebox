@@ -729,7 +729,7 @@
       </nav>
       <DropdownMenu.Root>
         <DropdownMenu.Trigger class="primary new" disabled={!!error}><Plus size={icon.md} />{t.new}</DropdownMenu.Trigger>
-        <DropdownMenu.Portal>
+        <DropdownMenu.Portal to="main">
           <DropdownMenu.Content class="menu" preventScroll={false} align="start" sideOffset={4}>
             {#each creators as c, i (c.label)}
               {#if i === 2}<DropdownMenu.Separator class="menu-sep" />{/if}
@@ -782,7 +782,7 @@
       </button>
       <DropdownMenu.Root>
         <DropdownMenu.Trigger class="icon-btn overflow" aria-label={t.more}><EllipsisVertical size={icon.md} /></DropdownMenu.Trigger>
-        <DropdownMenu.Portal>
+        <DropdownMenu.Portal to="main">
           <DropdownMenu.Content class="menu" preventScroll={false} align="end" sideOffset={4}>
             <DropdownMenu.Item class="menu-item" onSelect={() => (grid = !grid)}>
               {#if grid}<List size={icon.sm} />{t.listView}{:else}<LayoutGrid size={icon.sm} />{t.gridView}{/if}

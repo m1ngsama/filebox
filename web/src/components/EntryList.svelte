@@ -188,7 +188,7 @@
   }
 
   function menu(ev: MouseEvent, e: Entry) {
-    if ((touch && selected) || performance.now() - keyed < 500) ev.preventDefault()
+    if ((touch && selected) || (ev.button !== 2 && performance.now() - keyed < 500)) ev.preventDefault()
     else ctx = e
   }
 
@@ -332,7 +332,7 @@
   {:else}
   <DropdownMenu.Root>
     <DropdownMenu.Trigger class="icon-btn more" tabindex={-1} aria-label={`${e.name} ${t.actions}`}><Ellipsis size={icon.md} /></DropdownMenu.Trigger>
-    <DropdownMenu.Portal>
+    <DropdownMenu.Portal to="main">
       <DropdownMenu.Content class="menu" preventScroll={false} align="end" sideOffset={4} onCloseAutoFocus={refocus}>{@render items(e)}</DropdownMenu.Content>
     </DropdownMenu.Portal>
   </DropdownMenu.Root>
@@ -511,7 +511,7 @@
       </div>
     {/snippet}
   </ContextMenu.Trigger>
-  <ContextMenu.Portal>
+  <ContextMenu.Portal to="main">
     <ContextMenu.Content class="menu" preventScroll={false}>{@render items(ctx)}</ContextMenu.Content>
   </ContextMenu.Portal>
 </ContextMenu.Root>
