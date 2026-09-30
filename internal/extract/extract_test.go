@@ -4,11 +4,13 @@ import (
 	"archive/zip"
 	"bytes"
 	"context"
+	"encoding/binary"
 	"errors"
 	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -102,11 +104,66 @@ func TestTextCap(t *testing.T) {
 }
 
 func TestHTML(t *testing.T) {
-	r := fixture(t, map[string][]byte{"p.html": []byte(`<!doctype html><html><head><title>T</title><style>p{}</style>
-<script>var secret = 1</script></head><body><p>Hello&nbsp;<b>world</b> &amp; <i>more</i><br>next<p>para &lt;x&gt; <unclosed></body></html>`)})
-	got, err := (&Extractor{}).Extract(context.Background(), r, "p.html")
-	if want := "Hello world & more next para <x>"; err != nil || got != want {
-		t.Fatalf("%q %v, want %q", got, err, want)
+	r := fixture(t, map[string][]byte{
+		"p.html": []byte(`<!doctype html><html><head><title>T</title><style>p{}</style>
+<script>var secret = 1</script></head><body><p>Hello&nbsp;<b>world</b> &amp; <i>more</i><br>next<p>para &lt;x&gt; <unclosed></body></html>`),
+		"loop.html":   []byte(`<head><script>for(var i=0;i<n;i++){}</script></head><body><p>alpha omega</p>`),
+		"inline.html": []byte(`<p>alpha</p><script>if (a < b) {}</script><p>omega</p>`),
+		"bare.htm":    []byte(`<p>alpha</p><p>x < y & z</p><p>omega</p>`),
+		"nohead.html": []byte(`<html><head><title>T</title><body><p>body text`),
+		"icon.svg":    []byte(`<?xml version="1.0"?><svg xmlns="http://www.w3.org/2000/svg"><title>Logo mark</title><path d="M0 0h24v24" fill="red"/><image href="data:image/png;base64,AAAA"/></svg>`),
+		"feed.xml":    []byte(`<?xml version="1.0"?><rss><item><title>News</title><description>Body &amp; more</description></item></rss>`),
+	})
+	for name, want := range map[string]string{
+		"p.html":      "Hello world & more next para <x>",
+		"loop.html":   "alpha omega",
+		"inline.html": "alpha omega",
+		"bare.htm":    "alpha x < y & z omega",
+		"nohead.html": "body text",
+		"icon.svg":    "Logo mark",
+		"feed.xml":    "News Body & more",
+	} {
+		got, err := (&Extractor{}).Extract(context.Background(), r, name)
+		if err != nil || got != want {
+			t.Errorf("%s: %q %v, want %q", name, got, err, want)
+		}
+	}
+}
+
+// crafted builds a zip whose end record claims 5 entries while the directory holds 65,541 headers, which zip.NewReader accepts.
+func crafted() []byte {
+	const n = 65541
+	var b bytes.Buffer
+	h := make([]byte, 46)
+	binary.LittleEndian.PutUint32(h, 0x02014b50)
+	for range n {
+		b.Write(h)
+	}
+	end := make([]byte, 22)
+	binary.LittleEndian.PutUint32(end, 0x06054b50)
+	binary.LittleEndian.PutUint16(end[8:], uint16(n%65536))
+	binary.LittleEndian.PutUint16(end[10:], uint16(n%65536))
+	binary.LittleEndian.PutUint32(end[12:], uint32(b.Len()))
+	b.Write(end)
+	return b.Bytes()
+}
+
+func TestEPUBDirectoryBomb(t *testing.T) {
+	book := crafted()
+	if z, err := zip.NewReader(bytes.NewReader(book), int64(len(book))); err != nil || len(z.File) != 65541 {
+		t.Fatalf("fixture no longer fools zip.NewReader: %v", err)
+	}
+	r := fixture(t, map[string][]byte{"bomb.epub": book})
+	var before, after runtime.MemStats
+	runtime.GC()
+	runtime.ReadMemStats(&before)
+	_, err := (&Extractor{}).Extract(context.Background(), r, "bomb.epub")
+	runtime.ReadMemStats(&after)
+	if !errors.Is(err, ErrSkipped) {
+		t.Fatalf("err %v", err)
+	}
+	if n := after.TotalAlloc - before.TotalAlloc; n > 1<<20 {
+		t.Fatalf("allocated %d bytes before rejecting", n)
 	}
 }
 

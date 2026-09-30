@@ -2,6 +2,7 @@ package extract
 
 import (
 	"archive/zip"
+	"bufio"
 	"bytes"
 	"context"
 	"encoding/binary"
@@ -20,8 +21,12 @@ import (
 	"unicode"
 	"unicode/utf8"
 
+	"golang.org/x/net/html"
+
 	"github.com/m1ngsama/filebox/internal/serve"
 )
+
+const Version = 2
 
 const (
 	MaxText      = 1 << 20
@@ -43,7 +48,7 @@ var plain = map[string]bool{}
 
 func init() {
 	for _, e := range strings.Fields(`txt text md markdown mdown rst org adoc asciidoc tex bib csv tsv log
-		json jsonl yaml yml toml ini cfg conf properties xml svg srt vtt ass lrc
+		json jsonl yaml yml toml ini cfg conf properties srt vtt ass lrc
 		go py rb rs c h cc cpp cxx hpp hh m mm java kt kts scala groovy gradle swift cs fs vb dart
 		js mjs cjs ts mts cts jsx tsx vue svelte astro css scss sass less
 		sh bash zsh fish ps1 bat cmd lua pl pm php r jl ex exs erl hrl hs ml mli clj cljs el lisp scm
@@ -81,7 +86,7 @@ func kind(name string) string {
 		return "pdf"
 	case ext == ".epub":
 		return "epub"
-	case ext == ".html" || ext == ".htm" || ext == ".xhtml":
+	case ext == ".html" || ext == ".htm" || ext == ".xhtml" || ext == ".xml" || ext == ".svg":
 		return "html"
 	case plain[ext]:
 		return "text"
@@ -95,7 +100,7 @@ func (x *Extractor) Handles(name string) bool {
 }
 
 func (x *Extractor) Kinds() []string {
-	out := []string{".epub", ".html", ".htm", ".xhtml"}
+	out := []string{".epub", ".html", ".htm", ".xhtml", ".xml", ".svg"}
 	if x.pdftotext != "" {
 		out = append(out, ".pdf")
 	}
@@ -130,7 +135,7 @@ func (x *Extractor) Extract(ctx context.Context, root *os.Root, rel string) (str
 		if err != nil {
 			return "", err
 		}
-		if bytes.IndexByte(b[:min(len(b), 8192)], 0) >= 0 {
+		if !serve.UTF16(b) && bytes.IndexByte(b[:min(len(b), 8192)], 0) >= 0 {
 			return "", ErrSkipped
 		}
 		if len(b) == MaxText {
@@ -260,40 +265,35 @@ var blocks = map[string]bool{"p": true, "div": true, "br": true, "li": true, "tr
 	"blockquote": true, "pre": true, "dt": true, "dd": true, "hr": true, "title": true, "figcaption": true}
 
 func markup(w *text, r io.Reader) error {
-	d := xml.NewDecoder(r)
-	d.Strict = false
-	d.AutoClose = xml.HTMLAutoClose
-	d.Entity = xml.HTMLEntity
-	d.CharsetReader = func(_ string, in io.Reader) (io.Reader, error) { return in, nil }
+	z := html.NewTokenizer(r)
+	z.SetMaxBuf(MaxText)
 	hidden := 0
 	for {
-		tok, err := d.RawToken()
-		if err == io.EOF {
+		switch z.Next() {
+		case html.ErrorToken:
 			return nil
-		}
-		if err != nil {
-			return nil
-		}
-		switch t := tok.(type) {
-		case xml.StartElement:
-			name := strings.ToLower(t.Name.Local)
-			if skipped[name] {
+		case html.StartTagToken, html.SelfClosingTagToken:
+			name, _ := z.TagName()
+			if string(name) == "body" {
+				hidden = 0
+			}
+			if skipped[string(name)] {
 				hidden++
 			}
-			if blocks[name] {
+			if blocks[string(name)] {
 				w.brk()
 			}
-		case xml.EndElement:
-			name := strings.ToLower(t.Name.Local)
-			if skipped[name] && hidden > 0 {
+		case html.EndTagToken:
+			name, _ := z.TagName()
+			if skipped[string(name)] && hidden > 0 {
 				hidden--
 			}
-			if blocks[name] {
+			if blocks[string(name)] {
 				w.brk()
 			}
-		case xml.CharData:
+		case html.TextToken:
 			if hidden == 0 {
-				if err := w.write(t); err != nil {
+				if err := w.write(z.Text()); err != nil {
 					return err
 				}
 			}
@@ -317,21 +317,45 @@ type opf struct {
 	} `xml:"spine>itemref"`
 }
 
-// zip.NewReader loads the whole central directory, so its entry count is checked first.
+// zip.NewReader loads every central directory header whatever the end record claims, so count them first the way it finds them.
 func entries(f io.ReaderAt, size int64) int {
 	tail := make([]byte, min(size, 22+65535))
 	if _, err := f.ReadAt(tail, size-int64(len(tail))); err != nil {
 		return -1
 	}
-	i := bytes.LastIndex(tail, []byte("PK\x05\x06"))
-	if i < 0 || len(tail)-i < 22 {
+	i := len(tail) - 22
+	for ; i >= 0; i-- {
+		if string(tail[i:i+4]) == "PK\x05\x06" && i+22+int(binary.LittleEndian.Uint16(tail[i+20:])) <= len(tail) {
+			break
+		}
+	}
+	if i < 0 {
 		return -1
 	}
-	return int(binary.LittleEndian.Uint16(tail[i+10:]))
+	le := binary.LittleEndian
+	if le.Uint16(tail[i+10:]) == 0xffff || le.Uint32(tail[i+12:]) == 0xffffffff || le.Uint32(tail[i+16:]) == 0xffffffff {
+		return -1
+	}
+	start := size - int64(len(tail)) + int64(i) - int64(le.Uint32(tail[i+12:]))
+	if start < 0 {
+		return -1
+	}
+	r := bufio.NewReader(io.NewSectionReader(f, start, size-start))
+	var h [46]byte
+	n := 0
+	for ; n <= maxEntries; n++ {
+		if _, err := io.ReadFull(r, h[:]); err != nil || le.Uint32(h[:]) != 0x02014b50 {
+			return n
+		}
+		if _, err := r.Discard(int(le.Uint16(h[28:])) + int(le.Uint16(h[30:])) + int(le.Uint16(h[32:]))); err != nil {
+			return n
+		}
+	}
+	return n
 }
 
 func epub(w *text, f io.ReaderAt, size int64) error {
-	if n := entries(f, size); n < 0 || n >= 0xffff || n > maxEntries {
+	if n := entries(f, size); n < 0 || n > maxEntries {
 		return ErrSkipped
 	}
 	z, err := zip.NewReader(f, size)
