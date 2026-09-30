@@ -59,6 +59,8 @@ func TestCover(t *testing.T) {
 		"epub3 property": {book(pkg(`<meta name="cover" content="o"/>`,
 			`<item id="o" href="Images/other.png"/><item id="c" href="Images/c%25.jpg" properties="cover-image"/>`, "")), "OEBPS/Images/c%.jpg"},
 		"epub2 meta": {book(pkg(`<meta name="cover" content="o"/>`, `<item id="o" href="Images/other.png"/>`, "")), "OEBPS/Images/other.png"},
+		"skips an unusable image": {book(pkg("", `<item id="t" href="Text/t.xhtml"/>`, `<itemref idref="t"/>`),
+			[2]string{"OEBPS/Text/t.xhtml", `<html><body><img src="../Images/v.svg"/><img src="https://example.com/a.png"/><img src="../Images/other.png"/></body></html>`}), "OEBPS/Images/other.png"},
 		"first spine image": {book(pkg("", `<item id="t" href="Text/t.xhtml"/><item id="s" href="Text/s.xhtml"/>`, `<itemref idref="t"/><itemref idref="s"/>`),
 			[2]string{"OEBPS/Text/t.xhtml", `<html><body><p>title</p></body></html>`},
 			[2]string{"OEBPS/Text/s.xhtml", `<html><body><svg><image xlink:href="../Images/other.png"/></svg></body></html>`}), "OEBPS/Images/other.png"},

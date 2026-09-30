@@ -242,7 +242,9 @@ func (b *book) firstImage(doc string) *zip.File {
 				var k, v []byte
 				k, v, more = z.TagAttr()
 				if key := string(k); key == "src" || key == "href" || key == "xlink:href" {
-					return b.image(b.href(path.Dir(doc), string(v)))
+					if e := b.image(b.href(path.Dir(doc), string(v))); e != nil {
+						return e
+					}
 				}
 			}
 		}
