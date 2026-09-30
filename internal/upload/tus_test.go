@@ -15,6 +15,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/m1ngsama/filebox/internal/db"
+	"github.com/m1ngsama/filebox/internal/version"
 	"github.com/m1ngsama/filebox/internal/vol"
 )
 
@@ -489,9 +491,15 @@ func TestTusReplace(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	d, err := db.Open(filepath.Join(t.TempDir(), "t.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { d.Close() })
+	s.Versions = &version.Store{DB: d}
 	v, _ := vols.Get("v")
 	ts := httptest.NewServer(s.Handler("/up/", Policy{
-		Owner: func(*http.Request) (string, bool) { return "alice", true },
+		Owner: func(*http.Request) (string, bool) { return "user:7", true },
 		Resolve: func(r *http.Request, meta map[string]string) (Target, error) {
 			t, err := TargetFor(v, ".", meta)
 			t.Replace = meta["overwrite"] == "1"
@@ -520,11 +528,14 @@ func TestTusReplace(t *testing.T) {
 		t.Fatalf("got %q", b)
 	}
 	id := w.Header.Get("Upload-Replaced")
-	if b, _ := os.ReadFile(filepath.Join(dir, vol.TrashDir, id, "a.txt")); id == "" || string(b) != "old" {
-		t.Fatalf("old copy not in trash: %q %q", id, b)
+	if b, _ := os.ReadFile(filepath.Join(dir, vol.VersionsDir, id)); id == "" || string(b) != "old" {
+		t.Fatalf("old content not kept as a version: %q %q", id, b)
 	}
-	if b, _ := os.ReadFile(filepath.Join(dir, vol.TrashDir, id, ".origin")); string(b) != "a.txt" {
-		t.Fatalf("origin %q", b)
+	if xs, _ := s.Versions.List("v", "a.txt"); len(xs) != 1 || xs[0].ID != id || xs[0].Source != version.Upload || xs[0].UserID != 7 || xs[0].Size != 3 {
+		t.Fatalf("versions %+v", xs)
+	}
+	if _, err := os.Stat(filepath.Join(dir, vol.TrashDir)); err == nil {
+		t.Fatal("replace used the trash")
 	}
 	if _, err := os.Stat(filepath.Join(dir, "a (1).txt")); err == nil {
 		t.Fatal("replace also kept a copy")

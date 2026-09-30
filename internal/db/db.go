@@ -127,6 +127,17 @@ var migrations = []string{
 		n INTEGER NOT NULL,
 		PRIMARY KEY (share_id, day)
 	) WITHOUT ROWID;`,
+	`CREATE TABLE versions (
+		id TEXT PRIMARY KEY,
+		vol TEXT NOT NULL,
+		path TEXT NOT NULL,
+		size INTEGER NOT NULL,
+		mtime INTEGER NOT NULL,
+		created INTEGER NOT NULL,
+		source TEXT NOT NULL DEFAULT '',
+		user_id INTEGER NOT NULL DEFAULT 0
+	) WITHOUT ROWID;
+	CREATE INDEX versions_path ON versions(vol, path, created);`,
 }
 
 type DB struct {

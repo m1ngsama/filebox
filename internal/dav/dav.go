@@ -20,11 +20,12 @@ import (
 	"github.com/m1ngsama/filebox/internal/auth"
 	"github.com/m1ngsama/filebox/internal/index"
 	"github.com/m1ngsama/filebox/internal/serve"
+	"github.com/m1ngsama/filebox/internal/version"
 	"github.com/m1ngsama/filebox/internal/vol"
 )
 
-func Handler(vols *vol.Set, a *auth.Auth, ix *index.Index) http.Handler {
-	fsys := &FS{vols: vols, ix: ix}
+func Handler(vols *vol.Set, a *auth.Auth, ix *index.Index, vs *version.Store) http.Handler {
+	fsys := &FS{vols: vols, ix: ix, vs: vs}
 	h := &webdav.Handler{
 		Prefix:     "/dav",
 		FileSystem: fsys,
@@ -52,6 +53,11 @@ func Handler(vols *vol.Set, a *auth.Auth, ix *index.Index) http.Handler {
 		}
 		// Browsers with cached Basic credentials would otherwise render uploaded HTML on this origin.
 		serve.SafeHeaders(w.Header(), "")
+		if (r.Method == "COPY" || r.Method == "MOVE") && r.Header.Get("Overwrite") != "F" {
+			if u, err := url.Parse(r.Header.Get("Destination")); err == nil {
+				r = r.WithContext(context.WithValue(r.Context(), overwriteKey{}, strings.TrimPrefix(u.Path, "/dav")))
+			}
+		}
 		if r.Method == "COPY" && ix != nil {
 			sw := &status{ResponseWriter: w}
 			h.ServeHTTP(sw, r)
@@ -97,6 +103,14 @@ func readOnlyMethod(m string) bool {
 type FS struct {
 	vols *vol.Set
 	ix   *index.Index
+	vs   *version.Store
+}
+
+type overwriteKey struct{}
+
+func user(ctx context.Context) int64 {
+	p, _ := auth.From(ctx)
+	return p.UserID
 }
 
 func (f *FS) resolve(name string) (*vol.Volume, string, error) {
@@ -143,8 +157,19 @@ func (f *FS) OpenFile(ctx context.Context, name string, flag int, perm os.FileMo
 	if flag == os.O_RDWR && f.ix != nil {
 		flag = os.O_RDONLY
 	}
+	kept := ""
+	if flag&os.O_TRUNC != 0 && rel != "." {
+		if fi, err := v.Root.Lstat(rel); err == nil && fi.Mode().IsRegular() && fi.Size() > 0 {
+			if kept, err = f.vs.Capture(v, rel, version.WebDAV, user(ctx)); err != nil {
+				return nil, err
+			}
+		}
+	}
 	fh, err := v.Root.OpenFile(rel, flag, perm)
 	if err != nil {
+		if kept != "" {
+			f.vs.Restore(v, kept, 0)
+		}
 		return nil, err
 	}
 	var file webdav.File = fh
@@ -169,6 +194,12 @@ func (f *FS) RemoveAll(ctx context.Context, name string) error {
 		return os.ErrPermission
 	}
 	defer f.ix.Touch(v, rel)
+	if dst, ok := ctx.Value(overwriteKey{}).(string); ok && path.Clean("/"+dst) == path.Clean("/"+name) {
+		if fi, err := v.Root.Lstat(rel); err == nil && fi.Mode().IsRegular() {
+			_, err := f.vs.Capture(v, rel, version.WebDAV, user(ctx))
+			return err
+		}
+	}
 	return v.Root.RemoveAll(rel)
 }
 

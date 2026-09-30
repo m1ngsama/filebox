@@ -25,6 +25,7 @@ import (
 	"github.com/m1ngsama/filebox/internal/render"
 	"github.com/m1ngsama/filebox/internal/thumb"
 	"github.com/m1ngsama/filebox/internal/upload"
+	"github.com/m1ngsama/filebox/internal/version"
 	"github.com/m1ngsama/filebox/internal/vol"
 	"github.com/m1ngsama/filebox/web"
 )
@@ -113,6 +114,11 @@ func serveCmd(args []string) error {
 	}
 	ix := index.New(d)
 	up.Index = ix
+	vs := &version.Store{DB: d}
+	if err := vs.Recover(set); err != nil {
+		slog.Error("recover versions", "err", err)
+	}
+	up.Versions = vs
 	go func() {
 		for {
 			up.Sweep(24 * time.Hour)
@@ -129,7 +135,7 @@ func serveCmd(args []string) error {
 	}()
 	thumbs := thumb.New(*ffmpeg, filepath.Join(*data, "thumbs"))
 	thumbs.Probe(context.Background())
-	a := &app.App{Vols: set, DB: d, Auth: au, Web: webFS, Uploads: up, Thumbs: thumbs, Passkeys: pk, Index: ix}
+	a := &app.App{Vols: set, DB: d, Auth: au, Web: webFS, Uploads: up, Thumbs: thumbs, Passkeys: pk, Index: ix, Versions: vs}
 
 	srv := &http.Server{Addr: *listen, Handler: a.Handler(), ReadHeaderTimeout: 10 * time.Second, IdleTimeout: 2 * time.Minute}
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)

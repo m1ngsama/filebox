@@ -2,6 +2,7 @@ package app
 
 import (
 	"encoding/base64"
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"strings"
@@ -54,15 +55,26 @@ func TestUploadOverwriteIsForUsersOnly(t *testing.T) {
 		t.Fatalf("got %q", b)
 	}
 	id := w.Header().Get("Upload-Replaced")
-	tr := f.do("GET", "/api/trash?vol=v", nil)
-	if id == "" || !strings.Contains(tr.Body.String(), `"id":"`+id+`"`) || !strings.Contains(tr.Body.String(), `"path":"r.txt"`) {
-		t.Fatalf("replaced file not in trash: %q %s", id, tr.Body)
+	vs := f.do("GET", "/api/versions?vol=v&p=r.txt", nil)
+	if id == "" || !strings.Contains(vs.Body.String(), `"id":"`+id+`"`) || !strings.Contains(vs.Body.String(), `"source":"upload"`) {
+		t.Fatalf("replaced content not kept as a version: %q %s", id, vs.Body)
 	}
-	f.do("POST", "/api/rm", strings.NewReader(`{"vol":"v","paths":["r.txt"]}`))
-	if w := f.do("POST", "/api/trash/restore", strings.NewReader(`{"vol":"v","id":"`+id+`"}`)); w.Code != 204 {
+	w = f.do("POST", "/api/versions/restore", strings.NewReader(`{"vol":"v","id":"`+id+`"}`))
+	if w.Code != 200 {
 		t.Fatalf("restore %d %s", w.Code, w.Body)
 	}
 	if b, _ := os.ReadFile(filepath.Join(f.Dir, "r.txt")); string(b) != "old" {
 		t.Fatalf("after undo got %q", b)
+	}
+	var out struct{ Path, Prev string }
+	json.Unmarshal(w.Body.Bytes(), &out)
+	if out.Path != "r.txt" || out.Prev == "" {
+		t.Fatalf("restore returned %s", w.Body)
+	}
+	if w := f.do("POST", "/api/versions/restore", strings.NewReader(`{"vol":"v","id":"`+out.Prev+`"}`)); w.Code != 200 {
+		t.Fatalf("redo %d %s", w.Code, w.Body)
+	}
+	if b, _ := os.ReadFile(filepath.Join(f.Dir, "r.txt")); string(b) != "new" {
+		t.Fatalf("after redo got %q", b)
 	}
 }

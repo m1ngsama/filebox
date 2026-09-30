@@ -1,0 +1,289 @@
+package version
+
+import (
+	"crypto/rand"
+	"database/sql"
+	"encoding/hex"
+	"errors"
+	"fmt"
+	"io/fs"
+	"log/slog"
+	"path"
+	"regexp"
+	"strconv"
+	"strings"
+	"sync"
+	"time"
+
+	"github.com/m1ngsama/filebox/internal/db"
+	"github.com/m1ngsama/filebox/internal/vol"
+)
+
+const (
+	Upload    = "upload"
+	WebDAV    = "webdav"
+	Restore   = "restore"
+	Recovered = "recovered"
+
+	sidecar = ".path"
+)
+
+var validID = regexp.MustCompile(`^[0-9]{1,19}-[0-9a-f]{16}$`)
+
+type Version struct {
+	ID      string `json:"id"`
+	Vol     string `json:"-"`
+	Path    string `json:"-"`
+	Size    int64  `json:"size"`
+	Mtime   int64  `json:"mtime"`
+	Created int64  `json:"created"`
+	Source  string `json:"source"`
+	UserID  int64  `json:"-"`
+}
+
+type Store struct {
+	DB  *db.DB
+	Now func() time.Time
+	mu  sync.Mutex
+}
+
+func (s *Store) now() time.Time {
+	if s.Now != nil {
+		return s.Now()
+	}
+	return time.Now()
+}
+
+func File(id string) string { return path.Join(vol.VersionsDir, id) }
+
+func ValidID(id string) bool { return validID.MatchString(id) }
+
+func (s *Store) Capture(v *vol.Volume, rel, source string, user int64) (string, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.capture(v, rel, source, user)
+}
+
+func (s *Store) capture(v *vol.Volume, rel, source string, user int64) (string, error) {
+	fi, err := v.Root.Lstat(rel)
+	if err != nil {
+		return "", err
+	}
+	if !fi.Mode().IsRegular() {
+		return "", fs.ErrInvalid
+	}
+	now := s.now()
+	b := make([]byte, 8)
+	rand.Read(b)
+	id := strconv.FormatInt(now.UnixMilli(), 10) + "-" + hex.EncodeToString(b)
+	if err := v.Root.MkdirAll(vol.VersionsDir, 0o700); err != nil {
+		return "", err
+	}
+	if err := v.Root.WriteFile(File(id)+sidecar, []byte(rel), 0o600); err != nil {
+		return "", err
+	}
+	if err := v.Root.Rename(rel, File(id)); err != nil {
+		v.Root.Remove(File(id) + sidecar)
+		return "", err
+	}
+	_, err = s.DB.Exec(`INSERT INTO versions (id, vol, path, size, mtime, created, source, user_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+		id, v.Name, rel, fi.Size(), fi.ModTime().UnixMilli(), now.UnixMilli(), source, user)
+	if err != nil {
+		if v.Root.Rename(File(id), rel) == nil {
+			v.Root.Remove(File(id) + sidecar)
+		}
+		return "", err
+	}
+	return id, nil
+}
+
+const columns = `id, vol, path, size, mtime, created, source, user_id`
+
+func scan(rows *sql.Rows) ([]Version, error) {
+	defer rows.Close()
+	out := []Version{}
+	for rows.Next() {
+		var x Version
+		if err := rows.Scan(&x.ID, &x.Vol, &x.Path, &x.Size, &x.Mtime, &x.Created, &x.Source, &x.UserID); err != nil {
+			return nil, err
+		}
+		out = append(out, x)
+	}
+	return out, rows.Err()
+}
+
+func (s *Store) List(volName, rel string) ([]Version, error) {
+	rows, err := s.DB.Query(`SELECT `+columns+` FROM versions WHERE vol = ? AND path = ? ORDER BY created DESC, id DESC`, volName, rel)
+	if err != nil {
+		return nil, err
+	}
+	return scan(rows)
+}
+
+func (s *Store) Get(volName, id string) (Version, error) {
+	if !ValidID(id) {
+		return Version{}, vol.ErrBadPath
+	}
+	rows, err := s.DB.Query(`SELECT `+columns+` FROM versions WHERE vol = ? AND id = ?`, volName, id)
+	if err != nil {
+		return Version{}, err
+	}
+	xs, err := scan(rows)
+	if err != nil {
+		return Version{}, err
+	}
+	if len(xs) == 0 {
+		return Version{}, fs.ErrNotExist
+	}
+	return xs[0], nil
+}
+
+func (s *Store) Restore(v *vol.Volume, id string, user int64) (string, string, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	x, err := s.Get(v.Name, id)
+	if err != nil {
+		return "", "", err
+	}
+	dst, err := vol.Clean(x.Path)
+	if err != nil {
+		return "", "", err
+	}
+	prev := ""
+	if fi, err := v.Root.Lstat(dst); err == nil {
+		if !fi.Mode().IsRegular() {
+			return "", "", fs.ErrExist
+		}
+		if prev, err = s.capture(v, dst, Restore, user); err != nil {
+			return "", "", err
+		}
+	} else if err := v.Root.MkdirAll(path.Dir(dst), 0o755); err != nil {
+		return "", "", err
+	}
+	if err := v.Root.Rename(File(id), dst); err != nil {
+		if prev != "" {
+			s.unwind(v, prev, dst)
+		}
+		return "", "", err
+	}
+	s.forget(v, id)
+	return dst, prev, nil
+}
+
+func (s *Store) unwind(v *vol.Volume, id, dst string) {
+	if err := v.Root.Rename(File(id), dst); err != nil {
+		slog.Error("restore version", "vol", v.Name, "id", id, "err", err)
+		return
+	}
+	s.forget(v, id)
+}
+
+func (s *Store) forget(v *vol.Volume, id string) {
+	if _, err := s.DB.Exec(`DELETE FROM versions WHERE vol = ? AND id = ?`, v.Name, id); err != nil {
+		slog.Warn("forget version", "vol", v.Name, "id", id, "err", err)
+	}
+	v.Root.Remove(File(id) + sidecar)
+}
+
+func (s *Store) Delete(v *vol.Volume, id string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if _, err := s.Get(v.Name, id); err != nil {
+		return err
+	}
+	return s.drop(v, id)
+}
+
+func (s *Store) drop(v *vol.Volume, id string) error {
+	if err := v.Root.Remove(File(id)); err != nil && !errors.Is(err, fs.ErrNotExist) {
+		return err
+	}
+	s.forget(v, id)
+	return nil
+}
+
+func (s *Store) Recover(vols *vol.Set) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	var errs []error
+	for _, v := range vols.All() {
+		if err := s.recover(v); err != nil {
+			errs = append(errs, fmt.Errorf("versions of %s: %w", v.Name, err))
+		}
+	}
+	return errors.Join(errs...)
+}
+
+func (s *Store) recover(v *vol.Volume) error {
+	rows, err := s.DB.Query(`SELECT `+columns+` FROM versions WHERE vol = ?`, v.Name)
+	if err != nil {
+		return err
+	}
+	xs, err := scan(rows)
+	if err != nil {
+		return err
+	}
+	known := map[string]bool{}
+	for _, x := range xs {
+		if _, err := v.Root.Lstat(File(x.ID)); errors.Is(err, fs.ErrNotExist) {
+			slog.Warn("version file missing, dropping its row", "vol", v.Name, "id", x.ID)
+			s.forget(v, x.ID)
+			continue
+		}
+		known[x.ID] = true
+	}
+	f, err := v.Root.Open(vol.VersionsDir)
+	if errors.Is(err, fs.ErrNotExist) {
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+	names, err := f.Readdirnames(-1)
+	f.Close()
+	if err != nil {
+		return err
+	}
+	present := map[string]bool{}
+	for _, n := range names {
+		present[n] = true
+	}
+	for _, n := range names {
+		id, isSidecar := strings.CutSuffix(n, sidecar)
+		switch {
+		case !ValidID(id) || known[id]:
+		case isSidecar && !present[id]:
+			v.Root.Remove(File(n))
+		case !isSidecar:
+			if err := s.adopt(v, id); err != nil {
+				slog.Warn("adopt version", "vol", v.Name, "id", id, "err", err)
+			}
+		}
+	}
+	return nil
+}
+
+func (s *Store) adopt(v *vol.Volume, id string) error {
+	b, err := v.Root.ReadFile(File(id) + sidecar)
+	if err != nil {
+		return err
+	}
+	rel, err := vol.Clean(string(b))
+	if err != nil || rel == "." {
+		return vol.ErrBadPath
+	}
+	fi, err := v.Root.Lstat(File(id))
+	if err != nil {
+		return err
+	}
+	if !fi.Mode().IsRegular() {
+		return fs.ErrInvalid
+	}
+	ms, _ := strconv.ParseInt(id[:strings.IndexByte(id, '-')], 10, 64)
+	_, err = s.DB.Exec(`INSERT INTO versions (id, vol, path, size, mtime, created, source) VALUES (?, ?, ?, ?, ?, ?, ?)`,
+		id, v.Name, rel, fi.Size(), fi.ModTime().UnixMilli(), ms, Recovered)
+	if err == nil {
+		slog.Info("adopted orphaned version", "vol", v.Name, "path", rel, "id", id)
+	}
+	return err
+}

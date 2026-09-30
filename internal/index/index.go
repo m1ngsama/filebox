@@ -113,9 +113,11 @@ func (x *Index) rename(vol, from, to string) error {
 		return err
 	}
 	defer tx.Rollback()
-	for _, t := range []string{"files", "dav_props", "favorites"} {
-		if _, err := tx.Exec(`DELETE FROM `+t+` WHERE `+subtree, under(vol, to)...); err != nil {
-			return err
+	for _, t := range []string{"files", "dav_props", "favorites", "versions"} {
+		if t != "versions" {
+			if _, err := tx.Exec(`DELETE FROM `+t+` WHERE `+subtree, under(vol, to)...); err != nil {
+				return err
+			}
 		}
 		expr, args := moved(from, to)
 		if _, err := tx.Exec(`UPDATE `+t+` SET path = `+expr+` WHERE `+subtree, append(args, under(vol, from)...)...); err != nil {

@@ -12,6 +12,7 @@ import (
 	"github.com/m1ngsama/filebox/internal/auth"
 	"github.com/m1ngsama/filebox/internal/db"
 	"github.com/m1ngsama/filebox/internal/index"
+	"github.com/m1ngsama/filebox/internal/version"
 	"github.com/m1ngsama/filebox/internal/vol"
 )
 
@@ -20,6 +21,7 @@ type env struct {
 	dir    string
 	dir2   string
 	rw, ro string
+	vs     *version.Store
 }
 
 func setup(t *testing.T) *env {
@@ -37,12 +39,13 @@ func setup(t *testing.T) *env {
 	rw, _ := a.NewAppToken(uid, "rw", false)
 	ro, _ := a.NewAppToken(uid, "ro", true)
 	mux := http.NewServeMux()
-	h := Handler(vols, a, index.New(d))
+	vs := &version.Store{DB: d}
+	h := Handler(vols, a, index.New(d), vs)
 	mux.Handle("/dav", h)
 	mux.Handle("/dav/", h)
 	srv := httptest.NewServer(mux)
 	t.Cleanup(srv.Close)
-	return &env{srv: srv, dir: dir, dir2: dir2, rw: rw, ro: ro}
+	return &env{srv: srv, dir: dir, dir2: dir2, rw: rw, ro: ro, vs: vs}
 }
 
 func (e *env) req(t *testing.T, tok, method, p string, body string, hdr ...string) (*http.Response, string) {

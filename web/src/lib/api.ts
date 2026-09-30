@@ -25,6 +25,7 @@ export type Token = { id: number; label: string; readonly: boolean; created: num
 export type Session = { id: number; user_agent: string; ip: string; created: number; last_used: number; current: boolean }
 export type Passkey = { id: number; name: string; created: number; last_used: number }
 type Begun<T> = { ceremony: string; options: T }
+export type Version = { id: string; size: number; mtime: number; created: number; source: string }
 export type TrashItem = { id: string; name: string; path: string; dir: boolean; size: number; deleted: number }
 export type ShareInfo =
   | { locked: true; mode: Share['mode'] }
@@ -70,6 +71,7 @@ export const fileURL = (vol: string, p: string, as?: As) =>
   as === 'thumb' ? thumbURL(vol, p) : as === 'render' || as === 'meta' ? `/api/${as}?${q({ vol, p })}` : rawURL(vol, p, as === 'dl')
 export const shareFileURL = (tok: string, p: string, as?: As) =>
   as === 'thumb' ? shareThumbURL(tok, p) : as === 'render' || as === 'meta' ? `${shareURL(tok)}/${as}?${q({ p })}` : shareRawURL(tok, p, as === 'dl')
+export const versionURL = (vol: string, id: string, dl = false) => `/api/versions/raw?${q({ vol, id })}${dl ? '&dl' : ''}`
 const zipQuery = (paths: string[], name: string) => new URLSearchParams([...paths.map((p) => ['p', p]), ['name', name]]).toString()
 export const zipURL = (vol: string, paths: string[], name: string) => `/api/zip?vol=${encodeURIComponent(vol)}&${zipQuery(paths, name)}`
 export const shareZipURL = (tok: string, paths: string[], name: string) => `${shareURL(tok)}/zip?${zipQuery(paths, name)}`
@@ -133,6 +135,9 @@ export const api = {
   restore: (vol: string, id: string) => req<void>('POST', '/api/trash/restore', { vol, id }),
   emptyTrash: (vol: string) => req<void>('POST', '/api/trash/empty', { vol }),
   purge: (vol: string, ids: string[]) => req<void>('POST', '/api/trash/delete', { vol, ids }),
+  versions: (vol: string, p: string) => req<{ versions: Version[] }>('GET', `/api/versions?${q({ vol, p })}`),
+  restoreVersion: (vol: string, id: string) => req<{ path: string; prev: string }>('POST', '/api/versions/restore', { vol, id }),
+  delVersion: (vol: string, id: string) => req<void>('POST', '/api/versions/delete', { vol, id }),
   tokens: () => req<{ tokens: Token[] }>('GET', '/api/tokens'),
   newToken: (label: string, readonly: boolean) => req<{ token: string }>('POST', '/api/tokens', { label, readonly }),
   delToken: (id: number) => req<void>('DELETE', `/api/tokens/${id}`),

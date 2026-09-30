@@ -18,6 +18,7 @@ import (
 	"github.com/m1ngsama/filebox/internal/httpx"
 	"github.com/m1ngsama/filebox/internal/index"
 	"github.com/m1ngsama/filebox/internal/serve"
+	"github.com/m1ngsama/filebox/internal/version"
 	"github.com/m1ngsama/filebox/internal/vol"
 )
 
@@ -86,11 +87,12 @@ func List(root *os.Root, rel string) ([]Entry, error) {
 }
 
 type API struct {
-	Vols  *vol.Set
-	DB    *db.DB
-	Auth  *auth.Auth
-	Jobs  *Jobs
-	Index *index.Index
+	Vols     *vol.Set
+	DB       *db.DB
+	Auth     *auth.Auth
+	Jobs     *Jobs
+	Index    *index.Index
+	Versions *version.Store
 }
 
 func (a *API) Register(mux *http.ServeMux) {
@@ -116,6 +118,10 @@ func (a *API) Register(mux *http.ServeMux) {
 	h("POST /api/trash/restore", a.trashRestore)
 	h("POST /api/trash/empty", a.trashEmpty)
 	h("POST /api/trash/delete", a.trashDelete)
+	h("GET /api/versions", a.versions)
+	h("GET /api/versions/raw", a.versionRaw)
+	h("POST /api/versions/restore", a.versionRestore)
+	h("POST /api/versions/delete", a.versionDelete)
 	h("GET /api/tokens", a.tokens)
 	h("POST /api/tokens", a.tokenNew)
 	h("DELETE /api/tokens/{id}", a.tokenDel)

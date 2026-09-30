@@ -28,7 +28,7 @@
   import EllipsisVertical from '@lucide/svelte/icons/ellipsis-vertical'
   import ArrowUp from '@lucide/svelte/icons/arrow-up'
   import ArrowDown from '@lucide/svelte/icons/arrow-down'
-  import { api, errorText, filesURL, fileURL, rawURL, thumbURL, zipURL, saveURL, type Entry, type Move, type RecentFile } from '../lib/api'
+  import { api, filesURL, fileURL, rawURL, thumbURL, zipURL, saveURL, type Entry, type Move, type RecentFile } from '../lib/api'
   import { toast, fail, runLatest } from '../lib/toast.svelte'
   import { navigate, link, route } from '../lib/router.svelte'
   import { enqueue, type Replaced } from '../lib/uploads.svelte'
@@ -338,13 +338,7 @@
 
   async function unreplace(rs: Replaced[]) {
     const bad: Failed[] = []
-    for (const r of [...rs].reverse()) {
-      const gone = await api.rm(r.vol, [r.path]).then(
-        (x) => x.failed.map((f) => ({ name: base(r.path), error: new Error(errorText(f.status) ?? f.error) })),
-        (error: Error) => [{ name: base(r.path), error }],
-      )
-      bad.push(...(gone.length ? gone : await restore(r.vol, [r])))
-    }
+    for (const r of [...rs].reverse()) await api.restoreVersion(r.vol, r.id).catch((error: Error) => bad.push({ name: base(r.path), error }))
     return bad
   }
 

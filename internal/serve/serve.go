@@ -38,6 +38,10 @@ func SafeHeaders(h http.Header, contentType string) {
 }
 
 func File(w http.ResponseWriter, r *http.Request, root *os.Root, rel string, download bool) {
+	Named(w, r, root, rel, path.Base(rel), download)
+}
+
+func Named(w http.ResponseWriter, r *http.Request, root *os.Root, rel, name string, download bool) {
 	f, err := root.Open(rel)
 	if err != nil {
 		httpx.Error(w, err)
@@ -53,7 +57,6 @@ func File(w http.ResponseWriter, r *http.Request, root *os.Root, rel string, dow
 		httpx.Fail(w, 400, "is a directory")
 		return
 	}
-	name := path.Base(rel)
 	ext := strings.ToLower(path.Ext(name))
 	ct := mime.TypeByExtension(ext)
 	if ct == "" || dangerous[ext] {

@@ -12,9 +12,10 @@ import (
 )
 
 const (
-	UploadsDir = ".filebox/uploads"
-	JobsDir    = ".filebox/jobs"
-	TrashDir   = ".trash"
+	UploadsDir  = ".filebox/uploads"
+	JobsDir     = ".filebox/jobs"
+	VersionsDir = ".filebox/versions"
+	TrashDir    = ".trash"
 )
 
 var ErrBadPath = errors.New("bad path")

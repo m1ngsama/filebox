@@ -1303,7 +1303,7 @@ test('undo after replacing one name twice brings back the original', async ({ pa
   expect(readFileSync(join(server.vol, 'x.txt'), 'utf8')).toBe('old')
 })
 
-test('an undo that cannot remove a replacement says why in the UI language', async ({ page, server }) => {
+test('an undo that cannot restore the original says why in the UI language', async ({ page, server }) => {
   writeFileSync(join(server.vol, 'y.txt'), 'old')
   await login(page)
   await fileInput(page).setInputFiles({ name: 'y.txt', mimeType: 'text/plain', buffer: Buffer.from('new') })
@@ -1311,8 +1311,9 @@ test('an undo that cannot remove a replacement says why in the UI language', asy
   const done = page.locator('.toast', { hasText: t.uploadedReplaced(1, 1) })
   await expect(done).toHaveCount(1)
   rmSync(join(server.vol, 'y.txt'))
+  mkdirSync(join(server.vol, 'y.txt'))
   await done.getByRole('button', { name: t.undo }).click()
-  await expect(page.getByRole('alert').filter({ hasText: t.undoFailed('“y.txt”') })).toHaveText(t.failedItem(t.undoFailed('“y.txt”'), t.errors[404]))
+  await expect(page.getByRole('alert').filter({ hasText: t.undoFailed('“y.txt”') })).toHaveText(t.failedItem(t.undoFailed('“y.txt”'), t.errors[409]))
 })
 
 test('a large batch renders a bounded number of rows', async ({ page }) => {
@@ -1345,12 +1346,13 @@ test('a name clash asks to replace, keep both or skip', async ({ page, server })
   const read = (n: string) => readFileSync(join(server.vol, n), 'utf8')
   expect([read('a.txt'), read('b.txt'), read('c.txt'), read('c (1).txt'), read('d.txt')]).toEqual(['new', 'old', 'old', 'new', 'new'])
   expect(existsSync(join(server.vol, 'b (1).txt'))).toBe(false)
-  const trashed = () => readdirSync(join(server.vol, '.trash')).map((id) => `${read(`.trash/${id}/.origin`)}=${read(`.trash/${id}/a.txt`)}`)
-  expect(trashed()).toEqual(['a.txt=old'])
+  const kept = () => readdirSync(join(server.vol, '.filebox/versions')).filter((n) => !n.endsWith('.path')).map((id) => `${read(`.filebox/versions/${id}.path`)}=${read(`.filebox/versions/${id}`)}`)
+  expect(kept()).toEqual(['a.txt=old'])
+  expect(existsSync(join(server.vol, '.trash'))).toBe(false)
   await done.getByRole('button', { name: t.undo }).click()
   await expect(page.locator('.toast', { hasText: t.undone })).toHaveCount(1)
   expect(read('a.txt')).toBe('old')
-  expect(trashed()).toEqual(['a.txt=new'])
+  expect(kept()).toEqual(['a.txt=new'])
 
   await pick(['x', 'y'])
   await dialog.getByLabel(t.applyToRest(1)).check()

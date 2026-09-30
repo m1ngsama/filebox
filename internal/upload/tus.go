@@ -24,9 +24,9 @@ import (
 	"github.com/tus/tusd/v2/pkg/memorylocker"
 	xslog "golang.org/x/exp/slog"
 
-	"github.com/m1ngsama/filebox/internal/api"
 	"github.com/m1ngsama/filebox/internal/httpx"
 	"github.com/m1ngsama/filebox/internal/index"
+	"github.com/m1ngsama/filebox/internal/version"
 	"github.com/m1ngsama/filebox/internal/vol"
 )
 
@@ -132,6 +132,7 @@ type Server struct {
 	Index    *index.Index
 	Received func(owner, rel string, size int64)
 	Allow    func(owner string, size int64) error
+	Versions *version.Store
 
 	vols     []*volume
 	byKey    map[string]*volume
@@ -178,8 +179,8 @@ func New(vols *vol.Set) (*Server, error) {
 				return create(key, hook)
 			},
 			PreFinishResponseCallback: func(hook handler.HookEvent) (handler.HTTPResponse, error) {
-				trashed, err := s.finish(u, hook.Upload)
-				return replaced(trashed), err
+				kept, err := s.finish(u, hook.Upload)
+				return replaced(kept), err
 			},
 		})
 		if err != nil {
@@ -247,7 +248,7 @@ func (s *Server) Handler(prefix string, p Policy) http.Handler {
 			return
 		}
 		if r.Method == http.MethodHead || r.Method == http.MethodPatch {
-			size, trashed, err := s.settle(ctx, u, id)
+			size, kept, err := s.settle(ctx, u, id)
 			var herr handler.Error
 			if errors.As(err, &herr) {
 				httpx.Fail(w, herr.HTTPResponse.StatusCode, herr.Message)
@@ -264,7 +265,7 @@ func (s *Server) Handler(prefix string, p Policy) http.Handler {
 				h.Set("Cache-Control", "no-store")
 				h.Set("Upload-Offset", n)
 				h.Set("Upload-Length", n)
-				for k, v := range replaced(trashed).Header {
+				for k, v := range replaced(kept).Header {
 					h.Set(k, v)
 				}
 				if r.Method == http.MethodHead {
@@ -340,11 +341,11 @@ func complete(ctx context.Context, u *volume, id string) (handler.FileInfo, bool
 	return info, err == nil && !info.SizeIsDeferred && info.Offset == info.Size
 }
 
-func replaced(trashed string) handler.HTTPResponse {
-	if trashed == "" {
+func replaced(kept string) handler.HTTPResponse {
+	if kept == "" {
 		return handler.HTTPResponse{}
 	}
-	return handler.HTTPResponse{Header: handler.HTTPHeader{"Upload-Replaced": trashed}}
+	return handler.HTTPResponse{Header: handler.HTTPHeader{"Upload-Replaced": kept}}
 }
 
 func (s *Server) settle(ctx context.Context, u *volume, id string) (int64, string, error) {
@@ -357,8 +358,8 @@ func (s *Server) settle(ctx context.Context, u *volume, id string) (int64, strin
 	if !ok {
 		return -1, "", nil
 	}
-	trashed, err := s.finish(u, info)
-	return info.Size, trashed, err
+	kept, err := s.finish(u, info)
+	return info.Size, kept, err
 }
 
 func (s *Server) finish(u *volume, info handler.FileInfo) (string, error) {
@@ -375,19 +376,18 @@ func (s *Server) finish(u *volume, info handler.FileInfo) (string, error) {
 	err := Target{Vol: u.v, Dir: dir, Base: info.MetaData[keyBase]}.confine(true)
 	name := info.MetaData[keyName]
 	dst := path.Join(dir, name)
-	trashed := ""
+	kept := ""
 	if err == nil && replaceable(u.v.Root, dst, info.MetaData[keyReplace] == "1") {
-		trashed, err = api.Trash(u.v, dst, s.now())
+		kept, err = s.Versions.Capture(u.v, dst, version.Upload, userID(info.MetaData[keyOwner]))
 	} else if err == nil {
 		name, err = unique(u.v.Root, dir, name)
 		dst = path.Join(dir, name)
 	}
 	if err == nil {
 		err = u.v.Root.Rename(path.Join(vol.UploadsDir, info.ID), dst)
-		if err != nil && trashed != "" {
-			u.v.Root.Rename(path.Join(vol.TrashDir, trashed, path.Base(dst)), dst)
-			u.v.Root.RemoveAll(path.Join(vol.TrashDir, trashed))
-			trashed = ""
+		if err != nil && kept != "" {
+			s.Versions.Restore(u.v, kept, 0)
+			kept = ""
 		}
 	}
 	if err != nil {
@@ -399,7 +399,12 @@ func (s *Server) finish(u *volume, info handler.FileInfo) (string, error) {
 	if s.Received != nil {
 		s.Received(info.MetaData[keyOwner], dst, info.Size)
 	}
-	return trashed, nil
+	return kept, nil
+}
+
+func userID(owner string) int64 {
+	n, _ := strconv.ParseInt(strings.TrimPrefix(owner, "user:"), 10, 64)
+	return n
 }
 
 func replaceable(root *os.Root, rel string, replace bool) bool {
