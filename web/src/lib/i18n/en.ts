@@ -1,4 +1,4 @@
-import type { Table } from './zh'
+import type { ActivityKind, EventKind, Expiry, Status, Table } from './zh'
 
 const count = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? one : many}`
 const wait = (s: number) => (s < 60 ? count(s, 'second') : count(Math.ceil(s / 60), 'minute'))
@@ -164,7 +164,7 @@ export default {
     [7 * 86400, '7 days'],
     [30 * 86400, '30 days'],
     [0, 'Never'],
-  ] as [number, string][],
+  ] as [Expiry, Expiry, Expiry, Expiry],
   forever: 'Never expires',
   hasPassword: 'Password protected',
   expiresIn: (s: number) =>
@@ -251,7 +251,7 @@ export default {
   trashEmptied: 'Trash emptied',
   activity: 'Activity',
   activityHint: 'Downloads and received files on share links, plus sign-ins and settings changes. Kept for 90 days. Visit counts appear on each share.',
-  activityKinds: { '': 'All types', download: 'Downloads', upload: 'Received files', login: 'Sign-ins', share: 'Share settings', token: 'App passwords' } as Record<string, string>,
+  activityKinds: { '': 'All types', download: 'Downloads', upload: 'Received files', login: 'Sign-ins', share: 'Share settings', token: 'App passwords' } satisfies Record<ActivityKind, string>,
   allShares: 'All shares',
   noActivity: 'No activity yet',
   loadMore: 'Load more',
@@ -267,7 +267,7 @@ export default {
     share_delete: (n: string) => `Deleted share ${n}`,
     token_create: (n: string) => `Created app password “${n}”`,
     token_revoke: (n: string) => `Revoked app password “${n}”`,
-  } as Record<string, (name: string) => string>,
+  } satisfies Record<EventKind, (name: string) => string>,
   sessions: 'Signed-in devices',
   sessionsHint: 'Browsers signed in to this account. Sign out any device you don’t recognize.',
   thisDevice: 'This device',
@@ -333,6 +333,6 @@ export default {
     413: 'The file is larger than allowed',
     429: 'Too many requests. Try again later.',
     507: 'Not enough disk space',
-  } as Record<number, string>,
+  } satisfies Record<Status, string>,
   serverError: 'Server error. Try again later.',
 } satisfies Table

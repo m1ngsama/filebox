@@ -1,5 +1,10 @@
 const wait = (s: number) => (s < 60 ? `${s} 秒` : `${Math.ceil(s / 60)} 分钟`)
 
+type Expiry = [seconds: number, label: string]
+type ActivityKind = '' | 'download' | 'upload' | 'login' | 'share' | 'token'
+type EventKind = 'download' | 'upload' | 'login' | 'login_failed' | 'share_create' | 'share_edit' | 'share_delete' | 'token_create' | 'token_revoke'
+type Status = 400 | 401 | 403 | 404 | 409 | 413 | 429 | 507
+
 const zh = {
   brand: 'filebox',
   username: '用户名',
@@ -160,7 +165,7 @@ const zh = {
     [7 * 86400, '7 天'],
     [30 * 86400, '30 天'],
     [0, '永久'],
-  ] as [number, string][],
+  ] as [Expiry, Expiry, Expiry, Expiry],
   forever: '永久有效',
   hasPassword: '有密码',
   expiresIn: (s: number) =>
@@ -247,7 +252,7 @@ const zh = {
   trashEmptied: '回收站已清空',
   activity: '动态',
   activityHint: '分享链接的下载和收到的文件，以及登录和设置变更。只保留最近 90 天，访问次数显示在各个分享上。',
-  activityKinds: { '': '全部类型', download: '下载', upload: '收到文件', login: '登录', share: '分享设置', token: '应用密码' } as Record<string, string>,
+  activityKinds: { '': '全部类型', download: '下载', upload: '收到文件', login: '登录', share: '分享设置', token: '应用密码' } satisfies Record<ActivityKind, string>,
   allShares: '全部分享',
   noActivity: '还没有动态',
   loadMore: '加载更多',
@@ -263,7 +268,7 @@ const zh = {
     share_delete: (n: string) => `删除分享 ${n}`,
     token_create: (n: string) => `新建应用密码“${n}”`,
     token_revoke: (n: string) => `吊销应用密码“${n}”`,
-  } as Record<string, (name: string) => string>,
+  } satisfies Record<EventKind, (name: string) => string>,
   sessions: '登录设备',
   sessionsHint: '正在登录这个账号的浏览器。不认识的设备可以直接退出。',
   thisDevice: '本机',
@@ -329,9 +334,10 @@ const zh = {
     413: '文件超过允许的大小',
     429: '操作太频繁，请稍后再试',
     507: '磁盘空间不足',
-  } as Record<number, string>,
+  } satisfies Record<Status, string>,
   serverError: '服务器出错，请稍后再试',
 }
 
+export type { Expiry, ActivityKind, EventKind, Status }
 export type Table = typeof zh
 export default zh

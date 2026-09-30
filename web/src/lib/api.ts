@@ -3,7 +3,7 @@ import { t } from './i18n'
 import { child, parent, base } from './format'
 
 export const errorText = (status: number): string | undefined =>
-  t.errors[status] ?? (status >= 500 ? t.serverError : undefined)
+  (t.errors as Record<number, string>)[status] ?? (status >= 500 ? t.serverError : undefined)
 
 export class HttpError extends Error {
   constructor(public status: number, message: string) {

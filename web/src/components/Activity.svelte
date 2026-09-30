@@ -57,7 +57,7 @@
     {@const Icon = icons[e.kind as keyof typeof icons] ?? Link}
     <Icon size={18} class="row-icon" />
     <div class="row-main">
-      <span class="row-title">{t.events[e.kind]?.(e.kind.startsWith('share_') ? e.target : e.name) ?? e.kind}{e.kind === 'upload' ? ` · ${size(e.size)}` : ''}</span>
+      <span class="row-title">{(t.events as Record<string, (name: string) => string>)[e.kind]?.(e.kind.startsWith('share_') ? e.target : e.name) ?? e.kind}{e.kind === 'upload' ? ` · ${size(e.size)}` : ''}</span>
       <span class="tags">
         {#if e.target && !e.kind.startsWith('share_')}<span class="tag">{e.target}</span>{/if}
         {#if e.visitor}<span class="hint">{e.kind.startsWith('login') ? t.source(e.visitor) : t.visitor(e.visitor)}</span>{/if}
