@@ -330,6 +330,7 @@ export default {
     403: 'Permission denied',
     404: 'The file doesn’t exist or was moved',
     409: 'An item with that name already exists',
+    410: 'Link expired',
     413: 'The file is larger than allowed',
     429: 'Too many requests. Try again later.',
     507: 'Not enough disk space',

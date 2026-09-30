@@ -3,7 +3,7 @@ const wait = (s: number) => (s < 60 ? `${s} 秒` : `${Math.ceil(s / 60)} 分钟`
 type Expiry = [seconds: number, label: string]
 type ActivityKind = '' | 'download' | 'upload' | 'login' | 'share' | 'token'
 type EventKind = 'download' | 'upload' | 'login' | 'login_failed' | 'share_create' | 'share_edit' | 'share_delete' | 'token_create' | 'token_revoke'
-type Status = 400 | 401 | 403 | 404 | 409 | 413 | 429 | 507
+type Status = 400 | 401 | 403 | 404 | 409 | 410 | 413 | 429 | 507
 
 const zh = {
   brand: 'filebox',
@@ -331,6 +331,7 @@ const zh = {
     403: '没有权限',
     404: '文件不存在或已被移走',
     409: '已存在同名文件',
+    410: '链接已过期',
     413: '文件超过允许的大小',
     429: '操作太频繁，请稍后再试',
     507: '磁盘空间不足',

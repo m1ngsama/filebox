@@ -1568,6 +1568,20 @@ test('a single-file share previews inline and dead links explain themselves', as
   await anon.close()
 })
 
+test('a share that expires mid-visit says so when the visitor opens a folder', async ({ page, browser, server }) => {
+  mkdirSync(join(server.vol, 'docs/sub'))
+  await login(page)
+  const { url } = await apiShare(page, { path: 'docs', expires_in: 3 })
+  const anon = await browser.newPage()
+  await anon.goto(url)
+  await expect(row(anon, 'sub')).toBeVisible()
+  await anon.waitForTimeout(3100)
+  await row(anon, 'sub').locator('button.name').click()
+  await expect(anon.getByText(t.errors[410], { exact: true })).toBeVisible()
+  await expect(anon.locator('body')).not.toContainText('expired')
+  await anon.close()
+})
+
 test('a drop share shows upload progress and enforces its size limit', async ({ page, browser, server }) => {
   await login(page)
   const { url } = await apiShare(page, { path: 'docs', mode: 'drop', max_upload: 1 << 20 })
