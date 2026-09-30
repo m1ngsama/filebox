@@ -32,7 +32,10 @@
     display: grid; grid-template-columns: 28px minmax(0, 1fr); column-gap: var(--space-2); align-items: center;
     width: 100%; padding: var(--space-2); border: 0; border-radius: var(--radius-md); background: none; color: inherit; text-align: left; font: inherit; white-space: normal; cursor: pointer;
   }
-  .hit:hover { background: var(--hover); }
+  @media (hover: hover) and (pointer: fine) {
+    .hit:hover { background: var(--hover); }
+  }
+  .hit:active { background: var(--hover); }
   .hit > :global(.ficon) { justify-self: center; }
   .head { display: flex; align-items: baseline; gap: var(--space-2); min-width: 0; }
   .name { flex: none; max-width: 70%; font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
