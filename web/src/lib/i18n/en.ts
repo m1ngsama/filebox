@@ -138,7 +138,7 @@ export default {
   subtitles: 'Subtitles',
   uploads: 'Uploads',
   uploading: (ok: number, n: number) => `Uploading ${ok} of ${n}`,
-  eta: (s: number) => `About ${s < 60 ? count(Math.ceil(s), 'second') : s < 3600 ? count(Math.ceil(s / 60), 'minute') : `${Math.round(s / 360) / 10} hours`} left`,
+  eta: (s: number) => `About ${s < 60 ? count(Math.ceil(s), 'second') : s < 3600 ? count(Math.ceil(s / 60), 'minute') : count(Math.round(s / 360) / 10, 'hour')} left`,
   uploadsFailed: (n: number) => `${count(n, 'item')} didn’t finish uploading`,
   uploadDone: 'Done',
   moreUploads: (n: number) => `${n} more`,
@@ -158,7 +158,7 @@ export default {
   permission: 'Permission',
   modes: { read: 'View only', upload: 'Can upload', drop: 'Drop box' },
   passwordOptional: 'Password (optional)',
-  expiry: 'Expires after',
+  expiry: 'Expiration',
   expiries: [
     [86400, '1 day'],
     [7 * 86400, '7 days'],
