@@ -5,6 +5,7 @@
   import CircleAlert from '@lucide/svelte/icons/circle-alert'
   import ChevronLeft from '@lucide/svelte/icons/chevron-left'
   import ChevronRight from '@lucide/svelte/icons/chevron-right'
+  import ExternalLink from '@lucide/svelte/icons/external-link'
   import type { Entry, Src } from '../lib/api'
   import { kind, look, thumbable, subtitleOf, subtitleLang } from '../lib/format'
   import { load, save } from '../lib/storage'
@@ -25,6 +26,7 @@
   const list = $derived(inline ? [] : entries.filter((e) => !e.dir && kind(e.name)))
   const at = $derived(list.indexOf(entry))
   const step = (d: number) => at >= 0 && list[at + d] && (entry = list[at + d])
+  const ios = /iP(hone|ad|od)/.test(navigator.userAgent) || (/Macintosh/.test(navigator.userAgent) && navigator.maxTouchPoints > 1)
   let pages = $state<Entry[] | null>(null)
   let rtl = $state(false)
   const folder = $derived('rtl:' + src.slice(0, src.lastIndexOf('/')))
@@ -53,7 +55,7 @@
   $effect(() => {
     src
     audioOnly = false
-    status = k === 'audio' || !k ? 'ready' : 'loading'
+    status = k === 'audio' || !k || (k === 'pdf' && ios) ? 'ready' : 'loading'
   })
 
   $effect(() => {
@@ -269,6 +271,11 @@
       </video>
     {:else if k === 'audio'}
       <audio {src} controls autoplay={!inline} preload="metadata" onloadedmetadata={resume} ontimeupdate={track} onpause={track} onended={() => save(spot, '')} onerror={failed}></audio>
+    {:else if k === 'pdf' && ios}
+      <div class="viewer-error">
+        <p>{entry.name}</p>
+        <a class="button primary" href={src} target="_blank" rel="noopener"><ExternalLink size={18} />{t.openInTab}</a>
+      </div>
     {:else if k === 'pdf'}
       <iframe src={src} title={entry.name} onload={ready}></iframe>
     {:else if k === 'book'}

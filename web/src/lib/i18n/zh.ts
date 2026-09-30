@@ -138,6 +138,7 @@ const zh = {
   nextPage: '下一页',
   rtl: '从右往左翻页',
   page: (i: number, n: number) => `${i} / ${n}`,
+  openInTab: '在新标签页中打开',
   noPages: '这个压缩包里没有图片，可以下载后查看。',
   noPreview: '这个格式没法在浏览器里预览，可以直接下载。',
   previewFailed: '预览加载失败，可以下载后查看。',

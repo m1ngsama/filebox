@@ -138,6 +138,7 @@ export default (locale: string) => {
     nextPage: 'Next page',
     rtl: 'Right-to-left pages',
     page: (i: number, n: number) => `${i} / ${n}`,
+    openInTab: 'Open in a new tab',
     noPages: 'This archive has no images. You can download it instead.',
     noPreview: 'This format can’t be previewed in the browser. You can download it instead.',
     previewFailed: 'The preview didn’t load. You can download the file to view it.',
