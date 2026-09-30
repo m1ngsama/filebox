@@ -1744,6 +1744,22 @@ test('volumes on one filesystem share a single usage bar', async ({ page }) => {
   await expect(volItem('v').locator('.usage')).toHaveCount(0)
 })
 
+test('details list a photo\'s camera data with the same date format as the rest of the app', async ({ page, server }) => {
+  writeFileSync(join(server.vol, 'docs/shot.png'), png(40, 30))
+  await page.route('**/api/meta?*', (r) => r.fulfill({ json: { width: 4000, height: 3000, camera: 'FUJIFILM X100V', taken: '2024-05-06 10:05:00' } }))
+  await login(page)
+  await page.goto('/files/v/docs/?details=shot.png')
+  const dl = page.locator('.details dl')
+  await expect(dl).toContainText(`${t.meta.dimensions}4000 × 3000`)
+  await expect(dl).toContainText(`${t.meta.camera}FUJIFILM X100V`)
+  const want = await page.evaluate(() => new Intl.DateTimeFormat('zh-CN', { dateStyle: 'short', timeStyle: 'short' }).format(new Date(2024, 4, 6, 10, 5)))
+  await expect(dl).toContainText(`${t.meta.taken}${want}`)
+  await page.goto('/files/v/docs/?details=readme.txt')
+  await expect(page.locator('.details h2')).toHaveText('readme.txt')
+  await expect(page.locator('.details dl')).toContainText(t.mtime)
+  await expect(page.locator('.details dl')).not.toContainText(t.meta.dimensions)
+})
+
 test('revisiting a folder revalidates its listing instead of downloading it again', async ({ page }) => {
   await login(page)
   const seen: [number, string | undefined][] = []

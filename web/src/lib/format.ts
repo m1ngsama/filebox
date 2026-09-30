@@ -51,6 +51,19 @@ export function arrange<T extends Row>(list: T[], filter: string, sort: Sort, de
 const dtf = [new Intl.DateTimeFormat(locale, { dateStyle: 'short', timeStyle: 'short' }), new Intl.DateTimeFormat(locale, { dateStyle: 'short', timeStyle: 'medium' })]
 export const date = (ms: number, seconds = false) => dtf[+seconds].format(ms)
 
+export type Meta = Partial<Record<keyof typeof t.meta, string>> & { width?: number; height?: number }
+
+export function metaRows(m: Meta) {
+  const r: [string, string][] = []
+  if (m.width && m.height) r.push([t.meta.dimensions, `${m.width} × ${m.height}`])
+  for (const k of ['taken', 'camera', 'lens', 'focal', 'aperture', 'shutter', 'iso', 'gps'] as const) {
+    const v = m[k]
+    const at = k === 'taken' && v ? new Date(v.replace(' ', 'T')).getTime() : NaN
+    if (v) r.push([t.meta[k], Number.isNaN(at) ? v : date(at)])
+  }
+  return r
+}
+
 const rtf = new Intl.RelativeTimeFormat(locale, { numeric: 'auto' })
 const steps: [Intl.RelativeTimeFormatUnit, number][] = [['minute', 60], ['hour', 24], ['day', 30], ['month', 12], ['year', Infinity]]
 

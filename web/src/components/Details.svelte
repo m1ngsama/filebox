@@ -6,8 +6,8 @@
   import FileIcon from './FileIcon.svelte'
   import SharePanel from './SharePanel.svelte'
   import VersionsPanel from './VersionsPanel.svelte'
-  import { api, type Entry, type Version } from '../lib/api'
-  import { size, date, fallback, parent, place } from '../lib/format'
+  import { api, fileURL, type Entry, type Version } from '../lib/api'
+  import { size, date, fallback, parent, place, visual, metaRows, type Meta } from '../lib/format'
   import { t } from '../lib/i18n'
   import { starred, star } from '../lib/favorites.svelte'
   import { fail } from '../lib/toast.svelte'
@@ -30,6 +30,15 @@
       (s) => (total = s.scanning ? t.sizeIndexing : t.folderSize(size(s.size), s.files)),
       () => (total = null),
     )
+  })
+  let meta = $state<[string, string][]>([])
+  $effect(() => {
+    if (entry.dir || !visual(entry.name)) return
+    const stop = new AbortController()
+    fetch(fileURL(vol, path, 'meta'), { signal: stop.signal })
+      .then((r) => (r.ok ? r.json() : {}))
+      .then((m: Meta) => (meta = metaRows(m)), () => {})
+    return () => stop.abort()
   })
   let tab = $state('share')
   let versions = $state<Version[]>([])
@@ -54,6 +63,7 @@
     <dl>
       {#if total !== null}<dt>{t.size}</dt><dd class="size">{entry.dir ? total || '…' : size(entry.size)}</dd>{/if}
       <dt>{t.mtime}</dt><dd>{date(entry.mtime)}</dd>
+      {#each meta as [k, v] (k)}<dt>{k}</dt><dd>{v}</dd>{/each}
       <dt>{t.path}</dt><dd class="path">{place(vol, parent(path))}</dd>
       {#if versions.length}<dt>{t.versions}</dt><dd><button class="link" onclick={() => (tab = 'versions')}>{t.versionCount(versions.length)}</button></dd>{/if}
     </dl>
