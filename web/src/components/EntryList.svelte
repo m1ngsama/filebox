@@ -291,7 +291,8 @@
     const page = cols * Math.max(1, Math.floor((scroller?.clientHeight ?? 0) / rowPx) - 1)
     const step = { ArrowDown: cols, ArrowUp: -cols, ArrowRight: grid ? 1 : 0, ArrowLeft: grid ? -1 : 0, PageDown: page, PageUp: -page }[ev.key]
     const plain = !ev.ctrlKey && !ev.metaKey && !ev.altKey
-    if (ev.key.length === 1 && plain && (ev.key !== ' ' || seeking)) {
+    if (ev.isComposing || ev.key === 'Process') return
+    if ([...ev.key].length === 1 && plain && (ev.key !== ' ' || seeking)) {
       ev.preventDefault()
       typeahead(ev.key, i)
       return
@@ -480,6 +481,7 @@
                     class:pressing={pressing === i}
                     onclick={(ev) => pick(ev, i)}
                     onkeydown={(ev) => key(ev, i)}
+                    oncompositionend={(ev) => ev.data && typeahead(ev.data, i)}
                     onfocus={() => (cur = id(e))}
                     oncontextmenu={(ev) => menu(ev, e)}
                     onpointerdown={(ev) => press(ev, i)}
@@ -533,6 +535,7 @@
                 class:pressing={pressing === n}
                 onclick={(ev) => pick(ev, n)}
                 onkeydown={(ev) => key(ev, n)}
+                oncompositionend={(ev) => ev.data && typeahead(ev.data, n)}
                 onfocus={() => (cur = id(e))}
                 oncontextmenu={(ev) => menu(ev, e)}
                 onpointerdown={(ev) => press(ev, n)}

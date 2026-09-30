@@ -608,9 +608,9 @@ test('the file list is one tab stop with pages, type-ahead and a menu key, behin
   await expect(page.getByRole('dialog', { name: t.shortcuts })).toContainText(t.keys.seek)
 })
 
-test('backspace edits a type-ahead instead of deleting', async ({ page, server }) => {
+test('backspace edits a type-ahead instead of deleting, and committed IME text and astral characters jump too', async ({ page, server }) => {
   mkdirSync(join(server.vol, 'ta'))
-  for (const n of ['apple.txt', 'banana.txt', 'zed.txt']) writeFileSync(join(server.vol, 'ta', n), n)
+  for (const n of ['apple.txt', 'banana.txt', '香蕉.txt', '\u{1d4b3}.txt', 'zed.txt']) writeFileSync(join(server.vol, 'ta', n), n)
   await login(page)
   await page.goto('/files/v/ta/')
   const apple = row(page, 'apple.txt')
@@ -631,6 +631,13 @@ test('backspace edits a type-ahead instead of deleting', async ({ page, server }
   await page.keyboard.type('z')
   await expect(row(page, 'zed.txt')).toBeFocused()
   await page.waitForTimeout(800)
+  await page.evaluate(() => document.activeElement!.dispatchEvent(new KeyboardEvent('keydown', { key: 'x', isComposing: true, bubbles: true, cancelable: true })))
+  await expect(row(page, 'zed.txt')).toBeFocused()
+  await page.evaluate(() => document.activeElement!.dispatchEvent(new CompositionEvent('compositionend', { data: '香', bubbles: true })))
+  await expect(row(page, '香蕉.txt')).toBeFocused()
+  await page.waitForTimeout(800)
+  await page.evaluate(() => document.activeElement!.dispatchEvent(new KeyboardEvent('keydown', { key: '\u{1d4b3}', bubbles: true, cancelable: true })))
+  await expect(row(page, '\u{1d4b3}.txt')).toBeFocused()
   await page.waitForTimeout(800)
   await apple.focus()
   await page.keyboard.press('Backspace')
