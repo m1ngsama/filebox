@@ -1,6 +1,7 @@
 package thumb
 
 import (
+	"cmp"
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
@@ -20,11 +21,16 @@ import (
 	"sync"
 	"time"
 
+	"github.com/m1ngsama/filebox/internal/extract"
 	"github.com/m1ngsama/filebox/internal/httpx"
 	"github.com/m1ngsama/filebox/internal/vol"
 )
 
-const maxFailed = 10000
+const (
+	maxFailed  = 10000
+	maxEntries = 10000
+	maxCover   = 64 << 20
+)
 
 var probeTimeout = 10 * time.Second
 
@@ -36,6 +42,7 @@ var kinds = map[string]string{
 	".cr2": "raw", ".cr3": "raw", ".nef": "raw", ".arw": "raw", ".dng": "raw", ".pdf": "pdf",
 	".mp4": "video", ".m4v": "video", ".mkv": "video", ".mov": "video", ".avi": "video",
 	".webm": "video", ".ts": "video", ".flv": "video", ".wmv": "video", ".mpg": "video", ".mpeg": "video",
+	".epub": "epub", ".cbz": "cbz",
 }
 
 func Kind(name string) string { return kinds[strings.ToLower(path.Ext(name))] }
@@ -165,8 +172,7 @@ func (s *Service) Serve(w http.ResponseWriter, r *http.Request, v *vol.Volume, r
 }
 
 func (s *Service) ServeFrom(w http.ResponseWriter, r *http.Request, root *os.Root, open, volName, rel string) {
-	kind := Kind(rel)
-	if s.FFmpeg == "" || !s.can(kind) {
+	if s.FFmpeg == "" {
 		httpx.Fail(w, 404, "no thumbnail")
 		return
 	}
@@ -177,7 +183,19 @@ func (s *Service) ServeFrom(w http.ResponseWriter, r *http.Request, root *os.Roo
 	}
 	defer f.Close()
 	fi, err := f.Stat()
-	if err != nil || fi.IsDir() {
+	if err == nil && fi.IsDir() {
+		name := s.cover(f)
+		f.Close()
+		if f, err = root.Open(path.Join(open, name)); name == "" || err != nil {
+			httpx.Fail(w, 404, "no thumbnail")
+			return
+		}
+		defer f.Close()
+		open, rel = path.Join(open, name), path.Join(rel, name)
+		fi, err = f.Stat()
+	}
+	kind := Kind(rel)
+	if err != nil || !fi.Mode().IsRegular() || !s.can(kind) {
 		httpx.Fail(w, 404, "no thumbnail")
 		return
 	}
@@ -246,7 +264,7 @@ func (s *Service) render(ctx context.Context, key string, src *os.File, kind, ou
 	rctx, cancel := context.WithTimeout(context.Background(), time.Minute)
 	defer cancel()
 
-	if kind == "pdf" || kind == "heic" || kind == "raw" {
+	if kind != "image" && kind != "video" {
 		pre := out + ".src"
 		defer os.Remove(pre)
 		if err := s.prepare(rctx, kind, src, pre); err != nil {
@@ -292,4 +310,23 @@ func (s *Service) duration(ctx context.Context, src *os.File) float64 {
 	}
 	d, _ := strconv.ParseFloat(strings.TrimSpace(string(b)), 64)
 	return d
+}
+
+// A folder's cover is its first image, else its first book, by name; only the first maxEntries names are read.
+func (s *Service) cover(dir *os.File) string {
+	list, _ := dir.ReadDir(maxEntries)
+	var image, book string
+	for _, e := range list {
+		n := e.Name()
+		if strings.HasPrefix(n, ".") || e.IsDir() {
+			continue
+		}
+		switch k := Kind(n); {
+		case k == "image" && (image == "" || extract.Natural(n, image) < 0):
+			image = n
+		case (k == "epub" || k == "cbz" || k == "pdf") && s.can(k) && (book == "" || extract.Natural(n, book) < 0):
+			book = n
+		}
+	}
+	return cmp.Or(image, book)
 }

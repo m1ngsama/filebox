@@ -60,7 +60,7 @@ func TestCover(t *testing.T) {
 		"first spine image": {book(pkg("", `<item id="t" href="Text/t.xhtml"/><item id="s" href="Text/s.xhtml"/>`, `<itemref idref="t"/><itemref idref="s"/>`),
 			[2]string{"OEBPS/Text/t.xhtml", `<html><body><p>title</p></body></html>`},
 			[2]string{"OEBPS/Text/s.xhtml", `<html><body><svg><image xlink:href="../Images/other.png"/></svg></body></html>`}), "OEBPS/Images/other.png"},
-		"svg only": {book(pkg("", `<item id="v" href="Images/v.svg" properties="cover-image"/>`, "")), ""},
+		"svg only":  {book(pkg("", `<item id="v" href="Images/v.svg" properties="cover-image"/>`, "")), ""},
 		"traversal": {book(pkg("", `<item id="x" href="../../../etc/passwd.jpg" properties="cover-image"/>`, "")), ""},
 		"no opf":    {open(t, epubFile(t, [][2]string{{"a.jpg", "a"}})), ""},
 	} {

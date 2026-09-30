@@ -157,7 +157,7 @@ export const fallback = (urls: (string | null | false | undefined)[], failures: 
 
 export const rawThumb = (e: { name: string; size: number; dir: boolean }) => !e.dir && kind(e.name) === 'image' && e.size < 2 << 20
 
-const thumbs = new Set('jpg jpeg png gif webp bmp tif tiff heic heif avif pdf cr2 cr3 nef arw dng mp4 m4v mkv mov avi webm ts flv wmv mpg mpeg'.split(' '))
+const thumbs = new Set('jpg jpeg png gif webp bmp tif tiff heic heif avif pdf cr2 cr3 nef arw dng mp4 m4v mkv mov avi webm ts flv wmv mpg mpeg epub cbz'.split(' '))
 export const thumbable = (n: string) => thumbs.has(ext(n))
 
 type WeekLocale = Intl.Locale & { getWeekInfo?: () => { firstDay: number }; weekInfo?: { firstDay: number } }

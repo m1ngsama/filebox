@@ -1,6 +1,7 @@
 package thumb
 
 import (
+	"archive/zip"
 	"bytes"
 	"context"
 	_ "embed"
@@ -12,6 +13,8 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+
+	"github.com/m1ngsama/filebox/internal/extract"
 )
 
 //go:embed probe.heic
@@ -21,7 +24,7 @@ var errNoTool = errors.New("thumb: no tool for this kind")
 
 func (s *Service) can(kind string) bool {
 	switch kind {
-	case "image", "video", "raw":
+	case "image", "video", "raw", "epub", "cbz":
 		return true
 	case "pdf":
 		return s.pdf != ""
@@ -129,6 +132,8 @@ func (s *Service) prepare(ctx context.Context, kind string, src *os.File, out st
 			return os.Rename(out+".png", out)
 		}
 		return nil
+	case "epub", "cbz":
+		return page(kind, src, out)
 	case "raw":
 		if s.exiftool != "" {
 			for _, tag := range []string{"-PreviewImage", "-JpgFromRaw"} {
@@ -160,4 +165,35 @@ func (s *Service) exif(ctx context.Context, src *os.File, tag, out string) error
 	}
 	os.Remove(out)
 	return errNoTool
+}
+
+func page(kind string, src *os.File, out string) error {
+	st, err := src.Stat()
+	if err != nil {
+		return err
+	}
+	z, err := extract.Zip(src, st.Size())
+	if err != nil {
+		return err
+	}
+	var e *zip.File
+	if kind == "epub" {
+		e = extract.Cover(z)
+	} else if list := extract.Images(z); len(list) > 0 {
+		e = list[0]
+	}
+	r, err := extract.Open(e, maxCover)
+	if err != nil {
+		return err
+	}
+	defer r.Close()
+	f, err := os.Create(out)
+	if err != nil {
+		return err
+	}
+	if _, err = io.Copy(f, r); err != nil {
+		f.Close()
+		return err
+	}
+	return f.Close()
 }

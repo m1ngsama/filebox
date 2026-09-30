@@ -335,7 +335,7 @@
           {selected}
           bind:sort
           bind:desc
-          thumb={(e) => (!e.dir && thumbable(e.name) ? shareThumbURL(token, join(e.name)) : null)}
+          thumb={(e) => (e.dir || thumbable(e.name) ? shareThumbURL(token, join(e.name)) : null)}
           raw={(e) => (rawThumb(e) ? shareRawURL(token, join(e.name)) : null)}
           {actions}
           {onaction}

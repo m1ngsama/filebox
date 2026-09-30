@@ -146,7 +146,7 @@
     keepView(here, chosen)
   }
   const one = $derived(selected.size === 1 ? entries.find((e) => selected.has(e.name)) : undefined)
-  const thumb = (e: Entry) => (!e.dir && thumbable(e.name) ? thumbURL(vol, join(e.name)) : null)
+  const thumb = (e: Entry) => (e.dir || thumbable(e.name) ? thumbURL(vol, join(e.name)) : null)
   const raw = (e: Entry) => (rawThumb(e) ? rawURL(vol, join(e.name)) : null)
 
   let listing: Entry[] = []

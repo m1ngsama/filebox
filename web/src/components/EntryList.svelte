@@ -370,7 +370,7 @@
     row.focus()
   }
 
-  const src = (e: Entry) => (e.dir ? null : fallback([thumb(e), raw?.(e)], broken.get(id(e)) ?? 0))
+  const src = (e: Entry) => (e.dir && !grid ? null : fallback([thumb(e), raw?.(e)], broken.get(id(e)) ?? 0))
   const cancel = (img: HTMLImageElement) => () => img.removeAttribute('src')
   const named = (e: Entry) => (tag?.(e) ? `${e.name}, ${tag(e)}` : e.name)
   const miss = (e: Entry) => broken.set(id(e), (broken.get(id(e)) ?? 0) + 1)
@@ -507,6 +507,7 @@
                         <img src={s} alt="" draggable="false" loading="lazy" decoding="async" onerror={() => miss(e)} {@attach cancel} />
                         {@const g = tag?.(e)}
                         {#if look(e.name) === 'video' || g}<span class="card-badge">{#if look(e.name) === 'video'}<Play size={icon.sm} />{/if}{g}</span>{/if}
+                        {#if e.dir}<span class="card-badge"><FileIcon name={e.name} dir size={icon.sm} /></span>{/if}
                       {:else}
                         <FileIcon name={e.name} dir={e.dir} size={tiles ? 40 : 56} />
                         {#if tiles}<span class="tile-name">{@render label(e.name)}</span>{/if}
