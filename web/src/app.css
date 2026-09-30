@@ -461,6 +461,7 @@ button.quiet { border-color: transparent; background: none; color: var(--muted);
 .public-gone { margin: 14vh auto 0; padding: 0 var(--space-4); max-width: 420px; }
 .public .files { min-height: 0; }
 .public-bar .brand { font-weight: 700; padding-right: var(--space-3); border-right: 1px solid var(--line); }
+.public-bar .brand:only-child { border-right: 0; }
 .public-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .public-file, .dropbox { display: flex; flex-direction: column; align-items: center; gap: var(--space-2-5); width: min(440px, calc(100% - 32px)); margin: 8vh auto; text-align: center; }
 .public-file .details-thumb { width: 100%; height: 240px; }
@@ -470,8 +471,9 @@ button.quiet { border-color: transparent; background: none; color: var(--muted);
 
 .login, .load-error { max-width: 320px; margin: 18vh auto; display: flex; flex-direction: column; gap: var(--space-2-5); padding: 0 var(--space-4); }
 .login { max-width: 360px; margin-top: 14vh; }
-.login input:not([type='checkbox'], .sr-only) { height: 40px; }
-.login > button { height: 40px; }
+.login input:not([type='checkbox'], .sr-only), .unlock input { height: 40px; }
+.login > button, .unlock button { height: 40px; }
+.unlock { display: flex; flex-direction: column; gap: var(--space-2-5); width: min(320px, 100%); margin-top: var(--space-2); text-align: left; }
 .login-brand { display: flex; flex-direction: column; align-items: center; gap: var(--space-1); margin-bottom: var(--space-4); text-align: center; }
 .login-brand h1 { font-size: var(--text-2xl); letter-spacing: -0.01em; }
 .login-brand p { margin: 0; font-size: var(--text-sm); }
@@ -523,7 +525,7 @@ button.busy::before { content: ''; width: 14px; height: 14px; border: 2px solid 
   .card-check { top: 0; left: 0; }
   .empty-state .chip { min-height: var(--hit); padding-inline: var(--space-3); }
   .password .icon-btn { top: 0; right: 0; }
-  .nav a, .nav-item, .up, .menu-item, .dialog footer button, .list-head .select-all, .toast-action, .scope button, .bar.searching .filter, .login input:not([type='checkbox'], .sr-only), .login > button { min-height: var(--hit); }
+  .nav a, .nav-item, .up, .menu-item, .dialog footer button, .list-head .select-all, .toast-action, .scope button, .bar.searching .filter, .login input:not([type='checkbox'], .sr-only), .login > button, .unlock :is(input, button) { min-height: var(--hit); }
   .uploads li { grid-template-columns: 20px minmax(0, 1fr) auto var(--hit); }
   .bar { flex-wrap: wrap; padding: var(--space-2) var(--space-3); }
   .files .bar { flex-wrap: nowrap; gap: var(--space-1); }
@@ -576,7 +578,7 @@ button.busy::before { content: ''; width: 14px; height: 14px; border: 2px solid 
   .shares li .share-meta, .rows li .share-meta { flex-basis: calc(100% - 48px); }
   .shares li:has(.share-meta) > .icon-btn:first-of-type, .rows li:has(.share-meta) > button:first-of-type { margin-left: auto; }
   .public-bar { flex-wrap: nowrap; }
-  .public-bar .brand { display: none; }
+  .public-bar .brand:not(:only-child) { display: none; }
   .public-bar .button span, .public-bar button.primary span { position: absolute; width: 1px; height: 1px; margin: -1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
   .public-bar .crumbs { min-width: 0; overflow: hidden; }
   .public-inline { padding: 0; }

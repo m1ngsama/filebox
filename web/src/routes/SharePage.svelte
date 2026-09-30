@@ -32,6 +32,7 @@
   let fatal = $state<'gone' | 'expired' | 'error' | ''>('')
   let password = $state('')
   let unlockError = $state('')
+  let unlocking = $state(false)
   let entries = $state.raw<Entry[]>([])
   let at = $state<string | null>(null)
   let error = $state<{ status: number; message: string } | null>(null)
@@ -118,14 +119,16 @@
 
   async function unlock(e: SubmitEvent) {
     e.preventDefault()
+    unlocking = true
     try {
       await api.unlock(token, password)
       password = ''
       unlockError = ''
       await load()
     } catch (err) {
-      unlockError = err instanceof HttpError && err.status === 401 ? t.wrongPassword : (err as Error).message
+      unlockError = !(err instanceof HttpError) ? t.loadFailed : err.status === 401 ? t.wrongPassword : err.message
     }
+    unlocking = false
   }
 
   function upload(list: FileList | null | undefined) {
@@ -181,9 +184,8 @@
   <button class="icon-btn" aria-label={t.clearSelection} onclick={() => selected.clear()}><X size={icon.sm} /></button>
 {/snippet}
 
-<div
+<main
   class="public"
-  role="presentation"
   ondragenter={(e) => {
     if (!canUpload || !hasFiles(e)) return
     depth++
@@ -205,6 +207,7 @@
     <span class="brand">{t.brand}</span>
     {#if shared}
       {#if listed}
+        <h1 class="sr-only">{folder}</h1>
         <nav class="crumbs" aria-label={t.breadcrumb}>
           <a href={here('')} onclick={link} aria-current={crumbs.length ? undefined : 'page'}>{shared.name}</a>
           {#each crumbs as c, i}
@@ -251,14 +254,26 @@
       <EmptyState icon={fatal === 'expired' ? Clock : Link2Off} as="h1" title={fatal === 'expired' ? t.linkExpired : t.linkGone} hint={fatal === 'expired' ? t.linkExpiredHint : t.shareGone} />
     </div>
   {:else if info?.locked}
-    <form class="login" onsubmit={unlock}>
-      <Lock size={32} class="ficon" />
-      <p>{t.shareLocked}</p>
-      <label for="share-password" class="sr-only">{t.password}</label>
-      <input id="share-password" type="password" bind:value={password} placeholder={t.password} autocomplete="off" required />
-      <button class="primary" type="submit">{t.unlock}</button>
-      {#if unlockError}<p class="error">{unlockError}</p>{/if}
-    </form>
+    <div class="public-gone">
+      <EmptyState icon={Lock} as="h1" title={t.shareLocked} hint={t.shareLockedHint}>
+        <form class="unlock" onsubmit={unlock}>
+          <label class="field">
+            <span>{t.password}</span>
+            <input
+              type="password"
+              bind:value={password}
+              autocomplete="off"
+              required
+              aria-invalid={!!unlockError}
+              aria-describedby={unlockError ? 'unlock-error' : undefined}
+              oninput={() => (unlockError = '')}
+            />
+          </label>
+          {#if unlockError}<p class="error" id="unlock-error" role="alert">{unlockError}</p>{/if}
+          <button class="primary" class:busy={unlocking} disabled={unlocking} type="submit">{t.unlock}</button>
+        </form>
+      </EmptyState>
+    </div>
   {:else if file}
     {#if fileKind === 'image' && imageSrc}
       <button class="public-image" aria-label={t.preview} onclick={() => (preview = file)}>
@@ -332,7 +347,7 @@
   {/if}
 
   {#if dragging}<div class="dropzone">{t.dropHere}</div>{/if}
-</div>
+</main>
 
 {#if canUpload}
   <input bind:this={picker} type="file" multiple hidden onchange={(e) => upload(e.currentTarget.files)} />
