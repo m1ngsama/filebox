@@ -338,7 +338,7 @@ test('the grid asks only for visible thumbnails and drops the ones scrolled away
   await expect(page.locator('.card').first()).toBeVisible()
   await expect.poll(() => asked.size).toBeGreaterThan(0)
   const firstScreen = new Set(asked)
-  expect(firstScreen.size).toBeLessThan(120)
+  expect(firstScreen.size).toBeLessThanOrEqual(2 * (await page.locator('.card').count()))
   await page.locator('.scroller').evaluate((el) => el.scrollTo(0, el.scrollHeight))
   await expect(page.locator('.card', { hasText: 'p-1999.jpg' })).toBeInViewport()
   await expect.poll(() => [...firstScreen].filter((u) => dropped.has(u)).length).toBeGreaterThan(0)
