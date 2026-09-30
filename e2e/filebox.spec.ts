@@ -1023,6 +1023,27 @@ test('a hung request does not hold up unrelated changes and rolls back after 30 
   await expect(row(page, 'hang')).toHaveCount(0)
 })
 
+test('a delete queued behind a refused rename is cancelled and touches nothing', async ({ page, server }) => {
+  writeFileSync(join(server.vol, 'x.txt'), 'x')
+  await login(page)
+  writeFileSync(join(server.vol, 'y.txt'), 'REAL')
+  await page.route('**/api/mv', async (r) => (await new Promise((x) => setTimeout(x, 800)), r.continue()))
+  await row(page, 'x.txt').locator('button.more').click()
+  await page.getByRole('menuitem', { name: t.rename, exact: true }).click()
+  await page.getByLabel(t.newName).fill('y.txt')
+  await page.keyboard.press('Enter')
+  await expect(row(page, 'y.txt')).toBeFocused()
+  await page.waitForTimeout(350)
+  await page.keyboard.press('Delete')
+  await expect(row(page, 'y.txt')).toHaveCount(0)
+  await expect(page.locator('.toast.error', { hasText: t.errors[409] })).toBeVisible()
+  await expect(page.locator('.toast.error', { hasText: t.dependsFailed })).toBeVisible()
+  await expect(row(page, 'x.txt')).toHaveCount(1)
+  await expect(row(page, 'y.txt')).toHaveCount(1)
+  expect(readFileSync(join(server.vol, 'y.txt'), 'utf8')).toBe('REAL')
+  expect(existsSync(join(server.vol, 'x.txt'))).toBe(true)
+})
+
 test('a delete counts items that are already gone as done and rolls back a failed request', async ({ page, server }) => {
   writeFileSync(join(server.vol, 'gone-a.txt'), 'a')
   writeFileSync(join(server.vol, 'gone-b.txt'), 'b')

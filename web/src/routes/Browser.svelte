@@ -1,5 +1,6 @@
 <script lang="ts" module>
   import type { Entry as Row } from '../lib/api'
+  import { t as tr } from '../lib/i18n'
 
   type Op = { key: string; name: string; entry: Row | null; settled: number }
   let ops: Op[] = []
@@ -11,7 +12,10 @@
 
   function queue<T>(paths: string[], f: (signal: AbortSignal) => Promise<T>) {
     const deps = jobs.filter((j) => j.paths.some((p) => paths.some((q) => overlaps(p, q))))
-    const run = Promise.all(deps.map((d) => d.ok)).then(() => f(AbortSignal.timeout(30_000)))
+    const run = Promise.all(deps.map((d) => d.ok)).then((oks) => {
+      if (oks.includes(false)) throw new Error(tr.dependsFailed)
+      return f(AbortSignal.timeout(30_000))
+    })
     const job = { paths, ok: run.then(() => true, () => false) }
     jobs.push(job)
     job.ok.then(() => (jobs = jobs.filter((j) => j !== job)))

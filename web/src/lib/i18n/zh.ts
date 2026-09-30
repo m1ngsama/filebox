@@ -349,6 +349,7 @@ const zh = {
   } satisfies Record<Status, string>,
   serverError: '服务器出错，请稍后再试',
   timedOut: '服务器没有及时响应，请检查网络后重试',
+  dependsFailed: '前一步改动没有成功，这一步已取消',
 }
 
 export type { Expiry, ActivityKind, EventKind, Status }

@@ -349,5 +349,6 @@ export default (locale: string) => {
     } satisfies Record<Status, string>,
     serverError: 'Server error. Try again later.',
     timedOut: 'The server didn’t respond in time. Check your connection and try again.',
+    dependsFailed: 'Cancelled because an earlier change to the same item failed.',
   } satisfies Table
 }
