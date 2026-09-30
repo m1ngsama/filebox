@@ -240,6 +240,7 @@
   }
 
   const src = (e: Entry) => (e.dir ? null : fallback([thumb(e), raw?.(e)], broken.get(id(e)) ?? 0))
+  const cancel = (img: HTMLImageElement) => () => img.removeAttribute('src')
   const miss = (e: Entry) => broken.set(id(e), (broken.get(id(e)) ?? 0) + 1)
 </script>
 
@@ -350,7 +351,7 @@
                   >
                     {@render check(e, 'card-check')}
                     <button class="card-open" data-look={e.dir ? 'dir' : look(e.name)} onclick={() => tap(i)} title={e.name}>
-                      {#if s}<img src={s} alt="" draggable="false" loading="lazy" decoding="async" onerror={() => miss(e)} />{:else}<FileIcon name={e.name} dir={e.dir} size={56} />{/if}
+                      {#if s}<img src={s} alt="" draggable="false" loading="lazy" decoding="async" onerror={() => miss(e)} {@attach cancel} />{:else}<FileIcon name={e.name} dir={e.dir} size={56} />{/if}
                     </button>
                     <div class="card-foot">
                       <span class="card-name" title={e.name}>{e.name}</span>
@@ -394,7 +395,7 @@
               >
                 <span class="cell check-cell" role="gridcell">{@render check(e, '')}</span>
                 <span class="thumb" role="gridcell">
-                  {#if s}<img src={s} alt="" draggable="false" loading="lazy" decoding="async" onerror={() => miss(e)} />{:else}<FileIcon name={e.name} dir={e.dir} />{/if}
+                  {#if s}<img src={s} alt="" draggable="false" loading="lazy" decoding="async" onerror={() => miss(e)} {@attach cancel} />{:else}<FileIcon name={e.name} dir={e.dir} />{/if}
                 </span>
                 <span class="cell name-cell" role="gridcell">
                   <button class="name" onclick={() => tap(n)} title={e.name}>{e.name}</button>

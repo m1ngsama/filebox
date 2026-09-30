@@ -283,6 +283,28 @@ test('without thumbnails small images fall back to the original and others get a
   await expect(row(page, 'code.go').locator('svg.ficon.code')).toHaveCount(1)
 })
 
+test('the grid asks only for visible thumbnails and drops the ones scrolled away', async ({ page, server }) => {
+  const dir = join(server.vol, 'photos')
+  mkdirSync(dir)
+  for (let i = 0; i < 2000; i++) closeSync(openSync(join(dir, `p-${String(i).padStart(4, '0')}.jpg`), 'w'))
+  const asked = new Set<string>()
+  const dropped = new Set<string>()
+  page.on('request', (r) => r.url().includes('/thumb/') && asked.add(r.url()))
+  page.on('requestfailed', (r) => r.url().includes('/thumb/') && dropped.add(r.url()))
+  await page.route('**/thumb/**', () => {})
+  await login(page)
+  await page.getByRole('button', { name: t.gridView }).click()
+  await page.locator('.card', { hasText: 'photos' }).locator('.card-open').click()
+  await expect(page.locator('.card').first()).toBeVisible()
+  await expect.poll(() => asked.size).toBeGreaterThan(0)
+  const firstScreen = new Set(asked)
+  expect(firstScreen.size).toBeLessThan(120)
+  await page.locator('.scroller').evaluate((el) => el.scrollTo(0, el.scrollHeight))
+  await expect(page.locator('.card', { hasText: 'p-1999.jpg' })).toBeInViewport()
+  await expect.poll(() => [...firstScreen].filter((u) => dropped.has(u)).length).toBeGreaterThan(0)
+  expect(asked.size).toBeLessThan(300)
+})
+
 test('the file list loads one script and settings loads its own chunk', async ({ page }) => {
   const scripts: string[] = []
   page.on('response', (r) => {
