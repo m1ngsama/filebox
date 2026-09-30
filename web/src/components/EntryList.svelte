@@ -91,6 +91,7 @@
   let pressing = $state(-1)
   let held = $state(false)
   let keyed = 0
+  let said = $state('')
   let seek = ''
   let seeking = $state(false)
   let seekTimer = 0
@@ -312,6 +313,7 @@
       ev.preventDefault()
       anchor = id(entries[i])
       toggle(id(entries[i]))
+      if (selected) said = t.selected(selected.size)
     } else if (ev.key === 'Enter') {
       ev.preventDefault()
       onopen(entries[i])
@@ -446,6 +448,8 @@
 </div>
 {/if}
 
+<p class="sr-only" role="status">{said}</p>
+
 <ContextMenu.Root onOpenChange={(o) => !o && (ctx = null)}>
   <ContextMenu.Trigger disabled={held || (!ctx && !actions(null).length)}>
     {#snippet child({ props })}
@@ -460,7 +464,7 @@
             {/each}
           </div>
         {:else if !entries.length && empty}<div class="empty">{@render empty()}</div>{/if}
-        <div class="spacer" role="grid" aria-label={t.fileList} aria-multiselectable={selected ? true : undefined} aria-busy={busy || undefined} aria-rowcount={rows} style:height={`${$v.getTotalSize()}px`}>
+        <div class="spacer" role="grid" aria-label={t.fileList} aria-multiselectable={selected ? true : undefined} aria-busy={busy || undefined} aria-rowcount={rows} aria-colcount={grid ? cols : undefined} style:height={`${$v.getTotalSize()}px`}>
           {#each $v.getVirtualItems().filter((r) => r.index < rows) as r (r.key)}
             {#if grid}
               <div class="cards" class:media class:tiles role="row" aria-rowindex={r.index + 1} style:transform={`translateY(${r.start}px)`} style:height={`${rowH}px`} style:grid-template-columns={`repeat(${cols}, minmax(0, 1fr))`}>
@@ -475,6 +479,7 @@
                     use:target={dropOn(e)}
                     class:sel={selected?.has(id(e))}
                     role="gridcell"
+                    aria-colindex={j + 1}
                     aria-selected={selected ? selected.has(id(e)) : undefined}
                     tabindex={i === tab ? 0 : -1}
                     data-i={i}

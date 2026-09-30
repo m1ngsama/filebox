@@ -894,6 +894,11 @@ test('in grid view the focused card stays in view and focused while details open
   const card = (n: number) => page.locator('.card', { hasText: `c-${String(n).padStart(3, '0')}.txt` })
   await card(0).focus()
   const cols = await page.locator('.cards').first().locator('.card').count()
+  await expect(page.getByRole('grid', { name: t.fileList })).toHaveAttribute('aria-colcount', String(cols))
+  await expect(card(1)).toHaveAttribute('aria-colindex', '2')
+  await page.keyboard.press('Space')
+  await expect(page.getByRole('status').filter({ hasText: t.selected(1) })).toBeAttached()
+  await page.keyboard.press('Space')
   for (let i = 0; i < 16; i++) await page.keyboard.press('ArrowDown')
   const n = cols * 16
   await expect(card(n)).toBeFocused()
