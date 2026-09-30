@@ -598,6 +598,7 @@ test('the file list is one tab stop with pages, type-ahead and a menu key, behin
   await page.keyboard.press('Escape')
   await expect(row(page, 'k-40.txt')).toBeFocused()
   await page.keyboard.press('ContextMenu')
+  await expect.poll(() => page.evaluate(() => !!document.activeElement?.closest('[role=menu]'))).toBe(true)
   await page.getByRole('menuitem', { name: t.rename }).press('Enter')
   await expect(page.getByRole('dialog', { name: t.rename }).getByLabel(t.newName)).toHaveValue('k-40.txt')
   await page.keyboard.press('Escape')
