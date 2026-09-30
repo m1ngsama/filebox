@@ -1651,6 +1651,27 @@ test('an uploaded file shows first in recent and leads back to its folder', asyn
   await expect(row(page, 'fresh.txt')).toHaveAttribute('aria-selected', 'true')
 })
 
+test('recent folds a burst of writes into one folder row that expands', async ({ page }) => {
+  await login(page)
+  await page.request.post('/api/mkdir', { data: { vol: 'v', path: 'bulk' } })
+  await page.goto('/files/v/bulk/')
+  await fileInput(page).setInputFiles(Array.from({ length: 30 }, (_, i) => ({ name: `f${String(i).padStart(2, '0')}.log`, mimeType: 'text/plain', buffer: Buffer.from(String(i)) })))
+  await expect(page.locator('.uploads', { hasText: t.uploaded(30) })).toHaveCount(1)
+  await page.getByRole('link', { name: t.recent, exact: true }).click()
+  const head = page.locator('.row', { has: page.locator('.tag') })
+  await expect(head.locator('button.name')).toHaveAccessibleName('bulk')
+  await expect(head.locator('.tag')).toHaveText(t.runCount(30))
+  await expect(page.locator('.row button.name')).toHaveText([`bulk${t.runCount(30)}`, 'readme.txt'])
+  await head.locator('button.name').click()
+  await expect(page.locator('.row', { hasText: '.log' }).first()).toBeVisible()
+  await expect(page.locator('.row').nth(1)).toContainText('.log')
+  await head.locator('button.name').click()
+  await expect(page.locator('.row', { hasText: '.log' })).toHaveCount(0)
+  await head.locator('button.more').click()
+  await page.getByRole('menuitem', { name: t.openNamed('bulk') }).click()
+  await expect(page).toHaveURL(/\/files\/v\/bulk\/$/)
+})
+
 test('recent groups files by day and sorting by name drops the groups', async ({ page, server }) => {
   const old = join(server.vol, 'old.txt')
   writeFileSync(old, 'o')

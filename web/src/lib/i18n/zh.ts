@@ -50,6 +50,7 @@ const zh = {
   favoritesEmptyHint: '在文件或文件夹的“…”菜单里选择“收藏”，就能在这里快速找到它。',
   missing: '已不存在',
   recentEmpty: '最近没有改动过的文件',
+  runCount: (n: number) => `${n.toLocaleString('zh-CN')} 项`,
   recentScanning: '正在建立文件索引，完成后这里会列出最近改动的文件。',
   openFolder: '打开所在文件夹',
   today: '今天',

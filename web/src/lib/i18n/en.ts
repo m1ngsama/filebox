@@ -50,6 +50,7 @@ export default (locale: string) => {
     favoritesEmptyHint: 'Choose “Add to favorites” in a file or folder’s “…” menu to find it here quickly.',
     missing: 'No longer exists',
     recentEmpty: 'No recently changed files',
+    runCount: (n: number) => `${n.toLocaleString(locale)} ${n === 1 ? 'item' : 'items'}`,
     recentScanning: 'Building the file index. Recently changed files will show up here when it’s done.',
     openFolder: 'Open containing folder',
     today: 'Today',
