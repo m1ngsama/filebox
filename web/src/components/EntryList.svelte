@@ -14,7 +14,7 @@
   import FileIcon from './FileIcon.svelte'
   import { selectURL, type Entry, type Loc } from '../lib/api'
   import { link } from '../lib/router.svelte'
-  import { size, date, ago, look, fallback, flip, sorts, type Sort } from '../lib/format'
+  import { size, date, ago, look, fallback, flip, sorts, SEP, type Sort } from '../lib/format'
   import { t } from '../lib/i18n'
   import { narrow } from '../lib/shell.svelte'
   import { carry, drop, target, type Carried, type Target } from '../lib/dnd'
@@ -289,10 +289,10 @@
   {#if loc}
     {@const l = loc(e)}
     {@const segs = l.path.split('/')}
-    {#each [l.vol, ...segs.slice(0, -1)] as s, i (i)}{#if i}<span class="slash">›</span>{/if}<a
+    {#each [l.vol, ...segs.slice(0, -1)] as s, i (i)}{#if i}{SEP}{/if}<a
         href={selectURL(l.vol, segs.slice(0, i + 1).join('/'))}
         tabindex="-1"
-        onclick={link}>{s}</a
+        onclick={link}><bdi>{s}</bdi></a
       >{/each}
   {/if}
 {/snippet}

@@ -120,7 +120,12 @@ export function days(now = new Date()) {
   return (ms: number) => (ms >= today ? t.today : ms >= yesterday ? t.yesterday : ms >= week ? t.thisWeek : t.earlier)
 }
 
-export const place = (vol: string, path = '') => [vol, ...path.split('/').filter((s) => s && s !== '.')].join(' › ')
+export const SEP = '\u00a0› '
+export function place(vol: string, path = '', max = Infinity) {
+  const segs = [vol, ...path.split('/').filter((s) => s && s !== '.')]
+  const shown = segs.length > max ? [segs[0], '…', ...segs.slice(2 - max)] : segs
+  return shown.map((s) => `\u2068${s}\u2069`).join(SEP)
+}
 export const placeOf = (target: string) => {
   const i = target.indexOf(':/')
   return i < 0 ? target : place(target.slice(0, i), target.slice(i + 2))
