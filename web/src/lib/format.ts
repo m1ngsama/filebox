@@ -1,4 +1,4 @@
-import { lang, t } from './i18n'
+import { t } from './i18n'
 
 export function size(n: number): string {
   const u = ['B', 'KB', 'MB', 'GB', 'TB']
@@ -44,10 +44,10 @@ export function arrange<T extends Row>(list: T[], filter: string, sort: Sort, de
     .map((i) => list[i])
 }
 
-const dtf = new Intl.DateTimeFormat(lang, { dateStyle: 'short', timeStyle: 'short' })
+const dtf = new Intl.DateTimeFormat('zh-CN', { dateStyle: 'short', timeStyle: 'short' })
 export const date = (ms: number) => dtf.format(ms)
 
-const rtf = new Intl.RelativeTimeFormat(lang, { numeric: 'auto' })
+const rtf = new Intl.RelativeTimeFormat('zh-CN', { numeric: 'auto' })
 const steps: [Intl.RelativeTimeFormatUnit, number][] = [['minute', 60], ['hour', 24], ['day', 30], ['month', 12], ['year', Infinity]]
 
 export function ago(ms: number) {

@@ -319,7 +319,7 @@
         .then((bad) => {
           if (!bad.length) toast(t.undone)
           else if (bad.length === 1) fail(new Error(t.failedItem(t.undoFailed(t.what([bad[0].name])), bad[0].error.message)))
-          else fail(new Error(t.undoFailed(bad.map((b) => t.what([b.name])).join('、'))))
+          else fail(new Error(t.undoFailed(t.list(bad.map((b) => t.what([b.name]))))))
         }, fail)
         .finally(refresh),
   })

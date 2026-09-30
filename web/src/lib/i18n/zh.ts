@@ -1,8 +1,6 @@
 const wait = (s: number) => (s < 60 ? `${s} 秒` : `${Math.ceil(s / 60)} 分钟`)
 
-export const lang = 'zh-CN'
-
-export const t = {
+const zh = {
   brand: 'filebox',
   username: '用户名',
   password: '密码',
@@ -47,6 +45,8 @@ export const t = {
   appearance: '外观',
   appearanceHint: '选择浅色或深色，也可以跟随系统设置。',
   themes: { system: '跟随系统', light: '浅色', dark: '深色' },
+  language: '语言',
+  languages: { auto: '跟随浏览器', zh: '中文', en: 'English' },
   breadcrumb: '当前位置',
   upTo: (n: string) => `返回上级文件夹 ${n}`,
   openFilter: '打开筛选',
@@ -104,6 +104,7 @@ export const t = {
   confirmDeleteTitle: '删除',
   confirmDelete: (what: string) => `${what}会移到回收站，之后可以从回收站恢复。`,
   what: (names: string[]) => (names.length === 1 ? `“${names[0]}”` : `这 ${names.length} 项`),
+  list: (xs: string[]) => xs.join('、'),
   removeFailed: (names: string[]) => `${names.join('、')} 没能删除，其余已移到回收站。`,
   moveCopyTitle: (what: string) => `把${what}移动或复制到`,
   chooseFolder: '选择目标文件夹',
@@ -331,3 +332,6 @@ export const t = {
   } as Record<number, string>,
   serverError: '服务器出错，请稍后再试',
 }
+
+export type Table = typeof zh
+export default zh

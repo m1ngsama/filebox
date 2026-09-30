@@ -6,7 +6,7 @@ import { createServer, type AddressInfo } from 'node:net'
 import { crc32, deflateSync } from 'node:zlib'
 import { networkInterfaces, tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { t } from '../web/src/lib/i18n'
+import t from '../web/src/lib/i18n/zh'
 
 const BIN = join(import.meta.dirname, '../bin/filebox')
 
