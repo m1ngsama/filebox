@@ -77,6 +77,7 @@
   let scroller = $state<HTMLDivElement>()
   let width = $state(0)
   let ctx = $state.raw<Entry | null>(null)
+  let sheet = $state.raw<Entry | null>(null)
   let anchor = ''
   let cur = $state('')
   let inside = false
@@ -277,12 +278,16 @@
 {/snippet}
 
 {#snippet more(e: Entry)}
+  {#if narrow.current}
+    <button class="icon-btn more" aria-label={`${e.name} ${t.actions}`} aria-haspopup="dialog" onclick={() => (sheet = e)}><Ellipsis size={18} /></button>
+  {:else}
   <DropdownMenu.Root>
     <DropdownMenu.Trigger class="icon-btn more" aria-label={`${e.name} ${t.actions}`}><Ellipsis size={18} /></DropdownMenu.Trigger>
     <DropdownMenu.Portal>
       <DropdownMenu.Content class="menu" preventScroll={false} align="end" sideOffset={4}>{@render items(e)}</DropdownMenu.Content>
     </DropdownMenu.Portal>
   </DropdownMenu.Root>
+  {/if}
 {/snippet}
 
 {#snippet trail(e: Entry)}
@@ -445,3 +450,26 @@
     <ContextMenu.Content class="menu" preventScroll={false}>{@render items(ctx)}</ContextMenu.Content>
   </ContextMenu.Portal>
 </ContextMenu.Root>
+
+{#if sheet}
+  {@const e = sheet}
+  {#await import('./Sheet.svelte') then { default: Sheet }}
+    <Sheet title={e.name} sub={e.dir ? date(e.mtime) : `${size(e.size)} · ${date(e.mtime)}`} onclose={() => (sheet = null)}>
+      {#snippet icon()}
+        {@const s = src(e)}
+        <span class="thumb" data-look={e.dir ? 'dir' : look(e.name)}>{#if s}<img src={s} alt="" />{:else}<FileIcon name={e.name} dir={e.dir} />{/if}</span>
+      {/snippet}
+      {#each actions(e) as a (a.id)}
+        {#if a.danger}<hr class="menu-sep" />{/if}
+        <button
+          class={a.danger ? 'sheet-item danger' : 'sheet-item'}
+          onclick={() => {
+            const x = e
+            sheet = null
+            onaction(a.id, x)
+          }}><a.icon size={20} />{a.label}</button
+        >
+      {/each}
+    </Sheet>
+  {/await}
+{/if}

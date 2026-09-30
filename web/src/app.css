@@ -115,6 +115,11 @@ button.ghost { border-color: transparent; background: none; }
   max-height: 85dvh; overflow: auto; padding: var(--space-2) var(--space-2) calc(var(--space-2) + env(safe-area-inset-bottom));
   background: var(--panel); border-radius: var(--radius-xl) var(--radius-xl) 0 0; box-shadow: var(--shadow); outline: none; animation: rise 0.18s ease-out;
 }
+.sheet-head { display: flex; align-items: center; gap: var(--space-3); padding: var(--space-2) var(--space-3) var(--space-3); margin-bottom: var(--space-1); border-bottom: 1px solid var(--line); }
+.sheet-head > div { min-width: 0; }
+.sheet-head .hint { margin: 0; font-size: var(--text-sm); }
+.sheet-name { font-size: var(--text-lg); overflow-wrap: anywhere; display: -webkit-box; -webkit-line-clamp: 2; line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.bottom-sheet .menu-sep { border: 0; margin-inline: var(--space-3); }
 .sheet-title { padding: var(--space-2) var(--space-3); font-size: var(--text-sm); color: var(--muted); font-weight: 400; }
 .sheet-item { justify-content: flex-start; gap: var(--space-4); min-height: 52px; padding: 0 var(--space-4); border: 0; border-radius: var(--radius-md); background: none; font-size: var(--text-lg); }
 .sheet-item svg { color: var(--muted); }
