@@ -8,7 +8,7 @@
   import { tick, untrack, type Snippet } from 'svelte'
   import { SvelteSet, SvelteMap } from 'svelte/reactivity'
   import { ContextMenu, DropdownMenu } from 'bits-ui'
-  import { createVirtualizer } from '@tanstack/svelte-virtual'
+  import { createVirtualizer, defaultRangeExtractor } from '@tanstack/svelte-virtual'
   import Ellipsis from '@lucide/svelte/icons/ellipsis'
   import ArrowUp from '@lucide/svelte/icons/arrow-up'
   import ArrowDown from '@lucide/svelte/icons/arrow-down'
@@ -141,6 +141,18 @@
       $v.setOptions(opts)
       $v.measure()
     })
+  })
+
+  $effect(() => {
+    const pin = rowOf(tab)
+    untrack(() =>
+      $v.setOptions({
+        rangeExtractor: (r) => {
+          const out = defaultRangeExtractor(r)
+          return pin >= r.count || out.includes(pin) ? out : [...out, pin].sort((a, b) => a - b)
+        },
+      }),
+    )
   })
 
   function by(k: Sort) {

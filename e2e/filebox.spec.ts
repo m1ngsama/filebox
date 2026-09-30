@@ -608,6 +608,28 @@ test('the file list is one tab stop with pages, type-ahead and a menu key, behin
   await expect(page.getByRole('dialog', { name: t.shortcuts })).toContainText(t.keys.seek)
 })
 
+test('the focused row stays rendered when scrolled far away, so Tab returns to it and arrows go on from it', async ({ page, server }) => {
+  mkdirSync(join(server.vol, 'long'))
+  for (let i = 0; i < 400; i++) writeFileSync(join(server.vol, 'long', `r-${String(i).padStart(3, '0')}.txt`), 'r')
+  await login(page)
+  await page.goto('/files/v/long/')
+  const first = row(page, 'r-000.txt')
+  await first.focus()
+  await page.keyboard.press('ArrowDown')
+  const second = row(page, 'r-001.txt')
+  await expect(second).toBeFocused()
+  await page.locator('.scroller').evaluate((el) => el.scrollTo(0, el.scrollHeight))
+  await expect(row(page, 'r-399.txt')).toBeInViewport()
+  await expect(second).toBeFocused()
+  await expect(second).toHaveAttribute('tabindex', '0')
+  await page.getByRole('button', { name: t.mtime }).focus()
+  await page.keyboard.press('Tab')
+  await expect(second).toBeFocused()
+  await expect(second).toBeInViewport()
+  await page.keyboard.press('ArrowDown')
+  await expect(row(page, 'r-002.txt')).toBeFocused()
+})
+
 test('keyboard alone browses, selects, renames, moves, shares, deletes and undoes, with named controls', async ({ page, server, context }) => {
   await context.grantPermissions(['clipboard-read', 'clipboard-write'])
   mkdirSync(join(server.vol, 'dest'))
