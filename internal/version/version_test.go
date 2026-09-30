@@ -367,7 +367,7 @@ func TestExpireVersionsOfDeletedFiles(t *testing.T) {
 		e.capture(t, p, "old")
 	}
 	e.write(t, "live.txt", "new")
-	e.write(t, ".trash/1/.origin", "trashed")
+	e.write(t, ".trash/"+strconv.FormatInt(e.now.UnixMilli(), 10)+"-00/.origin", "trashed")
 	e.s.Prune(e.vols)
 	e.now = e.now.Add(OrphanTTL / 2)
 	e.write(t, "back.txt", "again")
@@ -490,5 +490,53 @@ func TestRecoverDropsAVersionThatIsTheLiveFile(t *testing.T) {
 	}
 	if xs, _ := e.s.List("v", "b.txt"); len(xs) != 1 || xs[0].ID != other {
 		t.Fatal("an ordinary version was dropped")
+	}
+}
+
+func (e *env) trash(t *testing.T, at time.Time, name, body string) string {
+	t.Helper()
+	id := strconv.FormatInt(at.UnixMilli(), 10) + "-0a"
+	e.write(t, filepath.Join(vol.TrashDir, id, ".origin"), name)
+	e.write(t, filepath.Join(vol.TrashDir, id, name, "f"), body)
+	return id
+}
+
+func (e *env) inTrash(id string) bool {
+	_, err := os.Stat(filepath.Join(e.dir, vol.TrashDir, id))
+	return err == nil
+}
+
+func TestTrashExpires(t *testing.T) {
+	e := setup(t)
+	old := e.trash(t, e.now.Add(-TrashTTL-time.Hour), "old", "x")
+	recent := e.trash(t, e.now.Add(-TrashTTL+time.Hour), "recent", "x")
+	e.write(t, "live.txt", "keep")
+	e.s.Prune(e.vols)
+	if e.inTrash(old) || !e.inTrash(recent) || e.read("live.txt") != "keep" {
+		t.Fatalf("old %v recent %v", e.inTrash(old), e.inTrash(recent))
+	}
+	e.now = e.now.Add(2 * time.Hour)
+	e.s.Prune(e.vols)
+	if e.inTrash(recent) {
+		t.Fatal("recent item kept past its 30 days")
+	}
+}
+
+func TestGuardPurgesOldestTrashAndVersions(t *testing.T) {
+	e := setup(t)
+	t0 := e.now
+	first := e.trash(t, t0, "first", "0123456789")
+	e.now = t0.Add(time.Hour)
+	e.capture(t, "a.txt", "0123456789")
+	last := e.trash(t, t0.Add(2*time.Hour), "last", "0123456789")
+	e.write(t, "live.txt", "keep")
+	e.now = t0.Add(3 * time.Hour)
+	e.s.Usage = func(*vol.Volume) (vol.Usage, error) { return vol.Usage{Total: 1000, Free: 75}, nil }
+	e.s.Prune(e.vols)
+	if e.inTrash(first) || e.count(t, "a.txt") != 0 || !e.inTrash(last) {
+		t.Fatalf("first %v, a.txt %d, last %v", e.inTrash(first), e.count(t, "a.txt"), e.inTrash(last))
+	}
+	if e.read("live.txt") != "keep" {
+		t.Fatal("guard touched a live file")
 	}
 }

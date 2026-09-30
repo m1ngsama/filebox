@@ -243,7 +243,7 @@ const zh = {
   trashEmptyHint: '删除的文件会先放在这里，可以随时恢复。',
   origin: '原位置',
   deletedAt: (d: string) => `删除于 ${d}`,
-  trashNote: '回收站里的文件不会自动清除，永久删除或清空后无法恢复。',
+  trashNote: '回收站里的文件会在 30 天后自动清除，磁盘剩余空间不足 10% 时会先清除最早删除的文件。永久删除或清空后无法恢复。',
   trashCount: (n: number) => `共 ${n} 项`,
   deleteForever: '永久删除',
   deleteForeverMessage: (what: string) => `${what}会被永久删除，无法恢复。`,

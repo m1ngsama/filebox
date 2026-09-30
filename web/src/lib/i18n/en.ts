@@ -243,7 +243,7 @@ export default (locale: string) => {
     trashEmptyHint: 'Deleted files land here first, and you can restore them anytime.',
     origin: 'From',
     deletedAt: (d: string) => `Deleted ${d}`,
-    trashNote: 'Files in the trash are never removed automatically. Once deleted permanently or emptied, they can’t be recovered.',
+    trashNote: 'Files in the trash are removed automatically after 30 days, oldest first when the disk is less than 10% free. Once deleted permanently or emptied, they can’t be recovered.',
     trashCount: (n: number) => count(n, 'item'),
     deleteForever: 'Delete permanently',
     deleteForeverMessage: (what: string) => `${what} will be permanently deleted. This can’t be undone.`,

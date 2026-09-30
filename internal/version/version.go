@@ -1,6 +1,7 @@
 package version
 
 import (
+	"cmp"
 	"crypto/rand"
 	"database/sql"
 	"encoding/hex"
@@ -32,6 +33,7 @@ const (
 	MinFreePct = 10
 	guardGrace = 10 * time.Minute
 	OrphanTTL  = 30 * 24 * time.Hour
+	TrashTTL   = 30 * 24 * time.Hour
 	sidecar    = ".path"
 )
 
@@ -313,8 +315,67 @@ func (s *Store) Prune(vols *vol.Set) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	for _, v := range vols.All() {
+		s.expireTrash(v)
 		s.expire(v)
 		s.prune(v, "")
+	}
+}
+
+type trashItem struct {
+	id string
+	at int64
+}
+
+func trashItems(v *vol.Volume) []trashItem {
+	f, err := v.Root.Open(vol.TrashDir)
+	if err != nil {
+		return nil
+	}
+	des, _ := f.ReadDir(-1)
+	f.Close()
+	var out []trashItem
+	for _, de := range des {
+		if !de.IsDir() || !vol.ValidName(de.Name()) {
+			continue
+		}
+		ms, _, _ := strings.Cut(de.Name(), "-")
+		at, err := strconv.ParseInt(ms, 10, 64)
+		if err != nil {
+			fi, err := de.Info()
+			if err != nil {
+				continue
+			}
+			at = fi.ModTime().UnixMilli()
+		}
+		out = append(out, trashItem{de.Name(), at})
+	}
+	slices.SortFunc(out, func(a, b trashItem) int { return cmp.Compare(a.at, b.at) })
+	return out
+}
+
+func (s *Store) purge(v *vol.Volume, it trashItem) (int64, error) {
+	dir := path.Join(vol.TrashDir, it.id)
+	var freed int64
+	fs.WalkDir(v.Root.FS(), dir, func(p string, d fs.DirEntry, err error) error {
+		if err == nil && d.Type().IsRegular() {
+			if fi, err := d.Info(); err == nil && !shared(fi) {
+				freed += fi.Size()
+			}
+		}
+		return nil
+	})
+	return freed, v.Root.RemoveAll(dir)
+}
+
+func (s *Store) expireTrash(v *vol.Volume) {
+	cutoff := s.now().Add(-TrashTTL).UnixMilli()
+	for _, it := range trashItems(v) {
+		if it.at >= cutoff {
+			return
+		}
+		if _, err := s.purge(v, it); err != nil {
+			slog.Warn("expire trash", "vol", v.Name, "id", it.id, "err", err)
+		}
 	}
 }
 
@@ -466,8 +527,8 @@ func (s *Store) guard(v *vol.Volume, now int64) {
 		return
 	}
 	need := int64(u.Total*MinFreePct/100 - u.Free)
-	rows, err := s.DB.Query(`SELECT `+columns+` FROM versions WHERE vol = ? AND created < ? ORDER BY created, id`,
-		v.Name, now-guardGrace.Milliseconds())
+	cutoff := now - guardGrace.Milliseconds()
+	rows, err := s.DB.Query(`SELECT `+columns+` FROM versions WHERE vol = ? AND created < ? ORDER BY created, id`, v.Name, cutoff)
 	if err != nil {
 		return
 	}
@@ -475,10 +536,17 @@ func (s *Store) guard(v *vol.Volume, now int64) {
 	if err != nil {
 		return
 	}
-	for _, x := range old {
-		if need <= 0 {
-			return
+	trash := slices.DeleteFunc(trashItems(v), func(it trashItem) bool { return it.at >= cutoff })
+	for need > 0 && (len(old) > 0 || len(trash) > 0) {
+		if len(trash) > 0 && (len(old) == 0 || trash[0].at < old[0].Created) {
+			if freed, err := s.purge(v, trash[0]); err == nil {
+				need -= freed
+			}
+			trash = trash[1:]
+			continue
 		}
+		x := old[0]
+		old = old[1:]
 		freed := x.Size
 		if fi, err := v.Root.Lstat(File(x.ID)); err == nil && shared(fi) {
 			freed = 0
