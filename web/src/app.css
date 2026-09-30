@@ -460,7 +460,7 @@ button.quiet:hover:not(:disabled) { color: var(--danger); background: color-mix(
 .load-error { align-items: center; text-align: center; }
 .loading { width: 24px; height: 24px; margin: 18vh auto; border: 2px solid var(--line); border-top-color: var(--accent); border-radius: 50%; animation: spin 0.8s linear infinite, appear 0.2s 0.3s both; }
 @keyframes spin { to { rotate: 360deg; } }
-button.busy::before { content: ''; width: 14px; height: 14px; border: 2px solid currentColor; border-right-color: transparent; border-radius: 50%; animation: spin 0.8s linear infinite; }
+button.busy::before { content: ''; width: 14px; height: 14px; border: 2px solid currentColor; border-right-color: transparent; border-radius: 50%; animation: spin 0.8s linear infinite, appear 0.2s 0.15s both; }
 @keyframes appear { from { opacity: 0; } }
 
 @media (max-width: 1100px) {
@@ -533,7 +533,7 @@ button.busy::before { content: ''; width: 14px; height: 14px; border: 2px solid 
 }
 @media (prefers-reduced-motion: reduce) {
   .nav { transition: none; }
-  .loading, .viewer .spinner { animation-name: none, appear; }
+  .loading, .viewer .spinner, button.busy::before { animation-name: none, appear; }
   .toast { animation: none; }
   .sk { animation: none; }
 }
