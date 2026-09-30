@@ -1694,6 +1694,7 @@ test('folders and selections download as one zip', async ({ page, server }) => {
   let dl = page.waitForEvent('download')
   await page.getByRole('menuitem', { name: t.download, exact: true }).click()
   expect((await dl).suggestedFilename()).toBe('docs.zip')
+  await expect(page.locator('.toast.info')).toHaveText(t.zipping('docs'))
   expect(await unzipped(await dl)).toEqual(['docs/deep/x.txt=x', 'docs/more.md=# more', 'docs/readme.txt=hello\n'])
 
   await row(page, 'docs').locator('input[type=checkbox]').check()
@@ -1715,6 +1716,7 @@ test('a read share downloads everything as a zip', async ({ page, browser }) => 
   const dl = anon.waitForEvent('download')
   await anon.getByRole('link', { name: t.downloadAll }).click()
   expect((await dl).suggestedFilename()).toBe('docs.zip')
+  await expect(anon.locator('.toast.info')).toHaveText(t.zipping('docs'))
   expect(await unzipped(await dl)).toEqual(['docs/readme.txt=hello\n'])
   await anon.close()
 })

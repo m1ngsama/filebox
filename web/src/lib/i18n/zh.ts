@@ -69,6 +69,7 @@ const zh = {
   download: '下载',
   downloadAll: '全部下载',
   zipName: (folder: string, n: number) => (n > 1 ? `${folder}-${n}项` : folder),
+  zipping: (name: string) => `正在打包“${name}.zip”，下载会自动开始`,
   rename: '重命名',
   newName: '新名称',
   moveOrCopy: '移动或复制',

@@ -69,6 +69,7 @@ export default (locale: string) => {
     download: 'Download',
     downloadAll: 'Download all',
     zipName: (folder: string, n: number) => (n > 1 ? `${folder}-${n}-items` : folder),
+    zipping: (name: string) => `Packing “${name}.zip”. The download starts on its own.`,
     rename: 'Rename',
     newName: 'New name',
     moveOrCopy: 'Move or copy',

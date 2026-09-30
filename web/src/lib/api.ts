@@ -1,6 +1,7 @@
 import type { PublicKeyCredentialCreationOptionsJSON, PublicKeyCredentialRequestOptionsJSON } from '@simplewebauthn/browser'
 import { t } from './i18n'
 import { child, parent, base } from './format'
+import { toast } from './toast.svelte'
 
 export const errorText = (status: number): string | undefined =>
   (t.errors as Record<number, string>)[status] ?? (status >= 500 ? t.serverError : undefined)
@@ -144,6 +145,11 @@ export function saveURL(url: string) {
   a.href = url
   a.download = ''
   a.click()
+}
+export const packing = (name: string) => toast(t.zipping(name), { kind: 'info' })
+export function saveZip(url: string, name: string) {
+  packing(name)
+  saveURL(url)
 }
 
 export type JobStatus = { state: 'running' | 'done' | 'error'; code?: string; total: number; done: number }

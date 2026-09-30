@@ -15,7 +15,7 @@
   import FileIcon from '../components/FileIcon.svelte'
   import EmptyState from '../components/EmptyState.svelte'
   import Toasts from '../components/Toasts.svelte'
-  import { api, HttpError, shareFileURL, shareRawURL, shareThumbURL, shareURL, shareZipURL, saveURL, validShareToken, type Entry, type ShareInfo } from '../lib/api'
+  import { api, HttpError, shareFileURL, shareRawURL, shareThumbURL, shareURL, shareZipURL, saveURL, saveZip, packing, validShareToken, type Entry, type ShareInfo } from '../lib/api'
   import { route, link, navigate } from '../lib/router.svelte'
   import { enqueue } from '../lib/uploads.svelte'
   import { arrange, size, kind, thumbable, rawThumb, fallback, child, type Sort } from '../lib/format'
@@ -148,7 +148,10 @@
   function download(names: string[]) {
     const one = names.length === 1 ? shown.find((e) => e.name === names[0]) : undefined
     if (one && !one.dir) saveURL(shareRawURL(token, join(one.name), true))
-    else saveURL(shareZipURL(token, names.map(join), one ? one.name : t.zipName(folder, names.length)))
+    else {
+      const name = one ? one.name : t.zipName(folder, names.length)
+      saveZip(shareZipURL(token, names.map(join), name), name)
+    }
   }
 
   function onaction(id: string, e: Entry | null) {
@@ -210,7 +213,7 @@
         <button class="icon-btn view" aria-label={grid ? t.listView : t.gridView} title={grid ? t.listView : t.gridView} onclick={() => (grid = !grid)}>
           {#if grid}<List size={20} />{:else}<LayoutGrid size={20} />{/if}
         </button>
-        <a class={shared.mode === 'upload' ? 'button' : 'button primary'} href={shareZipURL(token, p ? [p] : [], folder)} download
+        <a class={shared.mode === 'upload' ? 'button' : 'button primary'} href={shareZipURL(token, p ? [p] : [], folder)} download onclick={() => packing(folder)}
           ><Download size={18} /><span>{t.downloadAll}</span></a
         >
         {#if shared.mode === 'upload'}<button class="primary" onclick={() => picker?.click()}><Upload size={18} /><span>{t.upload}</span></button>{/if}

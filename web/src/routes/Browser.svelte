@@ -28,7 +28,7 @@
   import EllipsisVertical from '@lucide/svelte/icons/ellipsis-vertical'
   import ArrowUp from '@lucide/svelte/icons/arrow-up'
   import ArrowDown from '@lucide/svelte/icons/arrow-down'
-  import { api, errorText, filesURL, fileURL, rawURL, thumbURL, zipURL, saveURL, selectURL, type Entry, type Move, type RecentFile, type ContentHit, type Progress } from '../lib/api'
+  import { api, errorText, filesURL, fileURL, rawURL, thumbURL, zipURL, saveURL, saveZip, selectURL, type Entry, type Move, type RecentFile, type ContentHit, type Progress } from '../lib/api'
   import { toast, fail, runLatest, dismiss, retext, type Action as Act } from '../lib/toast.svelte'
   import { navigate, link, route } from '../lib/router.svelte'
   import { enqueue, type Replaced } from '../lib/uploads.svelte'
@@ -230,7 +230,10 @@
   function download(names: string[]) {
     const hit = names.length === 1 ? entries.find((e) => e.name === names[0]) : undefined
     if (hit && !hit.dir) saveURL(rawURL(vol, join(hit.name), true))
-    else saveURL(zipURL(vol, names.map(join), t.zipName(hit ? hit.name : (crumbs.at(-1) ?? vol), names.length)))
+    else {
+      const name = t.zipName(hit ? hit.name : (crumbs.at(-1) ?? vol), names.length)
+      saveZip(zipURL(vol, names.map(join), name), name)
+    }
   }
 
   const ask = (name: string, rest: number) => new Promise<[Choice, boolean] | null>((resolve) => (conflict = { name, rest, resolve }))
