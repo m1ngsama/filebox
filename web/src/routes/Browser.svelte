@@ -243,19 +243,18 @@
     return () => loading?.abort()
   })
 
-  async function nearest(p: string, live: () => boolean) {
-    while (p && live()) {
-      p = parent(p)
-      if (await api.exists(vol, p)) break
-    }
-    return p
+  async function nearest(p: string) {
+    const ups: string[] = []
+    while (p) ups.push((p = parent(p)))
+    const ok = await Promise.all(ups.map((u) => !u || api.exists(vol, u)))
+    return ups[ok.indexOf(true)] ?? ''
   }
 
   $effect(() => {
     up = null
     if (error?.status !== 404 && error?.status !== 403) return
     let live = true
-    nearest(path, () => live).then((p) => live && (up = p))
+    nearest(path).then((p) => live && (up = p))
     return () => void (live = false)
   })
 
