@@ -154,6 +154,7 @@ test('with a second user the login asks for a name again', async ({ page, server
 
 test('a deep link lists its folder alongside the session check, and after signing in when signed out', async ({ page }) => {
   await page.goto('/files/v/docs/')
+  await expect(page.getByLabel(t.username)).toHaveValue('')
   await page.getByLabel(t.password, { exact: true }).fill('pw-pw-pw-pw')
   await page.getByRole('button', { name: t.login, exact: true }).click()
   await expect(row(page, 'readme.txt')).toHaveCount(1)
@@ -164,6 +165,9 @@ test('a deep link lists its folder alongside the session check, and after signin
   await page.reload()
   await expect(row(page, 'readme.txt')).toHaveCount(1)
   expect(seen.slice(0, 2).sort()).toEqual(['>/api/ls', '>/api/me'])
+  await page.getByRole('button', { name: t.logout }).click()
+  await expect(page.getByLabel(t.username)).toHaveValue('admin')
+  await expect(page.getByLabel(t.username)).toHaveAttribute('aria-hidden', 'true')
 })
 
 test('browse and preview', async ({ page }) => {

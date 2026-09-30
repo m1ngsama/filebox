@@ -5,7 +5,7 @@
   import Fingerprint from '@lucide/svelte/icons/fingerprint'
   import { api, HttpError } from '../lib/api'
   import { t } from '../lib/i18n'
-  import { load, save } from '../lib/storage'
+  import { load } from '../lib/storage'
   import { passkeyLogin, passkeyError, webauthn } from '../lib/passkey'
 
   let { onok }: { onok: () => void } = $props()
@@ -39,7 +39,6 @@
     busy = true
     try {
       await api.login(single ? '' : name.trim(), password)
-      if (!single) save('user', name.trim())
       onok()
     } catch (err) {
       error = err instanceof HttpError && err.status === 429 ? err.message : t.wrongLogin

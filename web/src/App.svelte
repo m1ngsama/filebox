@@ -3,6 +3,7 @@
   import { api, session, HttpError, prefetchLs, dropPrefetch, type Me } from './lib/api'
   import { route, navigate } from './lib/router.svelte'
   import { t } from './lib/i18n'
+  import { save } from './lib/storage'
   import Login from './routes/Login.svelte'
   import Browser from './routes/Browser.svelte'
   import Lazy from './components/Lazy.svelte'
@@ -26,6 +27,7 @@
   async function load() {
     try {
       me = await api.me()
+      save('user', me.name)
       needLogin = false
       error = ''
     } catch (e) {
