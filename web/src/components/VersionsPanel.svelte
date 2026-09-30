@@ -10,6 +10,8 @@
 
   let { vol, versions, onchange }: { vol: string; versions: Version[]; onchange: () => void } = $props()
   let removing = $state<Version | null>(null)
+  const minute = (x: Version) => Math.floor(x.created / 60000)
+  const crowded = (x: Version) => versions.some((y) => y !== x && minute(y) === minute(x))
 
   async function restore(x: Version) {
     const r = await api.restoreVersion(vol, x.id).catch((e) => void fail(e))
@@ -24,7 +26,7 @@
   {#each versions as x (x.id)}
     <li>
       <div class="share-meta">
-        <a href={versionURL(vol, x.id)} target="_blank" rel="noreferrer">{date(x.created)}</a>
+        <a href={versionURL(vol, x.id)} target="_blank" rel="noreferrer">{date(x.created, crowded(x))}</a>
         <span class="hint">{ago(x.created)} · {size(x.size)} · {t.versionSources[x.source] ?? x.source}</span>
       </div>
       <a class="icon-btn" href={versionURL(vol, x.id, true)} download aria-label={t.download} title={t.download}><Download size={18} /></a>

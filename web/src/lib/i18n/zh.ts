@@ -253,7 +253,7 @@ const zh = {
   versions: '版本',
   versionCount: (n: number) => `${n} 个历史版本`,
   noVersions: '还没有历史版本',
-  versionsNote: '文件被覆盖时，旧内容会保存在这里。一小时内的版本全部保留，更早的每小时、每天、每周各留一个，每个文件最多 50 个；磁盘快满时先清理最旧的版本。',
+  versionsNote: '文件被覆盖时，旧内容会保存在这里。一小时内的版本全部保留，更早的每小时、每天、每周各留一个，每个文件最多 50 个；磁盘快满时先清理最旧的版本。文件被永久删除 30 天后，它的版本也会清除。',
   versionSources: { upload: '上传', webdav: 'WebDAV', restore: '恢复前的内容', recovered: '启动时找回' } as Record<string, string>,
   versionRestored: '已恢复到这个版本',
   deleteVersion: '删除版本',

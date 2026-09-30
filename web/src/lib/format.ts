@@ -46,8 +46,8 @@ export function arrange<T extends Row>(list: T[], filter: string, sort: Sort, de
     .map((i) => list[i])
 }
 
-const dtf = new Intl.DateTimeFormat(locale, { dateStyle: 'short', timeStyle: 'short' })
-export const date = (ms: number) => dtf.format(ms)
+const dtf = [new Intl.DateTimeFormat(locale, { dateStyle: 'short', timeStyle: 'short' }), new Intl.DateTimeFormat(locale, { dateStyle: 'short', timeStyle: 'medium' })]
+export const date = (ms: number, seconds = false) => dtf[+seconds].format(ms)
 
 const rtf = new Intl.RelativeTimeFormat(locale, { numeric: 'auto' })
 const steps: [Intl.RelativeTimeFormatUnit, number][] = [['minute', 60], ['hour', 24], ['day', 30], ['month', 12], ['year', Infinity]]

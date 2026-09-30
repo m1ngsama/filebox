@@ -253,7 +253,7 @@ export default (locale: string) => {
     versions: 'Versions',
     versionCount: (n: number) => count(n, 'earlier version'),
     noVersions: 'No earlier versions yet',
-    versionsNote: 'When this file is overwritten, its previous content is kept here. Every version from the last hour stays, then one per hour, per day and per week, up to 50 per file. When the disk is nearly full, the oldest versions go first.',
+    versionsNote: 'When this file is overwritten, its previous content is kept here. Every version from the last hour stays, then one per hour, per day and per week, up to 50 per file. When the disk is nearly full, the oldest versions go first. Versions of a file deleted for good are removed 30 days later.',
     versionSources: { upload: 'Upload', webdav: 'WebDAV', restore: 'Before a restore', recovered: 'Recovered at startup' } as Record<string, string>,
     versionRestored: 'Restored this version',
     deleteVersion: 'Delete version',
