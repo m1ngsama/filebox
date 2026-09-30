@@ -319,8 +319,9 @@ func (a *API) rm(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	type failure struct {
-		Path  string `json:"path"`
-		Error string `json:"error"`
+		Path   string `json:"path"`
+		Status int    `json:"status"`
+		Error  string `json:"error"`
 	}
 	type trashed struct {
 		Path string `json:"path"`
@@ -334,8 +335,8 @@ func (a *API) rm(w http.ResponseWriter, r *http.Request) {
 			id, err = Trash(v, rel, time.Now())
 		}
 		if err != nil {
-			_, msg := httpx.Status(err)
-			failed = append(failed, failure{p, msg})
+			code, msg := httpx.Status(err)
+			failed = append(failed, failure{p, code, msg})
 			continue
 		}
 		done = append(done, trashed{p, id})

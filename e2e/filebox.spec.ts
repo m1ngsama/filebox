@@ -1297,6 +1297,18 @@ test('undo after replacing one name twice brings back the original', async ({ pa
   expect(readFileSync(join(server.vol, 'x.txt'), 'utf8')).toBe('old')
 })
 
+test('an undo that cannot remove a replacement says why in the UI language', async ({ page, server }) => {
+  writeFileSync(join(server.vol, 'y.txt'), 'old')
+  await login(page)
+  await fileInput(page).setInputFiles({ name: 'y.txt', mimeType: 'text/plain', buffer: Buffer.from('new') })
+  await page.getByRole('dialog', { name: t.conflictTitle }).getByRole('button', { name: t.replace }).click()
+  const done = page.locator('.toast', { hasText: t.uploadedReplaced(1, 1) })
+  await expect(done).toHaveCount(1)
+  rmSync(join(server.vol, 'y.txt'))
+  await done.getByRole('button', { name: t.undo }).click()
+  await expect(page.getByRole('alert').filter({ hasText: t.undoFailed('“y.txt”') })).toHaveText(t.failedItem(t.undoFailed('“y.txt”'), t.errors[404]))
+})
+
 test('a large batch renders a bounded number of rows', async ({ page }) => {
   await login(page)
   await page.route('**/upload/*', (route) => (route.request().method() === 'PATCH' ? undefined : route.continue()))

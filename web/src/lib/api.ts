@@ -99,7 +99,7 @@ export const api = {
   mv: (src: Loc, dst: Loc) => req<{ job: string } | undefined>('POST', '/api/mv', { src, dst }),
   cp: (src: Loc, dst: Loc) => req<{ job: string }>('POST', '/api/cp', { src, dst }),
   rm: (vol: string, paths: string[]) =>
-    req<{ trashed: { path: string; id: string }[]; failed: { path: string; error: string }[] }>('POST', '/api/rm', { vol, paths }),
+    req<{ trashed: { path: string; id: string }[]; failed: { path: string; status: number; error: string }[] }>('POST', '/api/rm', { vol, paths }),
   async move(from: Loc, to: Loc, onprogress?: (s: JobStatus) => void) {
     const r = await api.mv(from, to)
     if (r?.job) await api.waitJob(r.job, onprogress)

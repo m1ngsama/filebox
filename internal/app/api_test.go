@@ -211,11 +211,13 @@ func TestTrash(t *testing.T) {
 	f.write(t, "a.txt", "a")
 	f.write(t, "c.txt", "c")
 	w = f.do("POST", "/api/rm", body(`{"vol":"v","paths":["a.txt","/","missing","c.txt"]}`))
-	got := decode[struct {
-		Failed []struct{ Path, Error string }
-	}](t, w)
-	if w.Code != 200 || len(got.Failed) != 2 || got.Failed[0] != (struct{ Path, Error string }{"/", "bad path"}) ||
-		got.Failed[1] != (struct{ Path, Error string }{"missing", "not found"}) {
+	type failure struct {
+		Path   string
+		Status int
+		Error  string
+	}
+	got := decode[struct{ Failed []failure }](t, w)
+	if w.Code != 200 || len(got.Failed) != 2 || got.Failed[0] != (failure{"/", 400, "bad path"}) || got.Failed[1] != (failure{"missing", 404, "not found"}) {
 		t.Fatalf("partial rm %d %s", w.Code, w.Body)
 	}
 	for _, n := range []string{"a.txt", "c.txt"} {
