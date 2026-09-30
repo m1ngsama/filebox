@@ -646,7 +646,7 @@
   }
 
   function keydown(e: KeyboardEvent) {
-    if (document.querySelector("[role=dialog], [role=menu]:not([data-state='closed'])")) return
+    if (document.querySelector(":is([role=dialog], [role=menu]):not([data-state='closed'])")) return
     const typing = (e.target as Element).matches?.('input:not([type=checkbox], [type=radio]), select, textarea, [contenteditable]')
     const mod = e.metaKey || e.ctrlKey
     const k = e.key.toLowerCase()

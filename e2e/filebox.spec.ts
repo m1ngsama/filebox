@@ -666,6 +666,31 @@ test('the focused row stays rendered when scrolled far away, so Tab returns to i
   await expect(row(page, 'r-002.txt')).toBeFocused()
 })
 
+test('popovers and menus that are closing do not swallow shortcuts', async ({ page, server }) => {
+  writeFileSync(join(server.vol, 'gone.txt'), 'g')
+  await login(page)
+  await page.evaluate(() => {
+    for (const role of ['dialog', 'menu']) {
+      const d = document.createElement('div')
+      d.setAttribute('role', role)
+      d.dataset.state = 'closed'
+      document.body.append(d)
+    }
+  })
+  await row(page, 'gone.txt').focus()
+  await page.keyboard.press('Space')
+  await page.keyboard.press('Delete')
+  await expect(row(page, 'gone.txt')).toHaveCount(0)
+  await page.evaluate(() => {
+    const d = document.createElement('div')
+    d.setAttribute('role', 'dialog')
+    d.dataset.state = 'open'
+    document.body.append(d)
+  })
+  await page.keyboard.press('?')
+  await expect(page.getByRole('dialog', { name: t.shortcuts })).toHaveCount(0)
+})
+
 test('keyboard alone browses, selects, renames, moves, shares, deletes and undoes, with named controls', async ({ page, server, context }) => {
   await context.grantPermissions(['clipboard-read', 'clipboard-write'])
   mkdirSync(join(server.vol, 'dest'))
