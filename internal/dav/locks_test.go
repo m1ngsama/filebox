@@ -36,6 +36,17 @@ func TestDavDeleteRespectsLocksBelow(t *testing.T) {
 	if _, err := os.Stat(filepath.Join(e.dir, "d/c.txt")); err != nil {
 		t.Fatal(err)
 	}
+	e.req(t, e.rw, "MKCOL", "/dav/v/src", "")
+	e.req(t, e.rw, "PUT", "/dav/v/src2", "file")
+	for _, m := range []struct{ method, from string }{{"COPY", "/dav/v/src"}, {"MOVE", "/dav/v/src2"}} {
+		res, _ := e.req(t, e.rw, m.method, m.from, "", "Destination", e.srv.URL+"/dav/v/d", "Overwrite", "T")
+		if res.StatusCode != 423 {
+			t.Fatalf("%s over a locked destination member %d", m.method, res.StatusCode)
+		}
+	}
+	if _, err := os.Stat(filepath.Join(e.dir, "d/c.txt")); err != nil {
+		t.Fatal(err)
+	}
 	if res, _ := e.req(t, e.rw, "DELETE", "/dav/v/d", "", "If", "<"+e.srv.URL+"/dav/v/d/c.txt> ("+tok+")"); res.StatusCode != 204 {
 		t.Fatalf("DELETE with the member's token %d", res.StatusCode)
 	}
@@ -83,10 +94,10 @@ func TestDavLocksLastAtMostAnHour(t *testing.T) {
 	l := newLocks()
 	now := time.Now()
 	tok, _ := l.Create(now, webdav.LockDetails{Root: "/v/d/f", Duration: -1})
-	if got := l.covering(now.Add(59*time.Minute), "/v/d"); len(got) != 1 {
+	if got := l.covering(now.Add(59*time.Minute), "/v/d", nil); len(got) != 1 {
 		t.Fatal("lock gone before an hour")
 	}
-	if got := l.covering(now.Add(61*time.Minute), "/v/d"); len(got) != 0 {
+	if got := l.covering(now.Add(61*time.Minute), "/v/d", nil); len(got) != 0 {
 		t.Fatalf("infinite lock outlived an hour: %v %s", got, tok)
 	}
 }
@@ -102,11 +113,39 @@ func TestLockRecordSurvivesAFailedUnlock(t *testing.T) {
 	if err := l.Unlock(now, tok); err == nil {
 		t.Fatal("unlock of a held lock succeeded")
 	}
-	if len(l.covering(now, "/v/d")) != 1 {
+	if len(l.covering(now, "/v/d", nil)) != 1 {
 		t.Fatal("record dropped after a failed unlock")
 	}
 	release()
-	if l.Unlock(now, tok) != nil || len(l.covering(now, "/v/d")) != 0 {
+	if l.Unlock(now, tok) != nil || len(l.covering(now, "/v/d", nil)) != 0 {
 		t.Fatal("unlock after release")
+	}
+}
+
+func TestDavOverwriteOfALockedDestination(t *testing.T) {
+	e := setup(t)
+	for _, m := range []string{"COPY", "MOVE"} {
+		e.req(t, e.rw, "PUT", "/dav/v/doc.docx", "old")
+		e.req(t, e.rw, "PUT", "/dav/v/tmp.docx", "new "+m)
+		tok := e.lock(t, "/dav/v/doc.docx")
+		if res, _ := e.req(t, e.rw, m, "/dav/v/tmp.docx", "", "Destination", e.srv.URL+"/dav/v/doc.docx", "Overwrite", "T"); res.StatusCode != 423 {
+			t.Fatalf("%s over a locked file without its token %d", m, res.StatusCode)
+		}
+		if res, _ := e.req(t, e.rw, m, "/dav/v/tmp.docx", "", "Destination", e.srv.URL+"/dav/v/doc.docx", "Overwrite", "T",
+			"If", "<"+e.srv.URL+"/dav/v/doc.docx> ("+tok+")"); res.StatusCode != 204 {
+			t.Fatalf("%s by the lock holder %d", m, res.StatusCode)
+		}
+		if b, _ := os.ReadFile(filepath.Join(e.dir, "doc.docx")); string(b) != "new "+m {
+			t.Fatalf("%s content %q", m, b)
+		}
+		if res, _ := e.req(t, e.rw, "PUT", "/dav/v/doc.docx", "after"); res.StatusCode != 201 && res.StatusCode != 204 {
+			t.Fatalf("%s left the destination locked: PUT %d", m, res.StatusCode)
+		}
+		e.req(t, e.rw, "PUT", "/dav/v/tmp.docx", "again")
+		tok = e.lock(t, "/dav/v/doc.docx")
+		if res, _ := e.req(t, e.rw, m, "/dav/v/tmp.docx", "", "Destination", e.srv.URL+"/dav/v/doc.docx", "Overwrite", "T", "If", "("+tok+")"); res.StatusCode == 423 {
+			t.Fatalf("%s with the destination token in an untagged list got 423", m)
+		}
+		e.req(t, e.rw, "UNLOCK", "/dav/v/doc.docx", "", "Lock-Token", tok)
 	}
 }

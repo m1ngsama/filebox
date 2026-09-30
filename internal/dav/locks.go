@@ -81,7 +81,9 @@ func (l *locks) Unlock(now time.Time, tok string) error {
 
 func under(p, root string) bool { return p == root || root == "/" || strings.HasPrefix(p, root+"/") }
 
-func (l *locks) covering(now time.Time, p string) []string {
+func within(p, root string, same func(a, b string) bool) bool { return under(p, root) }
+
+func (l *locks) covering(now time.Time, p string, same func(a, b string) bool) []string {
 	l.mu.Lock()
 	defer l.mu.Unlock()
 	var out []string
@@ -90,18 +92,18 @@ func (l *locks) covering(now time.Time, p string) []string {
 			delete(l.m, tok)
 			continue
 		}
-		if under(h.root, p) || (!h.zeroDepth && under(p, h.root)) {
+		if within(h.root, p, same) || (!h.zeroDepth && within(p, h.root, same)) {
 			out = append(out, tok)
 		}
 	}
 	return out
 }
 
-func (l *locks) release(now time.Time, p string) {
+func (l *locks) release(now time.Time, p string, same func(a, b string) bool) {
 	l.mu.Lock()
 	var toks []string
 	for tok, h := range l.m {
-		if under(h.root, p) {
+		if within(h.root, p, same) {
 			toks = append(toks, tok)
 		}
 	}

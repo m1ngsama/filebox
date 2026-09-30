@@ -67,20 +67,32 @@ func Handler(vols *vol.Set, a *auth.Auth, ix *index.Index, vs *version.Store) ht
 		}
 		removes := r.Method == "DELETE" || r.Method == "MOVE"
 		src := path.Clean("/" + strings.TrimPrefix(r.URL.Path, "/dav"))
+		var gone []string
 		if removes {
-			have := submitted(r.Header.Get("If"))
-			for _, tok := range ls.covering(time.Now(), src) {
+			gone = append(gone, src)
+		}
+		if u, err := url.Parse(r.Header.Get("Destination")); err == nil && (r.Method == "MOVE" || r.Method == "COPY") && r.Header.Get("Overwrite") != "F" {
+			gone = append(gone, path.Clean("/"+strings.TrimPrefix(u.Path, "/dav")))
+		}
+		have := submitted(r.Header.Get("If"))
+		for _, p := range gone {
+			for _, tok := range ls.covering(time.Now(), p, fsys.same) {
 				if !have[tok] {
 					http.Error(w, "locked", http.StatusLocked)
 					return
 				}
 			}
 		}
+		release := func() {
+			for _, p := range gone {
+				ls.release(time.Now(), p, fsys.same)
+			}
+		}
 		if r.Method != "COPY" && r.Method != "MOVE" {
 			sw := &status{ResponseWriter: w}
 			h.ServeHTTP(sw, r)
 			if removes && sw.code == http.StatusNoContent {
-				ls.release(time.Now(), src)
+				release()
 			}
 			return
 		}
@@ -100,8 +112,8 @@ func Handler(vols *vol.Set, a *auth.Auth, ix *index.Index, vs *version.Store) ht
 		if ok && r.Method == "COPY" && ix != nil {
 			fsys.copyProps(r)
 		}
-		if ok && removes {
-			ls.release(time.Now(), src)
+		if ok {
+			release()
 		}
 	}))
 }
@@ -126,6 +138,17 @@ func (f *FS) copyProps(r *http.Request) {
 	if err1 == nil && err2 == nil && v1 != nil && v2 != nil {
 		f.ix.CopyProps(v1, r1, v2, r2, r.Header.Get("Depth") != "0")
 	}
+}
+
+func (f *FS) same(a, b string) bool {
+	v1, r1, err1 := f.resolve(a)
+	v2, r2, err2 := f.resolve(b)
+	if err1 != nil || err2 != nil || v1 == nil || v1 != v2 {
+		return false
+	}
+	x, err1 := v1.Root.Lstat(r1)
+	y, err2 := v2.Root.Lstat(r2)
+	return err1 == nil && err2 == nil && os.SameFile(x, y)
 }
 
 func readOnlyMethod(m string) bool {
