@@ -1,5 +1,6 @@
 <script lang="ts">
-  import { api, session, HttpError, type Me } from './lib/api'
+  import { untrack } from 'svelte'
+  import { api, session, HttpError, prefetchLs, dropPrefetch, type Me } from './lib/api'
   import { route, navigate } from './lib/router.svelte'
   import { t } from './lib/i18n'
   import Login from './routes/Login.svelte'
@@ -28,6 +29,7 @@
       needLogin = false
       error = ''
     } catch (e) {
+      dropPrefetch()
       if (e instanceof HttpError && e.status === 401) {
         me = null
         needLogin = true
@@ -45,6 +47,7 @@
     needLogin = true
   }
 
+  untrack(() => parts[0] === 'files' && parts[1] && prefetchLs(parts[1], parts.slice(2).join('/')))
   load()
 
   $effect(() => {

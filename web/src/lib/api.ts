@@ -60,8 +60,33 @@ async function settle<T>(r: Response, url: string): Promise<T> {
   return (text ? JSON.parse(text) : undefined) as T
 }
 
+let early: { url: string; res: Promise<Response>; stop: AbortController } | undefined
+
+export function prefetchLs(vol: string, path: string) {
+  const url = lsURL(vol, path)
+  const stop = new AbortController()
+  early = { url, stop, res: fetch(url, { signal: stop.signal }) }
+}
+
+export function dropPrefetch() {
+  early?.stop.abort()
+  early = undefined
+}
+
+function take(url: string, signal?: AbortSignal) {
+  const e = early
+  early = undefined
+  if (e?.url !== url) {
+    e?.stop.abort()
+    return fetch(url, { signal })
+  }
+  if (signal?.aborted) e.stop.abort()
+  signal?.addEventListener('abort', () => e.stop.abort(), { once: true })
+  return e.res
+}
+
 async function list(url: string, signal?: AbortSignal, onchunk?: (entries: Entry[]) => void): Promise<Entry[]> {
-  const r = await fetch(url, { signal })
+  const r = await take(url, signal)
   if (!r.ok || !r.body || !r.headers.get('Content-Type')?.includes('ndjson')) return (await settle<{ entries: Entry[] }>(r, url)).entries
   const out: Entry[] = []
   const rd = r.body.pipeThrough(new TextDecoderStream()).getReader()
@@ -99,6 +124,7 @@ export const shareLink = (tok: string) => location.origin + shareURL(tok)
 export const shareRawURL = (tok: string, path: string, dl = false) => `${shareURL(tok)}/raw/${enc(path)}${dl ? '?dl' : ''}`
 export const shareThumbURL = (tok: string, path: string) => `${shareURL(tok)}/thumb/${enc(path)}`
 const q = (o: Record<string, string>) => new URLSearchParams(o).toString()
+const lsURL = (vol: string, path: string) => `/api/ls?${q({ vol, path })}`
 export type As = 'dl' | 'thumb' | 'render' | 'meta'
 export type Src = (e: Entry, as?: As) => string
 export const fileURL = (vol: string, p: string, as?: As) =>
@@ -124,7 +150,7 @@ export const api = {
   loginInfo: () => req<{ single: boolean }>('GET', '/api/login'),
   login: (name: string, password: string) => req<void>('POST', '/api/login', { name, password }),
   logout: () => req<void>('POST', '/api/logout'),
-  ls: (vol: string, path: string, signal?: AbortSignal, onchunk?: (entries: Entry[]) => void) => list(`/api/ls?${q({ vol, path })}`, signal, onchunk),
+  ls: (vol: string, path: string, signal?: AbortSignal, onchunk?: (entries: Entry[]) => void) => list(lsURL(vol, path), signal, onchunk),
   search: (q: string, signal: AbortSignal) =>
     req<{ entries: RecentFile[]; content: ContentHit[]; indexing: Progress | null; scanning: boolean }>(
       'GET',
