@@ -1702,6 +1702,28 @@ test.describe('on a phone', () => {
     expect(t2.x + t2.width).toBeLessThanOrEqual(n.x + n.width)
   })
 
+  test('touch targets are at least 44 px', async ({ page, server }) => {
+    writeFileSync(join(server.vol, 'docs', 'x.txt'), 'x')
+    await login(page)
+    const tall = async (l: Locator) => {
+      const all = await l.all()
+      expect(all.length).toBeGreaterThan(0)
+      for (const x of all) if (await x.isVisible()) expect((await x.boundingBox())!.height, await x.evaluate((e) => e.outerHTML.slice(0, 80))).toBeGreaterThanOrEqual(44)
+    }
+    await row(page, 'docs').locator('button.name').tap()
+    await tall(page.locator('.files > .bar').locator('button, a'))
+    await page.getByRole('button', { name: t.more, exact: true }).tap()
+    await tall(page.getByRole('menuitem'))
+    await page.keyboard.press('Escape')
+    await (await finger(page)).hold(row(page, 'x.txt'))
+    await tall(page.locator('.row .hit'))
+    for (const b of await page.locator('.row .hit').all()) expect((await b.boundingBox())!.width).toBeGreaterThanOrEqual(44)
+    await tall(page.locator('.list-head').getByRole('button'))
+    await page.getByRole('button', { name: t.clearSelection }).tap()
+    await page.getByRole('button', { name: t.openNav }).tap()
+    await tall(page.locator('.nav a, .nav-item'))
+  })
+
   test('the more sheet stars a multi-selection', async ({ page, server }) => {
     for (const n of ['p1.txt', 'p2.txt']) writeFileSync(join(server.vol, 'docs', n), n)
     await login(page)

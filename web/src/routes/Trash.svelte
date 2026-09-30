@@ -84,7 +84,7 @@
 
 {#if items?.length}
   <div class="trash-head" class:batch={selected.size > 0}>
-    <input type="checkbox" checked={all} indeterminate={!all && selected.size > 0} onchange={toggleAll} aria-label={t.selectAll} />
+    <label class="hit"><input type="checkbox" checked={all} indeterminate={!all && selected.size > 0} onchange={toggleAll} aria-label={t.selectAll} /></label>
     {#if selected.size}
       <span class="count">{t.selected(selected.size)}</span>
       <button class="ghost" disabled={busy} onclick={() => restore(picked)}><RotateCcw size={16} />{t.restore}</button>
@@ -98,12 +98,14 @@
 
 <RowList {items} {error} key={(x) => x.id} label={t.trash}>
   {#snippet row(it)}
-    <input
-      type="checkbox"
-      checked={selected.has(it.id)}
-      onchange={() => (selected.has(it.id) ? selected.delete(it.id) : selected.add(it.id))}
-      aria-label={t.select(it.name)}
-    />
+    <label class="hit">
+      <input
+        type="checkbox"
+        checked={selected.has(it.id)}
+        onchange={() => (selected.has(it.id) ? selected.delete(it.id) : selected.add(it.id))}
+        aria-label={t.select(it.name)}
+      />
+    </label>
     <FileIcon name={it.name} dir={it.dir} />
     <div class="row-main">
       <span class="row-title" title={it.name}>{it.name}</span>

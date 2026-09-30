@@ -152,7 +152,7 @@
   function press(ev: PointerEvent, i: number) {
     touch = ev.pointerType !== 'mouse'
     swallow = false
-    if (!touch || !selected || (ev.target as Element).closest('input, .more')) return
+    if (!touch || !selected || (ev.target as Element).closest('label, .more')) return
     held = true
     origin = [ev.clientX, ev.clientY]
     pressing = i
@@ -191,7 +191,7 @@
   }
 
   function pick(ev: MouseEvent, i: number) {
-    if (!selected || (ev.target as Element).closest('button, input, a')) return
+    if (!selected || (ev.target as Element).closest('button, label, a')) return
     if (touch) return tap(i)
     const a = anchor ? entries.findIndex((e) => id(e) === anchor) : -1
     if (ev.shiftKey && a >= 0) {
@@ -315,7 +315,7 @@
 
 {#snippet check(e: Entry, cls: string)}
   {#if selected}
-    <input type="checkbox" class={cls} checked={selected.has(id(e))} onchange={() => toggle(id(e))} aria-label={t.select(e.name)} />
+    <label class={`hit ${cls}`}><input type="checkbox" checked={selected.has(id(e))} onchange={() => toggle(id(e))} aria-label={t.select(e.name)} /></label>
   {:else}
     <span></span>
   {/if}
@@ -324,14 +324,16 @@
 {#if head}
 <div class="list-head" class:grid class:batch={!!selected?.size}>
   {#if selected}
-    <input
-      type="checkbox"
-      checked={all}
-      indeterminate={!all && selected.size > 0}
-      onchange={selectAll}
-      aria-label={t.selectAll}
-      disabled={!entries.length}
-    />
+    <label class="hit">
+      <input
+        type="checkbox"
+        checked={all}
+        indeterminate={!all && selected.size > 0}
+        onchange={selectAll}
+        aria-label={t.selectAll}
+        disabled={!entries.length}
+      />
+    </label>
   {:else}
     <span></span>
   {/if}
