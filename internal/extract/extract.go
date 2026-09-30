@@ -317,7 +317,7 @@ type opf struct {
 	} `xml:"spine>itemref"`
 }
 
-// zip.NewReader loads every central directory header whatever the end record claims, so count them first the way it finds them.
+// zip.NewReader loads every central directory header whatever the end record claims, starting at either offset it may pick, so count from both.
 func entries(f io.ReaderAt, size int64) int {
 	tail := make([]byte, min(size, 22+65535))
 	if _, err := f.ReadAt(tail, size-int64(len(tail))); err != nil {
@@ -336,10 +336,23 @@ func entries(f io.ReaderAt, size int64) int {
 	if le.Uint16(tail[i+10:]) == 0xffff || le.Uint32(tail[i+12:]) == 0xffffffff || le.Uint32(tail[i+16:]) == 0xffffffff {
 		return -1
 	}
-	start := size - int64(len(tail)) + int64(i) - int64(le.Uint32(tail[i+12:]))
-	if start < 0 {
+	records, dirSize, dirOff := int64(le.Uint16(tail[i+10:])), int64(le.Uint32(tail[i+12:])), int64(le.Uint32(tail[i+16:]))
+	if records*46 > size || records*46 > dirSize {
 		return -1
 	}
+	eocd := size - int64(len(tail)) + int64(i)
+	n := 0
+	for _, start := range []int64{eocd - dirSize, dirOff} {
+		if start < 0 || start >= size {
+			continue
+		}
+		n = max(n, headers(f, start, size))
+	}
+	return n
+}
+
+func headers(f io.ReaderAt, start, size int64) int {
+	le := binary.LittleEndian
 	r := bufio.NewReader(io.NewSectionReader(f, start, size-start))
 	var h [46]byte
 	n := 0

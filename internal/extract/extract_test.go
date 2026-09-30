@@ -130,9 +130,8 @@ func TestHTML(t *testing.T) {
 	}
 }
 
-// crafted builds a zip whose end record claims 5 entries while the directory holds 65,541 headers, which zip.NewReader accepts.
-func crafted() []byte {
-	const n = 65541
+// crafted builds a zip that zip.NewReader accepts while loading n headers, with the end record's size and offset set by the caller.
+func crafted(n int, size func(dir int) uint32, offset uint32) []byte {
 	var b bytes.Buffer
 	h := make([]byte, 46)
 	binary.LittleEndian.PutUint32(h, 0x02014b50)
@@ -143,27 +142,32 @@ func crafted() []byte {
 	binary.LittleEndian.PutUint32(end, 0x06054b50)
 	binary.LittleEndian.PutUint16(end[8:], uint16(n%65536))
 	binary.LittleEndian.PutUint16(end[10:], uint16(n%65536))
-	binary.LittleEndian.PutUint32(end[12:], uint32(b.Len()))
+	binary.LittleEndian.PutUint32(end[12:], size(b.Len()))
+	binary.LittleEndian.PutUint32(end[16:], offset)
 	b.Write(end)
 	return b.Bytes()
 }
 
 func TestEPUBDirectoryBomb(t *testing.T) {
-	book := crafted()
-	if z, err := zip.NewReader(bytes.NewReader(book), int64(len(book))); err != nil || len(z.File) != 65541 {
-		t.Fatalf("fixture no longer fools zip.NewReader: %v", err)
-	}
-	r := fixture(t, map[string][]byte{"bomb.epub": book})
-	var before, after runtime.MemStats
-	runtime.GC()
-	runtime.ReadMemStats(&before)
-	_, err := (&Extractor{}).Extract(context.Background(), r, "bomb.epub")
-	runtime.ReadMemStats(&after)
-	if !errors.Is(err, ErrSkipped) {
-		t.Fatalf("err %v", err)
-	}
-	if n := after.TotalAlloc - before.TotalAlloc; n > 1<<20 {
-		t.Fatalf("allocated %d bytes before rejecting", n)
+	for name, book := range map[string][]byte{
+		"understated count":   crafted(65541, func(dir int) uint32 { return uint32(dir) }, 0),
+		"raw offset fallback": crafted(65537, func(int) uint32 { return 47 }, 0),
+	} {
+		if z, err := zip.NewReader(bytes.NewReader(book), int64(len(book))); err != nil || len(z.File) < 65536 {
+			t.Fatalf("%s: fixture no longer fools zip.NewReader: %v", name, err)
+		}
+		r := fixture(t, map[string][]byte{"bomb.epub": book})
+		var before, after runtime.MemStats
+		runtime.GC()
+		runtime.ReadMemStats(&before)
+		_, err := (&Extractor{}).Extract(context.Background(), r, "bomb.epub")
+		runtime.ReadMemStats(&after)
+		if !errors.Is(err, ErrSkipped) {
+			t.Fatalf("%s: err %v", name, err)
+		}
+		if n := after.TotalAlloc - before.TotalAlloc; n > 1<<20 {
+			t.Fatalf("%s: allocated %d bytes before rejecting", name, n)
+		}
 	}
 }
 
