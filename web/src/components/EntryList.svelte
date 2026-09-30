@@ -170,7 +170,7 @@
       $v.setOptions({
         rangeExtractor: (r) => {
           const out = defaultRangeExtractor(r)
-          return pin >= r.count || out.includes(pin) ? out : [...out, pin].sort((a, b) => a - b)
+          return !(pin < r.count) || out.includes(pin) ? out : [...out, pin].sort((a, b) => a - b)
         },
       }),
     )

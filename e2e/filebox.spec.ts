@@ -661,8 +661,10 @@ test('the focused row stays rendered when scrolled far away, so Tab returns to i
   await page.keyboard.press('ArrowDown')
   const second = row(page, 'r-001.txt')
   await expect(second).toBeFocused()
-  await page.locator('.scroller').evaluate((el) => el.scrollTo(0, el.scrollHeight))
-  await expect(row(page, 'r-399.txt')).toBeInViewport()
+  await expect(async () => {
+    await page.locator('.scroller').evaluate((el) => el.scrollTo(0, el.scrollHeight))
+    await expect(row(page, 'r-399.txt')).toBeInViewport({ timeout: 500 })
+  }).toPass()
   await expect(second).toBeFocused()
   await expect(second).toHaveAttribute('tabindex', '0')
   await page.getByRole('button', { name: t.mtime }).focus()
