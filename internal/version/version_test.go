@@ -431,3 +431,25 @@ func TestReplaceFailureKeepsLiveFile(t *testing.T) {
 		t.Fatalf("left behind %v", names)
 	}
 }
+
+func TestExpireOnlyWhenTheFileIsReallyGone(t *testing.T) {
+	if os.Getuid() == 0 {
+		t.Skip("root reads unreadable folders")
+	}
+	e := setup(t)
+	e.capture(t, "locked/a.txt", "old")
+	e.write(t, "locked/a.txt", "new")
+	e.capture(t, "file.txt", "old")
+	e.write(t, "file.txt", "new")
+	e.s.DB.Exec(`UPDATE versions SET path = 'file.txt/under' WHERE path = 'file.txt'`)
+	os.Chmod(filepath.Join(e.dir, "locked"), 0)
+	t.Cleanup(func() { os.Chmod(filepath.Join(e.dir, "locked"), 0o755) })
+	for range 2 {
+		e.s.Prune(e.vols)
+		e.now = e.now.Add(OrphanTTL + time.Hour)
+	}
+	os.Chmod(filepath.Join(e.dir, "locked"), 0o755)
+	if e.count(t, "locked/a.txt") != 1 || e.count(t, "file.txt/under") != 1 {
+		t.Fatal("expired versions whose path could not be checked")
+	}
+}

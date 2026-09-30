@@ -343,7 +343,7 @@ func (s *Store) expire(v *vol.Volume) {
 	origins := trashed(v)
 	for _, g := range gs {
 		_, err := v.Root.Lstat(g.path)
-		gone := err != nil && !slices.ContainsFunc(origins, func(o string) bool { return g.path == o || strings.HasPrefix(g.path, o+"/") })
+		gone := errors.Is(err, fs.ErrNotExist) && !slices.ContainsFunc(origins, func(o string) bool { return g.path == o || strings.HasPrefix(g.path, o+"/") })
 		switch {
 		case !gone && g.since != 0:
 			s.DB.Exec(`UPDATE versions SET orphaned = 0 WHERE vol = ? AND path = ?`, v.Name, g.path)
