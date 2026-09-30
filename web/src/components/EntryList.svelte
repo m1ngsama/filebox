@@ -35,6 +35,7 @@
     batch,
     empty,
     loading = false,
+    busy = false,
     id = (e) => e.name,
     loc,
     group,
@@ -55,6 +56,7 @@
     batch?: Snippet
     empty?: Snippet
     loading?: boolean
+    busy?: boolean
     id?: (e: Entry) => string
     loc?: (e: Entry) => Loc
     group?: (e: Entry) => string
@@ -338,7 +340,7 @@
             {/each}
           </div>
         {:else if !entries.length && empty}<div class="empty">{@render empty()}</div>{/if}
-        <div class="spacer" role="grid" aria-label={t.fileList} aria-multiselectable={selected ? true : undefined} aria-rowcount={rows} style:height={`${$v.getTotalSize()}px`}>
+        <div class="spacer" role="grid" aria-label={t.fileList} aria-multiselectable={selected ? true : undefined} aria-busy={busy || undefined} aria-rowcount={rows} style:height={`${$v.getTotalSize()}px`}>
           {#each $v.getVirtualItems().filter((r) => r.index < rows) as r (r.key)}
             {#if grid}
               <div class="cards" role="row" aria-rowindex={r.index + 1} style:transform={`translateY(${r.start}px)`} style:grid-template-columns={`repeat(${cols}, minmax(0, 1fr))`}>

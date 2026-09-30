@@ -51,6 +51,8 @@
   let error = $state('')
   let at = $state('')
   let streaming = $state(false)
+  let announce = $state('')
+  let loading: AbortController | undefined
   let filter = $state('')
   let scope = $state<'here' | 'all'>('here')
   let hits = $state.raw<RecentFile[] | null>(null)
@@ -88,14 +90,22 @@
   const thumb = (e: Entry) => (!e.dir && thumbable(e.name) ? thumbURL(vol, join(e.name)) : null)
   const raw = (e: Entry) => (rawThumb(e) ? rawURL(vol, join(e.name)) : null)
 
-  async function refresh(signal?: AbortSignal) {
+  async function refresh() {
     const want = here
+    loading?.abort()
+    const { signal } = (loading = new AbortController())
     let last = -Infinity
+    let said = -Infinity
     const partial = (es: Entry[]) => {
       if (want !== here || (at === want && !streaming) || performance.now() - last < 150) return
       last = performance.now()
+      if (last - said > 2500) {
+        said = last
+        announce = t.loadingItems(es.length)
+      }
       entries = es.slice()
       streaming = true
+      error = ''
       at = want
     }
     const [list, err] = await api.ls(vol, path, signal, partial).then(
@@ -106,6 +116,7 @@
     entries = [...list]
     error = err
     streaming = false
+    announce = ''
     at = want
     return true
   }
@@ -118,11 +129,10 @@
     details = null
     reveal = ''
     const focus = new URLSearchParams(untrack(() => route.search)).get('details')
-    const stop = new AbortController()
-    refresh(stop.signal).then((ok) => {
+    refresh().then((ok) => {
       if (ok && focus) details = entries.find((e) => e.name === focus) ?? null
     })
-    return () => stop.abort()
+    return () => loading?.abort()
   })
 
   function closeDetails() {
@@ -559,7 +569,8 @@
     </header>
 
     {#if error && at === here}<p class="error banner">{error}</p>{/if}
-    {#if streaming && at === here}<p class="hint banner" role="status">{t.loadingItems(entries.length)}</p>{/if}
+    {#if streaming && at === here}<p class="hint banner loading-count" aria-hidden="true">{t.loadingItems(entries.length)}</p>{/if}
+    <p class="sr-only" role="status">{announce}</p>
 
     {#if ranked}
       {#if partial}<p class="hint banner">{t.indexing}</p>{/if}
@@ -598,6 +609,7 @@
         {dnd}
         {reveal}
         loading={at !== here}
+        busy={streaming}
       >
         {#snippet empty()}
           {#if query}
@@ -697,7 +709,7 @@
         title={t.newFolder}
         label={t.folderName}
         action={t.create}
-        onsave={(n) => api.mkdir(vol, join(n)).then(() => refresh())}
+        onsave={(n) => api.mkdir(vol, join(n)).then(refresh)}
         onclose={() => (dialog = null)}
       />
     {:else if dialog?.kind === 'rename'}

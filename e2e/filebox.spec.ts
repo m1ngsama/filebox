@@ -1404,7 +1404,7 @@ test('a folder with 20,000 entries streams in, shows its count, then sorts, scro
   await page.addInitScript(() => {
     const seen: string[] = ((window as unknown as { seen: string[] }).seen = [])
     new MutationObserver(() => {
-      const s = document.querySelector('.files > [role=status]')?.textContent
+      const s = document.querySelector('.files > .loading-count')?.textContent
       if (s && s !== seen.at(-1)) seen.push(s)
     }).observe(document, { subtree: true, childList: true, characterData: true })
   })
@@ -1413,7 +1413,7 @@ test('a folder with 20,000 entries streams in, shows its count, then sorts, scro
   await page.goto('/files/v/huge/')
   await expect(page.locator('.row').first()).toBeVisible()
   const first = Date.now() - start
-  await expect(page.locator('.files > [role=status]')).toHaveCount(0)
+  await expect(page.locator('.files > .loading-count')).toHaveCount(0)
   const seen: string[] = await page.evaluate(() => (window as unknown as { seen: string[] }).seen)
   expect(seen.length).toBeGreaterThan(0)
   expect(seen[0]).toMatch(/^正在加载 \d+ 项…$/)
