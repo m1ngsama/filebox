@@ -222,6 +222,8 @@ button.ghost { border-color: transparent; background: none; }
 .cards.tiles { gap: var(--space-1); padding: 0 var(--space-1); align-items: start; }
 .tiles .card { padding: 0; border-radius: var(--radius-sm); }
 .tiles .card-open { border-radius: var(--radius-sm); }
+.tiles .more { position: absolute; top: 0; right: 0; z-index: 1; }
+.tiles .card:has(img) .more { color: var(--viewer-fg); filter: drop-shadow(0 0 2px var(--viewer-bg)); }
 .tiles .card.sel { outline: 3px solid var(--accent); outline-offset: -3px; }
 .tile-name { position: absolute; left: var(--space-1); right: var(--space-1); bottom: var(--space-1); font-size: var(--text-xs); }
 .tile-name .mid { justify-content: center; }

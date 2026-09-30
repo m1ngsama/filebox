@@ -403,6 +403,7 @@
                         {#if tiles}<span class="tile-name">{@render label(e.name)}</span>{/if}
                       {/if}
                     </button>
+                    {#if tiles}{@render more(e)}{/if}
                     {#if !tiles}
                       <div class="card-foot">
                         <span class="card-name" title={e.name}>{@render label(e.name)}</span>

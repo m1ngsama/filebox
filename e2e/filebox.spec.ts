@@ -1683,6 +1683,10 @@ test.describe('on a phone', () => {
     const cards = page.locator('.cards').first()
     await expect(cards).toHaveCSS('grid-template-columns', /^\S+ \S+ \S+$/)
     await expect(page.locator('.card-foot')).toHaveCount(0)
+    await page.locator('.card', { has: page.locator('[aria-label="p0.png"]') }).locator('button.more').tap()
+    await expect(page.getByRole('dialog', { name: 'p0.png' })).toBeVisible()
+    await page.keyboard.press('Escape')
+    await expect(page.getByRole('dialog')).toHaveCount(0)
     const box = (await page.locator('.card').first().boundingBox())!
     expect(box.width).toBeGreaterThan(110)
     expect(Math.abs(box.width - box.height)).toBeLessThan(1)
