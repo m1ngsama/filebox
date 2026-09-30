@@ -5,6 +5,7 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"strconv"
 	"testing"
 	"time"
 
@@ -195,6 +196,49 @@ func TestThin(t *testing.T) {
 	keep, _ = Thin(old, now)
 	if len(keep) < 17 || len(keep) > 18 {
 		t.Fatalf("weekly thinning kept %d of 120 days", len(keep))
+	}
+}
+
+func TestCapKeepsLongTermHistory(t *testing.T) {
+	const minute, day = int64(time.Minute / time.Millisecond), int64(24 * time.Hour / time.Millisecond)
+	now := int64(1_800_000_000_000)
+	var xs []Version
+	for i := range 60 {
+		xs = append(xs, Version{ID: "m" + strconv.Itoa(i), Created: now - int64(i)*minute/2})
+	}
+	for i := range 10 {
+		xs = append(xs, Version{ID: "d" + strconv.Itoa(i), Created: now - int64(i+2)*day})
+	}
+	for i := range 8 {
+		xs = append(xs, Version{ID: "w" + strconv.Itoa(i), Created: now - 40*day - int64(i)*7*day})
+	}
+	keep, drop := Thin(xs, now)
+	if len(keep) != PerFile || len(keep)+len(drop) != len(xs) {
+		t.Fatalf("kept %d dropped %d", len(keep), len(drop))
+	}
+	ids := map[string]bool{}
+	for _, x := range keep {
+		ids[x.ID] = true
+	}
+	for i := range 10 {
+		if !ids["d"+strconv.Itoa(i)] {
+			t.Fatalf("daily version %d dropped", i)
+		}
+	}
+	for i := range 8 {
+		if !ids["w"+strconv.Itoa(i)] {
+			t.Fatalf("weekly version %d dropped", i)
+		}
+	}
+	if !ids["m0"] || !ids["m31"] || ids["m32"] {
+		t.Fatal("did not keep the newest recent versions")
+	}
+	var weekly []Version
+	for i := range 3 * PerFile {
+		weekly = append(weekly, Version{ID: strconv.Itoa(i), Created: now - 40*day - int64(i)*7*day})
+	}
+	if keep, _ = Thin(append([]Version{{ID: "new", Created: now}}, weekly...), now); len(keep) != PerFile || keep[0].ID != "new" || keep[PerFile-1].ID != strconv.Itoa(PerFile-2) {
+		t.Fatal("with only representatives left the oldest should go first")
 	}
 }
 

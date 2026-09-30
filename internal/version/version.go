@@ -260,6 +260,7 @@ type bucket struct{ tier, n int64 }
 func Thin(newestFirst []Version, now int64) (keep, drop []Version) {
 	const hour, day = int64(time.Hour / time.Millisecond), int64(24 * time.Hour / time.Millisecond)
 	seen := map[bucket]bool{}
+	var recent []int
 	for _, x := range newestFirst {
 		age := now - x.Created
 		var b bucket
@@ -273,14 +274,38 @@ func Thin(newestFirst []Version, now int64) (keep, drop []Version) {
 		default:
 			b = bucket{3, x.Created / (7 * day)}
 		}
-		if seen[b] || len(keep) >= PerFile {
+		if seen[b] {
 			drop = append(drop, x)
 			continue
 		}
 		seen[b] = true
+		if b.tier == 0 && len(keep) > 0 {
+			recent = append(recent, len(keep))
+		}
 		keep = append(keep, x)
 	}
-	return keep, drop
+	over := len(keep) - PerFile
+	if over <= 0 {
+		return keep, drop
+	}
+	evict := map[int]bool{}
+	for i := len(recent) - 1; i >= 0 && over > 0; i-- {
+		evict[recent[i]] = true
+		over--
+	}
+	var kept []Version
+	for i, x := range keep {
+		if evict[i] {
+			drop = append(drop, x)
+		} else {
+			kept = append(kept, x)
+		}
+	}
+	if len(kept) > PerFile {
+		drop = append(drop, kept[PerFile:]...)
+		kept = kept[:PerFile]
+	}
+	return kept, drop
 }
 
 func (s *Store) guard(v *vol.Volume, now int64) {
