@@ -69,6 +69,8 @@ func (a *API) Register(mux *http.ServeMux) {
 	h("GET /api/ls", a.ls)
 	h("GET /api/stat", a.stat)
 	mux.Handle("GET /api/zip", a.Auth.RequireAny(http.HandlerFunc(a.zip)))
+	mux.Handle("GET /api/zip-entries", a.Auth.RequireAny(http.HandlerFunc(a.zipEntries)))
+	mux.Handle("GET /api/zip-entry", a.Auth.RequireAny(http.HandlerFunc(a.zipEntry)))
 	h("GET /api/recent", a.recent)
 	h("GET /api/search", a.search)
 	h("GET /api/vols", a.vols)

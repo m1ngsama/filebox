@@ -44,6 +44,8 @@ func (s *Service) Register(mux *http.ServeMux) {
 	mux.HandleFunc("GET /s/{token}/zip", s.zip)
 	mux.HandleFunc("GET /s/{token}/render", s.render)
 	mux.HandleFunc("GET /s/{token}/meta", s.meta)
+	mux.HandleFunc("GET /s/{token}/zip-entries", s.scoped(api.ZipEntries))
+	mux.HandleFunc("GET /s/{token}/zip-entry", s.scoped(api.ZipEntry))
 	mux.HandleFunc("/s/{token}/upload/{rest...}", s.upload)
 	s.Uploads.Received = s.received
 	s.Uploads.Allow = s.allow
@@ -541,4 +543,20 @@ func (s *Service) upload(w http.ResponseWriter, r *http.Request) {
 			return t, err
 		},
 	}).ServeHTTP(w, r)
+}
+
+func (s *Service) scoped(fn func(http.ResponseWriter, *http.Request, *os.Root, string)) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		o, ok := s.open(w, r, "read", "upload")
+		if !ok {
+			return
+		}
+		root, rel, done, err := o.root(r.URL.Query().Get("p"))
+		if err != nil {
+			httpx.Error(w, err)
+			return
+		}
+		defer done()
+		fn(w, r, root, rel)
+	}
 }
