@@ -25,7 +25,10 @@ const (
 	Restore   = "restore"
 	Recovered = "recovered"
 
-	sidecar = ".path"
+	PerFile    = 50
+	MinFreePct = 10
+	guardGrace = 10 * time.Minute
+	sidecar    = ".path"
 )
 
 var validID = regexp.MustCompile(`^[0-9]{1,19}-[0-9a-f]{16}$`)
@@ -42,9 +45,10 @@ type Version struct {
 }
 
 type Store struct {
-	DB  *db.DB
-	Now func() time.Time
-	mu  sync.Mutex
+	DB    *db.DB
+	Now   func() time.Time
+	Usage func(*vol.Volume) (vol.Usage, error)
+	mu    sync.Mutex
 }
 
 func (s *Store) now() time.Time {
@@ -54,6 +58,13 @@ func (s *Store) now() time.Time {
 	return time.Now()
 }
 
+func (s *Store) usage(v *vol.Volume) (vol.Usage, error) {
+	if s.Usage != nil {
+		return s.Usage(v)
+	}
+	return v.Usage()
+}
+
 func File(id string) string { return path.Join(vol.VersionsDir, id) }
 
 func ValidID(id string) bool { return validID.MatchString(id) }
@@ -61,7 +72,11 @@ func ValidID(id string) bool { return validID.MatchString(id) }
 func (s *Store) Capture(v *vol.Volume, rel, source string, user int64) (string, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	return s.capture(v, rel, source, user)
+	id, err := s.capture(v, rel, source, user)
+	if err == nil {
+		s.prune(v)
+	}
+	return id, err
 }
 
 func (s *Store) capture(v *vol.Volume, rel, source string, user int64) (string, error) {
@@ -200,6 +215,95 @@ func (s *Store) drop(v *vol.Volume, id string) error {
 	}
 	s.forget(v, id)
 	return nil
+}
+
+func (s *Store) Prune(vols *vol.Set) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	for _, v := range vols.All() {
+		s.prune(v)
+	}
+}
+
+func (s *Store) prune(v *vol.Volume) {
+	rows, err := s.DB.Query(`SELECT `+columns+` FROM versions WHERE vol = ? ORDER BY path, created DESC, id DESC`, v.Name)
+	if err != nil {
+		slog.Warn("prune versions", "vol", v.Name, "err", err)
+		return
+	}
+	xs, err := scan(rows)
+	if err != nil {
+		slog.Warn("prune versions", "vol", v.Name, "err", err)
+		return
+	}
+	now := s.now().UnixMilli()
+	live := xs[:0]
+	for i := 0; i < len(xs); {
+		j := i
+		for j < len(xs) && xs[j].Path == xs[i].Path {
+			j++
+		}
+		keep, drop := Thin(xs[i:j], now)
+		for _, x := range drop {
+			s.drop(v, x.ID)
+		}
+		live = append(live, keep...)
+		i = j
+	}
+	s.guard(v, live, now)
+}
+
+type bucket struct{ tier, n int64 }
+
+func Thin(newestFirst []Version, now int64) (keep, drop []Version) {
+	const hour, day = int64(time.Hour / time.Millisecond), int64(24 * time.Hour / time.Millisecond)
+	seen := map[bucket]bool{}
+	for _, x := range newestFirst {
+		age := now - x.Created
+		var b bucket
+		switch {
+		case age < hour:
+			b = bucket{0, -int64(len(keep)) - 1}
+		case age < day:
+			b = bucket{1, x.Created / hour}
+		case age < 30*day:
+			b = bucket{2, x.Created / day}
+		default:
+			b = bucket{3, x.Created / (7 * day)}
+		}
+		if seen[b] || len(keep) >= PerFile {
+			drop = append(drop, x)
+			continue
+		}
+		seen[b] = true
+		keep = append(keep, x)
+	}
+	return keep, drop
+}
+
+func (s *Store) guard(v *vol.Volume, xs []Version, now int64) {
+	u, err := s.usage(v)
+	if err != nil || u.Total == 0 || u.Free*100 >= u.Total*MinFreePct {
+		return
+	}
+	need := int64(u.Total*MinFreePct/100 - u.Free)
+	rows, err := s.DB.Query(`SELECT `+columns+` FROM versions WHERE vol = ? AND created < ? ORDER BY created, id`,
+		v.Name, now-guardGrace.Milliseconds())
+	if err != nil {
+		return
+	}
+	old, err := scan(rows)
+	if err != nil {
+		return
+	}
+	for _, x := range old {
+		if need <= 0 {
+			return
+		}
+		if s.drop(v, x.ID) == nil {
+			need -= x.Size
+		}
+	}
 }
 
 func (s *Store) Recover(vols *vol.Set) error {

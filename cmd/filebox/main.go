@@ -127,6 +127,7 @@ func serveCmd(args []string) error {
 				slog.Error("prune activity", "err", err)
 			}
 			pk.Sweep()
+			vs.Prune(set)
 			if err := ix.Scan(set); err != nil {
 				slog.Error("index scan", "err", err)
 			}

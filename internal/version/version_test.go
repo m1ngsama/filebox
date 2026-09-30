@@ -36,7 +36,9 @@ func setup(t *testing.T) *env {
 	t.Cleanup(func() { d.Close() })
 	v, _ := vols.Get("v")
 	e := &env{v: v, vols: vols, dir: dir, now: time.UnixMilli(1_800_000_000_000)}
-	e.s = &Store{DB: d, Now: func() time.Time { return e.now }}
+	e.s = &Store{DB: d, Now: func() time.Time { return e.now }, Usage: func(*vol.Volume) (vol.Usage, error) {
+		return vol.Usage{Total: 1000, Free: 900}, nil
+	}}
 	return e
 }
 
@@ -150,6 +152,105 @@ func TestVersionsFollowRename(t *testing.T) {
 	ix.Rename(e.v, "moved/a.txt", "b.txt")
 	if e.count(t, "b.txt") != 2 {
 		t.Fatal("renaming onto a name dropped its history")
+	}
+}
+
+func TestThin(t *testing.T) {
+	const min = int64(time.Minute / time.Millisecond)
+	now := int64(1_800_000_000_000)
+	var xs []Version
+	for i := range 2000 {
+		xs = append(xs, Version{ID: string(rune(i)), Created: now - int64(i)*10*min})
+	}
+	keep, drop := Thin(xs, now)
+	if len(keep)+len(drop) != len(xs) || len(keep) < 40 || len(keep) > 45 {
+		t.Fatalf("kept %d dropped %d", len(keep), len(drop))
+	}
+	for i := range 6 {
+		if keep[i].ID != xs[i].ID {
+			t.Fatal("dropped a version from the last hour")
+		}
+	}
+	day := 24 * 60 * min
+	hourly := 0
+	for _, x := range keep {
+		if a := now - x.Created; a >= 60*min && a < day {
+			hourly++
+		}
+	}
+	if hourly < 22 || hourly > 24 {
+		t.Fatalf("%d versions from the last day", hourly)
+	}
+	var burst []Version
+	for i := range 3 * PerFile {
+		burst = append(burst, Version{Created: now - int64(i)*1000})
+	}
+	if keep, _ = Thin(burst, now); len(keep) != PerFile || keep[0].Created != now {
+		t.Fatalf("cap kept %d", len(keep))
+	}
+	var old []Version
+	for i := range 120 {
+		old = append(old, Version{Created: now - 40*day - int64(i)*day})
+	}
+	keep, _ = Thin(old, now)
+	if len(keep) < 17 || len(keep) > 18 {
+		t.Fatalf("weekly thinning kept %d of 120 days", len(keep))
+	}
+}
+
+func TestPruneOnCapture(t *testing.T) {
+	e := setup(t)
+	start := e.now
+	for i := range 30 {
+		e.now = start.Add(time.Duration(i) * 5 * time.Minute)
+		e.capture(t, "a.txt", "x")
+	}
+	xs, _ := e.s.List("v", "a.txt")
+	young := 0
+	for _, x := range xs {
+		if e.now.UnixMilli()-x.Created < time.Hour.Milliseconds() {
+			young++
+		}
+	}
+	if young != 12 || len(xs) >= 30 {
+		t.Fatalf("%d versions, %d from the last hour", len(xs), young)
+	}
+	e.now = start.Add(48 * time.Hour)
+	e.s.Prune(e.vols)
+	if n := e.count(t, "a.txt"); n != 1 {
+		t.Fatalf("after two days %d versions", n)
+	}
+	f, _ := os.Open(filepath.Join(e.dir, vol.VersionsDir))
+	names, _ := f.Readdirnames(-1)
+	f.Close()
+	if len(names) != 2 {
+		t.Fatalf("pruned bytes or sidecars left behind: %d files", len(names))
+	}
+}
+
+func TestSpaceGuard(t *testing.T) {
+	e := setup(t)
+	e.capture(t, "a.txt", "0123456789")
+	e.now = e.now.Add(time.Hour)
+	e.capture(t, "b.txt", "0123456789")
+	e.now = e.now.Add(time.Hour)
+	e.capture(t, "c.txt", "0123456789")
+	e.write(t, "live.txt", "keep")
+	free := uint64(85)
+	e.s.Usage = func(*vol.Volume) (vol.Usage, error) { return vol.Usage{Total: 1000, Free: free}, nil }
+	e.now = e.now.Add(time.Minute)
+	e.capture(t, "d.txt", "0123456789")
+	if e.count(t, "a.txt") != 0 || e.count(t, "b.txt") != 0 || e.count(t, "c.txt") != 1 || e.count(t, "d.txt") != 1 {
+		t.Fatal("guard did not drop the oldest versions first")
+	}
+	if e.read("live.txt") != "keep" {
+		t.Fatal("guard touched a live file")
+	}
+	free = 10
+	e.now = e.now.Add(10 * time.Minute)
+	e.s.Prune(e.vols)
+	if e.count(t, "c.txt") != 0 || e.count(t, "d.txt") != 1 {
+		t.Fatal("guard did not respect the grace period")
 	}
 }
 
