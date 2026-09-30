@@ -83,15 +83,18 @@
   }
   load()
 
+  let loading: AbortController | undefined
   async function refresh() {
     const want = p
+    loading?.abort()
+    const stop = (loading = new AbortController())
     try {
-      const list = (await api.shareLs(token, want)).entries
-      if (want !== p) return
+      const list = await api.shareLs(token, want, stop.signal)
+      if (want !== p || stop.signal.aborted) return
       entries = list
       error = ''
     } catch (e) {
-      if (want !== p) return
+      if (want !== p || stop.signal.aborted) return
       entries = []
       error = (e as Error).message
     }

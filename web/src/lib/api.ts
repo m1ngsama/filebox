@@ -186,5 +186,5 @@ export const api = {
     req<{ events: Activity[]; more: boolean }>('GET', `/api/activity?${q(Object.fromEntries(Object.entries(o).filter(([, v]) => v)))}`),
   shareInfo: (tok: string) => req<ShareInfo>('GET', `${shareURL(tok)}/info`),
   unlock: (tok: string, password: string) => req<void>('POST', `${shareURL(tok)}/unlock`, { password }),
-  shareLs: (tok: string, path: string) => req<{ entries: Entry[] }>('GET', `${shareURL(tok)}/ls?${q({ path })}`),
+  shareLs: (tok: string, path: string, signal?: AbortSignal) => list(`${shareURL(tok)}/ls?${q({ path })}`, signal),
 }

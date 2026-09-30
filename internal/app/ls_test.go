@@ -2,8 +2,10 @@ package app
 
 import (
 	"bufio"
+	"compress/gzip"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -46,18 +48,23 @@ func (s *sink) Write(b []byte) (int, error) {
 	return len(b), nil
 }
 
-func TestListStreamsHugeFolder(t *testing.T) {
-	f := newTestApp(t)
-	fill(t, filepath.Join(f.Dir, "big"), 2500)
-	f.write(t, "big/sub/x", "")
-	w := f.do("GET", "/api/ls?vol=v&path=big", nil)
-	tag := w.Header().Get("ETag")
-	if w.Code != 200 || w.Header().Get("Content-Type") != "application/x-ndjson" || !strings.HasPrefix(tag, `W/"`) {
-		t.Fatalf("%d %v", w.Code, w.Header())
+func streamed(t *testing.T, w *httptest.ResponseRecorder) map[string]bool {
+	t.Helper()
+	h := w.Header()
+	if w.Code != 200 || h.Get("Content-Type") != "application/x-ndjson" || h.Get("ETag") != "" || h.Get("Cache-Control") != "no-store" {
+		t.Fatalf("%d %v", w.Code, h)
 	}
-	sc := bufio.NewScanner(w.Body)
+	var body io.Reader = w.Body
+	if h.Get("Content-Encoding") == "gzip" {
+		zr, err := gzip.NewReader(w.Body)
+		if err != nil {
+			t.Fatal(err)
+		}
+		body = zr
+	}
+	sc := bufio.NewScanner(body)
 	sc.Buffer(nil, 1<<20)
-	var lines int
+	lines := 0
 	seen := map[string]bool{}
 	for sc.Scan() {
 		var l struct {
@@ -71,18 +78,39 @@ func TestListStreamsHugeFolder(t *testing.T) {
 		}
 		lines++
 	}
-	if len(seen) != 2501 || !seen["sub"] || !seen["f0002499.jpg"] || lines != 3 {
-		t.Fatalf("seen %d, lines %d", len(seen), lines)
+	if lines != 3 {
+		t.Fatalf("%d lines", lines)
 	}
-	if w := f.do("GET", "/api/ls?vol=v&path=big", nil, "If-None-Match", tag); w.Code != 304 {
-		t.Fatalf("revalidate %d", w.Code)
+	return seen
+}
+
+func TestListStreamsHugeFolder(t *testing.T) {
+	f := newTestApp(t)
+	fill(t, filepath.Join(f.Dir, "big"), 2500)
+	f.write(t, "big/sub/x", "")
+	f.write(t, "outside.txt", "")
+	for _, enc := range []string{"", "gzip, br", "gzip;q=0"} {
+		w := f.do("GET", "/api/ls?vol=v&path=big", nil, "Accept-Encoding", enc)
+		if got := w.Header().Get("Content-Encoding"); (got == "gzip") != (enc == "gzip, br") {
+			t.Fatalf("Accept-Encoding %q gave %q", enc, got)
+		}
+		if seen := streamed(t, w); len(seen) != 2501 || !seen["sub"] || !seen["f0002499.jpg"] {
+			t.Fatalf("%q: seen %d", enc, len(seen))
+		}
 	}
-	f.write(t, "big/new", "")
-	if w := f.do("GET", "/api/ls?vol=v&path=big", nil, "If-None-Match", tag); w.Code != 200 || w.Header().Get("ETag") == tag {
-		t.Fatalf("after add %d %s", w.Code, w.Header().Get("ETag"))
-	}
-	if w := f.do("GET", "/api/ls?vol=v&path=big/sub", nil); w.Header().Get("Content-Type") != "application/json" {
+	w := f.do("GET", "/api/ls?vol=v&path=big/sub", nil)
+	if w.Header().Get("Content-Type") != "application/json" || !strings.HasPrefix(w.Header().Get("ETag"), `"`) {
 		t.Fatalf("small folder %v", w.Header())
+	}
+	if w := f.do("GET", "/api/ls?vol=v&path=big/sub", nil, "If-None-Match", w.Header().Get("ETag")); w.Code != 304 {
+		t.Fatalf("small folder revalidate %d", w.Code)
+	}
+	tok := mkShare(t, f, `{"vol":"v","path":"big","mode":"read"}`)
+	for _, p := range []string{"", "../..", "/"} {
+		seen := streamed(t, f.do("GET", "/s/"+tok+"/ls?path="+p, nil, "X-No-Auth", "1", "Accept-Encoding", "gzip"))
+		if len(seen) != 2501 || seen["outside.txt"] || seen["big"] {
+			t.Fatalf("share %q: seen %d", p, len(seen))
+		}
 	}
 }
 

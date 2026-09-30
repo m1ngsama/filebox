@@ -397,12 +397,7 @@ func (s *Service) ls(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	defer done()
-	es, err := api.List(root, rel)
-	if err != nil {
-		httpx.Error(w, err)
-		return
-	}
-	httpx.JSON(w, 200, map[string]any{"entries": es})
+	api.WriteList(w, r, root, rel)
 }
 
 func (s *Service) raw(w http.ResponseWriter, r *http.Request) {
