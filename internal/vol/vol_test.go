@@ -129,3 +129,38 @@ func TestFree(t *testing.T) {
 		t.Fatalf("Free = %d, %v", n, err)
 	}
 }
+
+func TestMoveNeverReplaces(t *testing.T) {
+	dir := t.TempDir()
+	r, err := os.OpenRoot(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer r.Close()
+	r.WriteFile("a", []byte("a"), 0o644)
+	r.WriteFile("b", []byte("b"), 0o644)
+	r.Mkdir("d", 0o755)
+	r.WriteFile("d/x", []byte("x"), 0o644)
+	if err := Move(r, "a", "b"); !errors.Is(err, fs.ErrExist) {
+		t.Fatalf("file over file: %v", err)
+	}
+	if err := Move(r, "d", "b"); !errors.Is(err, fs.ErrExist) {
+		t.Fatalf("folder over file: %v", err)
+	}
+	if err := Move(r, "a", "c"); err != nil {
+		t.Fatal(err)
+	}
+	if err := Move(r, "d", "e"); err != nil {
+		t.Fatal(err)
+	}
+	for p, want := range map[string]string{"b": "b", "c": "a", "e/x": "x"} {
+		if got, _ := r.ReadFile(p); string(got) != want {
+			t.Errorf("%s = %q", p, got)
+		}
+	}
+	for _, p := range []string{"a", "d"} {
+		if _, err := r.Lstat(p); !errors.Is(err, fs.ErrNotExist) {
+			t.Errorf("%s still there", p)
+		}
+	}
+}

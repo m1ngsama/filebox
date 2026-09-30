@@ -124,7 +124,7 @@ func (a *API) trashRestore(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	dir := path.Join(vol.TrashDir, in.ID)
-	if err := v.Root.Rename(path.Join(dir, it.Name), dst); err != nil {
+	if err := vol.Move(v.Root, path.Join(dir, it.Name), dst); err != nil {
 		httpx.Error(w, err)
 		return
 	}

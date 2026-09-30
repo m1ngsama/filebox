@@ -218,7 +218,7 @@ func (f *FS) Rename(ctx context.Context, oldName, newName string) error {
 	if v1 != v2 {
 		return api.Transfer(f.ix, v1, v2, r1, r2, true)
 	}
-	if err := v1.Root.Rename(r1, r2); err != nil {
+	if err := vol.Move(v1.Root, r1, r2); err != nil {
 		return err
 	}
 	f.ix.Rename(v1, r1, r2)

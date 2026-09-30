@@ -296,7 +296,7 @@ func (a *API) mv(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if src == dst {
-		if err := src.Root.Rename(srel, drel); err != nil {
+		if err := vol.Move(src.Root, srel, drel); err != nil {
 			httpx.Error(w, err)
 			return
 		}

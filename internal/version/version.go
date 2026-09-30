@@ -104,7 +104,7 @@ func (s *Store) capture(v *vol.Volume, rel, source string, user int64) (string, 
 	_, err = s.DB.Exec(`INSERT INTO versions (id, vol, path, size, mtime, created, source, user_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
 		id, v.Name, rel, fi.Size(), fi.ModTime().UnixMilli(), now.UnixMilli(), source, user)
 	if err != nil {
-		if v.Root.Rename(File(id), rel) == nil {
+		if vol.Move(v.Root, File(id), rel) == nil {
 			v.Root.Remove(File(id) + sidecar)
 		}
 		return "", err
@@ -175,7 +175,7 @@ func (s *Store) Restore(v *vol.Volume, id string, user int64) (string, string, e
 	} else if err := v.Root.MkdirAll(path.Dir(dst), 0o755); err != nil {
 		return "", "", err
 	}
-	if err := v.Root.Rename(File(id), dst); err != nil {
+	if err := vol.Move(v.Root, File(id), dst); err != nil {
 		if prev != "" {
 			s.unwind(v, prev, dst)
 		}
@@ -186,7 +186,7 @@ func (s *Store) Restore(v *vol.Volume, id string, user int64) (string, string, e
 }
 
 func (s *Store) unwind(v *vol.Volume, id, dst string) {
-	if err := v.Root.Rename(File(id), dst); err != nil {
+	if err := vol.Move(v.Root, File(id), dst); err != nil {
 		slog.Error("restore version", "vol", v.Name, "id", id, "err", err)
 		return
 	}

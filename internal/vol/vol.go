@@ -133,6 +133,20 @@ func Clean(p string) (string, error) {
 	return c, nil
 }
 
+func Move(r *os.Root, from, to string) error {
+	err := r.Link(from, to)
+	if err == nil {
+		return r.Remove(from)
+	}
+	if errors.Is(err, fs.ErrExist) {
+		return err
+	}
+	if _, err := r.Lstat(to); err == nil {
+		return fs.ErrExist
+	}
+	return r.Rename(from, to)
+}
+
 func Numbered(name string, i int) string {
 	ext := path.Ext(name)
 	return fmt.Sprintf("%s (%d)%s", strings.TrimSuffix(name, ext), i, ext)

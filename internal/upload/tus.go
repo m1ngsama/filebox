@@ -384,7 +384,7 @@ func (s *Server) finish(u *volume, info handler.FileInfo) (string, error) {
 		dst = path.Join(dir, name)
 	}
 	if err == nil {
-		err = u.v.Root.Rename(path.Join(vol.UploadsDir, info.ID), dst)
+		err = vol.Move(u.v.Root, path.Join(vol.UploadsDir, info.ID), dst)
 		if err != nil && kept != "" {
 			s.Versions.Restore(u.v, kept, 0)
 			kept = ""
