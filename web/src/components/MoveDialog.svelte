@@ -9,14 +9,17 @@
     vols,
     vol,
     dir,
-    names,
+    names: picked,
+    extra = [],
     ondone,
     onclose,
-  }: { vols: string[]; vol: string; dir: string; names: string[]; ondone: (done: Move[], copy: boolean) => void; onclose: () => void } = $props()
+  }: { vols: string[]; vol: string; dir: string; names: string[]; extra?: string[]; ondone: (done: Move[], copy: boolean) => void; onclose: () => void } = $props()
 
   let at = $state(untrack(() => ({ vol, path: dir })))
   let error = $state('')
   let busy = $state(false)
+  let carry = $state(true)
+  const names = $derived(carry ? [...picked, ...extra] : picked)
   let status = $state('')
   const same = $derived(at.vol === vol && at.path === dir)
 
@@ -34,8 +37,9 @@
   }
 </script>
 
-<Modal title={t.moveCopyTitle(t.what(names))} {onclose} onsubmit={() => !same && run(false)}>
+<Modal title={t.moveCopyTitle(t.what(picked))} {onclose} onsubmit={() => !same && run(false)}>
   <FolderPicker {vols} bind:at bind:error />
+  {#if extra.length}<label class="check"><input type="checkbox" bind:checked={carry} />{t.withSubtitles(extra.length)}</label>{/if}
   {#if status}<p class="hint">{status}</p>{/if}
   {#if error}<p class="error" role="alert">{error}</p>{/if}
   {#snippet footer()}

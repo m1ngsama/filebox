@@ -151,6 +151,8 @@ export default (locale: string) => {
       gps: 'Location',
     },
     subtitles: 'Subtitles',
+    showSubtitles: 'Show subtitle files',
+    withSubtitles: (n: number) => `Include ${count(n, 'subtitle file')}`,
     uploads: 'Uploads',
     uploading: (ok: number, n: number) => `Uploading ${ok} of ${n}`,
     eta: (s: number) => `About ${s < 60 ? count(Math.ceil(s), 'second') : s < 3600 ? count(Math.ceil(s / 60), 'minute') : count(Math.round(s / 360) / 10, 'hour')} left`,

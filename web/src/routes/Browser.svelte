@@ -59,15 +59,16 @@
   import EllipsisVertical from '@lucide/svelte/icons/ellipsis-vertical'
   import ArrowUp from '@lucide/svelte/icons/arrow-up'
   import ArrowDown from '@lucide/svelte/icons/arrow-down'
+  import Check from '@lucide/svelte/icons/check'
   import { api, HttpError, errorText, filesURL, fileURL, rawURL, thumbURL, zipURL, saveURL, selectURL, type Entry, type Move, type RecentFile, type ContentHit, type Progress } from '../lib/api'
   import { toast, fail, runLatest, retract, retext, forgetUndo, type ToastAction } from '../lib/toast.svelte'
   import { navigate, link, route } from '../lib/router.svelte'
   import { enqueue, type Replaced } from '../lib/uploads.svelte'
   import { loadStars, starred, star } from '../lib/favorites.svelte'
   import { folderAction, downloadAction, actOn, saveZip } from '../lib/located'
-  import { thumbable, rawThumb, arrange, parent, base, child, flip, sorts, place, mostlyMedia, type Sort } from '../lib/format'
+  import { thumbable, rawThumb, arrange, parent, base, child, flip, sorts, place, mostlyMedia, sidecars, stem, type Sort } from '../lib/format'
   import { t } from '../lib/i18n'
-  import { viewOf, keepView, type View } from '../lib/storage'
+  import { load, save, viewOf, keepView, type View } from '../lib/storage'
   import NavToggle from '../components/NavToggle.svelte'
   import EmptyState from '../components/EmptyState.svelte'
   import EntryList, { type Action } from '../components/EntryList.svelte'
@@ -101,6 +102,8 @@
   let sort = $state<Sort>('name')
   let desc = $state(false)
   let chosen = $state<View>()
+  let subs = $state(load('subs') === '1')
+  let carry = $state(true)
   let dragging = $state(false)
   let depth = 0
   let preview = $state.raw<Entry | null>(null)
@@ -115,14 +118,21 @@
   let conflict = $state<{ name: string; rest: number; resolve: (r: [Choice, boolean] | null) => void } | null>(null)
   const selected = new SvelteSet<string>()
   let calm = 0
+  $effect(() => {
+    if (dialog) carry = true
+  })
   let files = $state<HTMLInputElement>()
   let folder = $state<HTMLInputElement>()
 
   const here = $derived(`${vol}/${path}`)
   const join = (n: string) => child(path, n)
   const crumbs = $derived(path ? path.split('/') : [])
-  const shown = $derived(at !== here ? [] : streaming ? entries : arrange(entries, query, sort, desc))
-  const grid = $derived(chosen ? chosen === 'grid' : at === here && mostlyMedia(entries))
+  const side = $derived(at === here ? sidecars(entries) : new Map<string, string[]>())
+  const hidden = $derived(new Set(subs ? [] : [...side.values()].flat()))
+  const visible = $derived(hidden.size ? entries.filter((e) => !hidden.has(e.name)) : entries)
+  const shown = $derived(at !== here ? [] : streaming ? visible : arrange(visible, query, sort, desc))
+  const grid = $derived(chosen ? chosen === 'grid' : at === here && mostlyMedia(visible))
+  const subsOf = (names: string[]) => (subs ? [] : names.flatMap((n) => side.get(n) ?? []).filter((n) => !names.includes(n)))
 
   function flipView() {
     chosen = grid ? 'list' : 'grid'
@@ -557,17 +567,19 @@
     )
   }
 
-  function rename(e: Entry, n: string) {
-    vacant(n)
-    const m = { from: { vol, path: join(e.name) }, to: { vol, path: join(n) } }
+  function rename(e: Entry, n: string, extra: string[] = []) {
+    const pairs: [Entry, string][] = [[e, n]]
+    if (stem(n) !== stem(e.name))
+      for (const x of entries) if (extra.includes(x.name)) pairs.push([x, stem(n) + x.name.slice(stem(e.name).length)])
+    for (const [, to] of pairs) vacant(to)
+    const ms = pairs.map(([x, to]) => ({ from: { vol, path: join(x.name) }, to: { vol, path: join(to) } }))
     if (details?.name === e.name) details = { ...e, name: n }
-    const mine = begin([
-      [e.name, null],
-      [n, { ...e, name: n }],
-    ])
+    const mine = begin(pairs.flatMap(([x, to]): [string, Entry | null][] => [[x.name, null], [to, { ...x, name: to }]]))
     pick(n)
-    const pending = queue([m.from, m.to].map((l) => `${l.vol}/${l.path}`), (s) => api.mv(m.from, m.to, s))
-    const id = toast(t.renamed(n), { actions: [undo(() => pending.then(() => reverse([m])))] })
+    const pending = queue(ms.flatMap((m) => [m.from, m.to]).map((l) => `${l.vol}/${l.path}`), async (s) => {
+      for (const m of ms) await api.mv(m.from, m.to, s)
+    })
+    const id = toast(t.renamed(n), { actions: [undo(() => pending.then(() => reverse(ms)))] })
     pending.then(
       () => {
         settle(mine)
@@ -640,7 +652,10 @@
   })
 
   const dnd = {
-    carry: (e: Entry) => ({ vol, dir: path, names: selected.has(e.name) ? [...selected] : [e.name] }),
+    carry: (e: Entry) => {
+      const names = selected.has(e.name) ? [...selected] : [e.name]
+      return { vol, dir: path, names: [...names, ...subsOf(names)] }
+    },
     target: (e: Entry) => into({ vol, path: join(e.name) }, () => open(e)),
   }
 
@@ -800,12 +815,17 @@
         {#if grid}<List size={icon.md} />{:else}<LayoutGrid size={icon.md} />{/if}
       </button>
       <DropdownMenu.Root>
-        <DropdownMenu.Trigger class="icon-btn overflow" aria-label={t.more}><EllipsisVertical size={icon.md} /></DropdownMenu.Trigger>
+        <DropdownMenu.Trigger class={side.size ? 'icon-btn overflow keep' : 'icon-btn overflow'} aria-label={t.more}><EllipsisVertical size={icon.md} /></DropdownMenu.Trigger>
         <DropdownMenu.Portal to="main">
           <DropdownMenu.Content class="menu" preventScroll={false} align="end" sideOffset={4}>
             <DropdownMenu.Item class="menu-item" onSelect={flipView}>
               {#if grid}<List size={icon.sm} />{t.listView}{:else}<LayoutGrid size={icon.sm} />{t.gridView}{/if}
             </DropdownMenu.Item>
+            {#if side.size}
+              <DropdownMenu.CheckboxItem class="menu-item" bind:checked={() => subs, (v) => save('subs', (subs = v) ? '1' : '0')}>
+                {#snippet children({ checked })}{#if checked}<Check size={icon.sm} />{:else}<span class="menu-gap"></span>{/if}{t.showSubtitles}{/snippet}
+              </DropdownMenu.CheckboxItem>
+            {/if}
             <DropdownMenu.Separator class="menu-sep" />
             <DropdownMenu.Group>
               <DropdownMenu.GroupHeading class="menu-label">{t.sortBy}</DropdownMenu.GroupHeading>
@@ -863,6 +883,7 @@
         {batch}
         {dnd}
         {reveal}
+        tag={(e) => (side.has(e.name) && !subs ? t.subtitles : undefined)}
         loading={at !== here}
         busy={streaming}
         head={!error}
@@ -975,7 +996,7 @@
 
 {#if preview}
   {#await import('../components/Preview.svelte') then { default: Preview }}
-    <Preview bind:entry={preview} entries={shown} url={(e, as) => fileURL(vol, join(e.name), as)} onclose={() => (preview = null)} />
+    <Preview bind:entry={preview} entries={hidden.size ? [...shown, ...entries.filter((e) => hidden.has(e.name))] : shown} url={(e, as) => fileURL(vol, join(e.name), as)} onclose={() => (preview = null)} />
   {/await}
 {/if}
 
@@ -991,21 +1012,25 @@
       />
     {:else if dialog?.kind === 'rename'}
       {@const e = dialog.e}
+      {@const extra = subsOf([e.name])}
       <NameDialog
         title={t.rename}
         label={t.newName}
         action={t.rename}
         value={e.name}
         stem={!e.dir}
-        onsave={(n) => rename(e, n)}
+        onsave={(n) => rename(e, n, carry ? extra : [])}
         onclose={() => (dialog = null)}
-      />
+      >
+        {#if extra.length}<label class="check"><input type="checkbox" bind:checked={carry} />{t.withSubtitles(extra.length)}</label>{/if}
+      </NameDialog>
     {:else if dialog?.kind === 'move'}
       <MoveDialog
         {vols}
         {vol}
         dir={path}
         names={dialog.names}
+        extra={subsOf(dialog.names)}
         ondone={moved}
         onclose={() => (dialog = null)}
       />

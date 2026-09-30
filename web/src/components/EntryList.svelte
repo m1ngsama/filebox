@@ -45,6 +45,7 @@
     group,
     reveal,
     dim,
+    tag,
     dnd,
   }: {
     entries: Entry[]
@@ -68,6 +69,7 @@
     group?: (e: Entry) => string
     reveal?: { name: string; center?: boolean }
     dim?: (e: Entry) => string | undefined
+    tag?: (e: Entry) => string | undefined
     dnd?: { carry: (e: Entry) => Carried; target: (e: Entry) => Target }
   } = $props()
 
@@ -498,7 +500,8 @@
                     <button class="card-open" tabindex="-1" data-look={e.dir ? 'dir' : look(e.name)} onclick={() => tap(i)} title={e.name} aria-label={e.name}>
                       {#if s}
                         <img src={s} alt="" draggable="false" loading="lazy" decoding="async" onerror={() => miss(e)} {@attach cancel} />
-                        {#if look(e.name) === 'video'}<span class="card-badge"><Play size={icon.sm} /></span>{/if}
+                        {@const g = tag?.(e)}
+                        {#if look(e.name) === 'video' || g}<span class="card-badge">{#if look(e.name) === 'video'}<Play size={icon.sm} />{/if}{g}</span>{/if}
                       {:else}
                         <FileIcon name={e.name} dir={e.dir} size={tiles ? 40 : 56} />
                         {#if tiles}<span class="tile-name">{@render label(e.name)}</span>{/if}
@@ -508,6 +511,7 @@
                     {#if !tiles}
                       <div class="card-foot">
                         <span class="card-name" title={e.name}>{@render label(e.name)}</span>
+                        {#if !s && tag?.(e)}<span class="tag">{tag(e)}</span>{/if}
                         {@render more(e)}
                       </div>
                     {/if}
@@ -553,7 +557,7 @@
                   {#if s}<img src={s} alt="" draggable="false" loading="lazy" decoding="async" onerror={() => miss(e)} {@attach cancel} />{:else}<FileIcon name={e.name} dir={e.dir} />{/if}
                 </span>
                 <span class="cell name-cell" role="gridcell">
-                  <button class="name" tabindex="-1" onclick={() => tap(n)} title={e.name} aria-label={e.name}>{@render label(e.name)}</button>
+                  <button class="name" tabindex="-1" onclick={() => tap(n)} title={e.name} aria-label={e.name}>{@render label(e.name)}{#if tag?.(e)}<span class="tag">{tag(e)}</span>{/if}</button>
                   {#if narrow.current}
                     <span class="hint sub">{#if gone}{@render trail(e)} · {gone}{:else}{e.dir ? '' : `${size(e.size)} · `}{ago(e.mtime)}{#if loc}{' · '}{@render trail(e)}{/if}{/if}</span>
                   {:else if loc}

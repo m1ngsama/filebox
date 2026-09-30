@@ -95,6 +95,22 @@ export const look = (n: string) => (icons.get(ext(n)) ?? kind(n)) as Look
 
 export const visual = (n: string) => /^(image|video)$/.test(kind(n))
 
+export const stem = (n: string) => (n.lastIndexOf('.') > 0 ? n.slice(0, n.lastIndexOf('.')) : n)
+
+export function sidecars(list: Row[]) {
+  const videos = new Map<string, string>()
+  for (const e of list) if (!e.dir && kind(e.name) === 'video') videos.set(stem(e.name), e.name)
+  const of = new Map<string, string[]>()
+  if (!videos.size) return of
+  for (const e of list) {
+    if (e.dir || !/\.(srt|vtt|ass)$/i.test(e.name)) continue
+    const s = stem(e.name)
+    const v = videos.get(s) ?? videos.get(stem(s))
+    if (v) of.set(v, [...(of.get(v) ?? []), e.name])
+  }
+  return of
+}
+
 export const mostlyMedia = (es: Row[]) => es.length > 0 && es.filter((e) => !e.dir && (visual(e.name) || ext(e.name) === 'cbz')).length >= 0.6 * es.length
 
 const graphemes = new Intl.Segmenter(locale, { granularity: 'grapheme' })

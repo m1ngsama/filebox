@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { untrack } from 'svelte'
+  import { untrack, type Snippet } from 'svelte'
   import Modal from './Modal.svelte'
   import { t } from '../lib/i18n'
 
@@ -13,6 +13,7 @@
     valid = (n) => !n.includes('/'),
     onsave,
     onclose,
+    children,
   }: {
     title: string
     label: string
@@ -23,6 +24,7 @@
     valid?: (name: string) => boolean
     onsave: (name: string) => unknown
     onclose: () => void
+    children?: Snippet
   } = $props()
 
   let name = $state(untrack(() => value))
@@ -58,6 +60,7 @@
     <span>{label}</span>
     <input bind:this={input} bind:value={name} required autocomplete="off" aria-invalid={!!error} aria-describedby={error ? 'name-error' : undefined} />
   </label>
+  {@render children?.()}
   {#if error}<p class="error" id="name-error" role="alert">{error}</p>{/if}
   {#snippet footer()}
     <button type="button" onclick={onclose}>{t.cancel}</button>
