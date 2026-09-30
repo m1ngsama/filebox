@@ -25,6 +25,6 @@
   {#if error}<p class="error">{error}</p>{/if}
   {#snippet footer()}
     <button type="button" onclick={onclose}>{t.cancel}</button>
-    <button class="danger-fill" disabled={busy}>{action}</button>
+    <button class="danger-fill" class:busy disabled={busy}>{action}</button>
   {/snippet}
 </Modal>

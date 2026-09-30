@@ -217,7 +217,12 @@ func (a *API) mkdir(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	a.Index.Touch(v, rel)
-	w.WriteHeader(201)
+	e, err := Stat(v.Root, rel)
+	if err != nil {
+		httpx.Error(w, err)
+		return
+	}
+	httpx.JSON(w, 201, e)
 }
 
 type transfer struct {

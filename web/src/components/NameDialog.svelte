@@ -21,7 +21,7 @@
     stem?: boolean
     fresh?: boolean
     valid?: (name: string) => boolean
-    onsave: (name: string) => Promise<unknown>
+    onsave: (name: string) => unknown
     onclose: () => void
   } = $props()
 
@@ -61,6 +61,6 @@
   {#if error}<p class="error">{error}</p>{/if}
   {#snippet footer()}
     <button type="button" onclick={onclose}>{t.cancel}</button>
-    <button class="primary" disabled={busy || !ok}>{action}</button>
+    <button class="primary" class:busy disabled={busy || !ok}>{action}</button>
   {/snippet}
 </Modal>

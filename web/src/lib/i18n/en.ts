@@ -109,8 +109,6 @@ export default (locale: string) => {
     clearFilter: 'Clear filter',
     folderEmpty: 'This folder is empty',
     dropHere: 'Drop to upload to this folder',
-    confirmDeleteTitle: 'Delete',
-    confirmDelete: (what: string) => `${what} will be moved to the trash. You can restore it from there later.`,
     what: (names: string[]) => (names.length === 1 ? `“${names[0]}”` : `${names.length} items`),
     list,
     removeFailed: (names: string[]) => `Couldn’t delete ${list(names)}. The rest were moved to the trash.`,

@@ -92,7 +92,7 @@ func TestList(t *testing.T) {
 
 func TestMkdirMv(t *testing.T) {
 	f := newTestApp(t)
-	if w := f.do("POST", "/api/mkdir", body(`{"vol":"v","path":"new"}`)); w.Code != 201 {
+	if w := f.do("POST", "/api/mkdir", body(`{"vol":"v","path":"new"}`)); w.Code != 201 || !strings.Contains(w.Body.String(), `"name":"new","dir":true`) {
 		t.Fatalf("mkdir %d %s", w.Code, w.Body)
 	}
 	if w := f.do("POST", "/api/mkdir", body(`{"vol":"v","path":"new"}`)); w.Code != 409 {

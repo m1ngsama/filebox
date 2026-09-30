@@ -31,6 +31,11 @@ export function runLatest(label: string) {
   return false
 }
 
+export function retext(id: number, text: string) {
+  const x = toasts.find((x) => x.id === id)
+  if (x) x.text = text
+}
+
 export const fail = (e: unknown) => toast((e as Error).message, { kind: 'error' })
 
 function arm(id: number) {

@@ -28,8 +28,8 @@
   import EllipsisVertical from '@lucide/svelte/icons/ellipsis-vertical'
   import ArrowUp from '@lucide/svelte/icons/arrow-up'
   import ArrowDown from '@lucide/svelte/icons/arrow-down'
-  import { api, filesURL, fileURL, rawURL, thumbURL, zipURL, saveURL, selectURL, type Entry, type Move, type RecentFile, type ContentHit, type Progress } from '../lib/api'
-  import { toast, fail, runLatest, type Action as Act } from '../lib/toast.svelte'
+  import { api, errorText, filesURL, fileURL, rawURL, thumbURL, zipURL, saveURL, selectURL, type Entry, type Move, type RecentFile, type ContentHit, type Progress } from '../lib/api'
+  import { toast, fail, runLatest, dismiss, retext, type Action as Act } from '../lib/toast.svelte'
   import { navigate, link, route } from '../lib/router.svelte'
   import { enqueue, type Replaced } from '../lib/uploads.svelte'
   import { loadStars, starred, star } from '../lib/favorites.svelte'
@@ -46,7 +46,7 @@
 
   let { vol, path, vols }: { vol: string; path: string; vols: string[] } = $props()
 
-  type Dialog = { kind: 'mkdir' } | { kind: 'rename'; e: Entry } | { kind: 'delete' | 'move'; names: string[] }
+  type Dialog = { kind: 'mkdir' } | { kind: 'rename'; e: Entry } | { kind: 'move'; names: string[] }
 
   let entries = $state.raw<Entry[]>([])
   let error = $state('')
@@ -323,7 +323,7 @@
     else if (id === 'download') download([e.name])
     else if (id === 'rename') dialog = { kind: 'rename', e }
     else if (id === 'move') dialog = { kind: 'move', names: [e.name] }
-    else if (id === 'remove') dialog = { kind: 'delete', names: [e.name] }
+    else if (id === 'remove') remove([e.name])
     else if (id === 'star' || id === 'unstar') toggleStar([e.name], id === 'star')
     else details = e
   }
@@ -367,6 +367,82 @@
     const bad: Failed[] = []
     for (const r of [...rs].reverse()) await api.restoreVersion(r.vol, r.id).catch((error: Error) => bad.push({ name: base(r.path), error }))
     return bad
+  }
+
+  function put(e: Entry, drop = e.name) {
+    entries = [...entries.filter((x) => x.name !== e.name && x.name !== drop), e]
+  }
+
+  function pick(name: string) {
+    selected.clear()
+    selected.add(name)
+    reveal = name
+  }
+
+  function vacant(n: string) {
+    if (entries.some((e) => e.name === n)) throw new Error(t.errors[409])
+  }
+
+  function mkdir(n: string) {
+    vacant(n)
+    const key = here
+    put({ name: n, dir: true, size: 0, mtime: Date.now() })
+    pick(n)
+    api.mkdir(vol, join(n)).then(
+      (e) => here === key && put(e),
+      (err) => {
+        if (here === key) entries = entries.filter((x) => x.name !== n)
+        fail(err)
+      },
+    )
+  }
+
+  function rename(e: Entry, n: string) {
+    vacant(n)
+    const key = here
+    const m = { from: { vol, path: join(e.name) }, to: { vol, path: join(n) } }
+    if (details?.name === e.name) closeDetails()
+    put({ ...e, name: n }, e.name)
+    pick(n)
+    api.mv(m.from, m.to).then(
+      () => {
+        toast(t.renamed(n), { actions: [undo(() => reverse([m]))] })
+        loadStars(true)
+      },
+      (err) => {
+        if (here === key) put(e, n)
+        fail(err)
+      },
+    )
+  }
+
+  async function remove(names: string[]) {
+    const v = vol
+    const key = here
+    const gone = new Set(names)
+    const held = entries.filter((e) => gone.has(e.name))
+    const back = (keep: Set<string>) => {
+      if (here === key) entries = [...entries.filter((e) => !keep.has(e.name)), ...held.filter((e) => keep.has(e.name))]
+    }
+    entries = entries.filter((e) => !gone.has(e.name))
+    selected.clear()
+    if (details && gone.has(details.name)) closeDetails()
+    const pending = api.rm(v, names.map(join))
+    const id = toast(t.trashed(t.what(names)), { actions: [undo(async () => restore(v, (await pending).trashed))] })
+    try {
+      const r = await pending
+      loadStars(true)
+      if (!r.failed.length) return
+      if (r.trashed.length) retext(id, t.trashed(t.what(r.trashed.map((x) => base(x.path)))))
+      else dismiss(id)
+      back(new Set(r.failed.map((f) => base(f.path))))
+      const f = r.failed[0]
+      fail(new Error(r.failed.length > 1 ? t.removeFailed(r.failed.map((x) => base(x.path))) : t.failedItem(t.what([base(f.path)]), errorText(f.status) ?? f.error)))
+    } catch (err) {
+      dismiss(id)
+      back(gone)
+      fail(err)
+    }
   }
 
   function moved(done: Move[], copy: boolean) {
@@ -440,7 +516,7 @@
       else if (e.key === 'n') dialog = { kind: 'mkdir' }
       else if (e.key === 'u') files?.click()
       else if (target) dialog = { kind: 'rename', e: target }
-    } else if ((e.key === 'Delete' || e.key === 'Backspace') && selected.size) dialog = { kind: 'delete', names: [...selected] }
+    } else if ((e.key === 'Delete' || e.key === 'Backspace') && selected.size) remove([...selected])
     else if (e.key === 'Enter' && selected.size === 1 && !(e.target as Element).closest('button, a, [role=grid]')) {
       const hit = entries.find((x) => selected.has(x.name))
       if (hit) open(hit)
@@ -460,7 +536,7 @@
   <button class="ghost" onclick={() => toggleStar([...selected], !allStarred)}>
     {#if allStarred}<StarOff size={16} />{t.unstar}{:else}<Star size={16} />{t.star}{/if}
   </button>
-  <button class="ghost danger" onclick={() => (dialog = { kind: 'delete', names: [...selected] })}><Trash size={16} />{t.remove}</button>
+  <button class="ghost danger" onclick={() => remove([...selected])}><Trash size={16} />{t.remove}</button>
   <button class="icon-btn" aria-label={t.clearSelection} onclick={() => selected.clear()}><X size={16} /></button>
 {/snippet}
 
@@ -680,7 +756,7 @@
     <button onclick={() => download([...selected])}><Download size={20} /><span>{t.download}</span></button>
     <button onclick={() => (dialog = { kind: 'move', names: [...selected] })}><FolderInput size={20} /><span>{t.moveOrCopy}</span></button>
     <button disabled={!one} onclick={() => pass('share')}><Share2 size={20} /><span>{t.share}</span></button>
-    <button class="danger" onclick={() => (dialog = { kind: 'delete', names: [...selected] })}><Trash size={20} /><span>{t.remove}</span></button>
+    <button class="danger" onclick={() => remove([...selected])}><Trash size={20} /><span>{t.remove}</span></button>
     <button onclick={() => (sheet = 'more')}><Ellipsis size={20} /><span>{t.more}</span></button>
   </div>
 {/if}
@@ -714,13 +790,13 @@
 {/if}
 
 {#if dialog}
-  {#await Promise.all([import('../components/NameDialog.svelte'), import('../components/ConfirmDialog.svelte'), import('../components/MoveDialog.svelte')]) then [{ default: NameDialog }, { default: ConfirmDialog }, { default: MoveDialog }]}
+  {#await Promise.all([import('../components/NameDialog.svelte'), import('../components/MoveDialog.svelte')]) then [{ default: NameDialog }, { default: MoveDialog }]}
     {#if dialog?.kind === 'mkdir'}
       <NameDialog
         title={t.newFolder}
         label={t.folderName}
         action={t.create}
-        onsave={(n) => api.mkdir(vol, join(n)).then(refresh)}
+        onsave={mkdir}
         onclose={() => (dialog = null)}
       />
     {:else if dialog?.kind === 'rename'}
@@ -731,41 +807,7 @@
         action={t.rename}
         value={e.name}
         stem={!e.dir}
-        onsave={async (n) => {
-          const m = { from: { vol, path: join(e.name) }, to: { vol, path: join(n) } }
-          await api.mv(m.from, m.to)
-          toast(t.renamed(n), { actions: [undo(() => reverse([m]))] })
-          loadStars(true)
-          selected.clear()
-          if (details?.name === e.name) closeDetails()
-          await refresh()
-        }}
-        onclose={() => (dialog = null)}
-      />
-    {:else if dialog?.kind === 'delete'}
-      {@const names = dialog.names}
-      <ConfirmDialog
-        title={t.confirmDeleteTitle}
-        message={t.confirmDelete(t.what(names))}
-        action={t.remove}
-        onconfirm={async () => {
-          const v = vol
-          const r = await api.rm(v, names.map(join))
-          const failed = new Set(r.failed.map((f) => f.path))
-          const left = names.filter((n) => failed.has(join(n)))
-          if (r.trashed.length)
-            toast(t.trashed(t.what(names.filter((n) => !failed.has(join(n))))), {
-              actions: [undo(() => restore(v, r.trashed))],
-            })
-          selected.clear()
-          loadStars(true)
-          if (details && names.includes(details.name) && !left.includes(details.name)) closeDetails()
-          await refresh()
-          if (left.length) {
-            dialog = { kind: 'delete', names: left }
-            throw new Error(t.removeFailed(left))
-          }
-        }}
+        onsave={(n) => rename(e, n)}
         onclose={() => (dialog = null)}
       />
     {:else if dialog?.kind === 'move'}
