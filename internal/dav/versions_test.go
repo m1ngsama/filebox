@@ -2,7 +2,9 @@ package dav
 
 import (
 	"encoding/base64"
+	"io/fs"
 	"net"
+	"net/http"
 	"net/http/httptest"
 	"net/url"
 	"os"
@@ -318,5 +320,34 @@ func TestDavCrossVolumeMoveNeverUndoesAPlacedCopy(t *testing.T) {
 	}
 	if b, _ := os.ReadFile(filepath.Join(e.dir2, vol.VersionsDir, xs[0].ID)); string(b) != "old dst file" {
 		t.Fatalf("overwritten destination %q", b)
+	}
+}
+
+func TestDavPutAcrossMountsWritesNewFilesDirectly(t *testing.T) {
+	e := setup(t)
+	real := sameDevice
+	sameDevice = func(a, b fs.FileInfo) bool { return false }
+	t.Cleanup(func() { sameDevice = real })
+	staged := false
+	orig := e.srv.Config.Handler
+	e.srv.Config.Handler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		orig.ServeHTTP(w, r)
+		if len(e.staged(t)) != 0 {
+			staged = true
+		}
+	})
+	res, _ := e.req(t, e.rw, "PUT", "/dav/v/new.txt", "direct")
+	if res.StatusCode != 201 {
+		t.Fatalf("PUT %d", res.StatusCode)
+	}
+	if b, _ := os.ReadFile(filepath.Join(e.dir, "new.txt")); string(b) != "direct" || staged || len(e.versions(t, "new.txt")) != 0 {
+		t.Fatalf("new file across a mount: %q staged %v", b, staged)
+	}
+	r := httptest.NewRequest("PUT", "/dav/v/new.txt", strings.NewReader("partial"))
+	r.ContentLength = 100
+	r.SetBasicAuth("me", e.rw)
+	orig.ServeHTTP(httptest.NewRecorder(), r)
+	if b, _ := os.ReadFile(filepath.Join(e.dir, "new.txt")); string(b) != "direct" {
+		t.Fatalf("an overwrite across a mount was not staged: %q", b)
 	}
 }

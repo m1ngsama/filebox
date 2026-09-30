@@ -177,7 +177,9 @@ func (f *FS) OpenFile(ctx context.Context, name string, flag int, perm os.FileMo
 		flag = os.O_RDONLY
 	}
 	if pb, ok := ctx.Value(putKey{}).(*putBody); ok && flag&os.O_TRUNC != 0 && rel != "." {
-		return f.stage(ctx, pb, v, rel, perm)
+		if file, err := f.stage(ctx, pb, v, rel, perm); file != nil || err != nil {
+			return file, err
+		}
 	}
 	fh, err := v.Root.OpenFile(rel, flag, perm)
 	if err != nil {
@@ -221,17 +223,23 @@ func (b *putBody) complete() bool { return b.eof && b.err == nil && (b.want < 0 
 var errIncomplete = errors.New("upload body incomplete")
 
 func (f *FS) stage(ctx context.Context, pb *putBody, v *vol.Volume, rel string, perm os.FileMode) (webdav.File, error) {
-	if fi, err := v.Root.Stat(path.Dir(rel)); err != nil || !fi.IsDir() {
+	parent, err := v.Root.Stat(path.Dir(rel))
+	if err != nil || !parent.IsDir() {
 		return nil, os.ErrNotExist
 	}
-	if fi, err := v.Root.Lstat(rel); err == nil {
-		if fi.IsDir() {
-			return nil, &fs.PathError{Op: "open", Path: rel, Err: syscall.EISDIR}
-		}
+	fi, err := v.Root.Lstat(rel)
+	if err == nil && fi.IsDir() {
+		return nil, &fs.PathError{Op: "open", Path: rel, Err: syscall.EISDIR}
+	}
+	exists := err == nil
+	if exists {
 		perm = fi.Mode().Perm()
 	}
 	if err := v.Root.MkdirAll(vol.TmpDir, 0o700); err != nil {
 		return nil, err
+	}
+	if st, err := v.Root.Stat(vol.TmpDir); err == nil && !exists && !sameDevice(st, parent) {
+		return nil, nil
 	}
 	tmp := path.Join(vol.TmpDir, rand.Text())
 	fh, err := v.Root.OpenFile(tmp, os.O_RDWR|os.O_CREATE|os.O_EXCL, perm)
@@ -255,6 +263,12 @@ func (f *FS) stage(ctx context.Context, pb *putBody, v *vol.Volume, rel string, 
 		file = propFile{file, f.ix, v, rel}
 	}
 	return file, nil
+}
+
+var sameDevice = func(a, b fs.FileInfo) bool {
+	sa, ok1 := a.Sys().(*syscall.Stat_t)
+	sb, ok2 := b.Sys().(*syscall.Stat_t)
+	return !ok1 || !ok2 || sa.Dev == sb.Dev
 }
 
 type staged struct {
