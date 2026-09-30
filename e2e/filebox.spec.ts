@@ -757,6 +757,7 @@ test('keyboard alone browses, selects, renames, moves, shares, deletes and undoe
   await expect(move.getByRole('navigation', { name: t.pickerPath })).toBeVisible()
   await tabTo('v')
   await page.keyboard.press('Enter')
+  await expect(move.getByRole('button', { name: 'dest' })).toBeVisible()
   await tabTo('dest')
   await page.keyboard.press('Enter')
   await tabTo(t.move)
