@@ -4,7 +4,7 @@
   import ChevronRight from '@lucide/svelte/icons/chevron-right'
   import { api, type Loc } from '../lib/api'
   import { t } from '../lib/i18n'
-  import { child } from '../lib/format'
+  import { child, arrange } from '../lib/format'
 
   let { vols, at = $bindable(), error = $bindable('') }: { vols: string[]; at: Loc; error?: string } = $props()
 
@@ -12,22 +12,20 @@
   const crumbs = $derived(at.path ? at.path.split('/') : [])
 
   $effect(() => {
-    let stale = false
-    api.ls(at.vol, at.path).then(
-      (r) => {
-        if (stale) return
-        folders = r.entries.filter((e) => e.dir).map((e) => e.name)
+    const stop = new AbortController()
+    api.ls(at.vol, at.path, stop.signal).then(
+      (es) => {
+        if (stop.signal.aborted) return
+        folders = arrange(es.filter((e) => e.dir), '', 'name', false).map((e) => e.name)
         error = ''
       },
       (e) => {
-        if (stale) return
+        if (stop.signal.aborted) return
         folders = []
         error = e.message
       },
     )
-    return () => {
-      stale = true
-    }
+    return () => stop.abort()
   })
 </script>
 

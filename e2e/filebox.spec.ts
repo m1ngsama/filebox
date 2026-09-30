@@ -1355,6 +1355,35 @@ test('a large batch renders a bounded number of rows', async ({ page }) => {
   await expect(panel.locator('header')).toContainText(t.uploading(0, 60))
 })
 
+test('a folder with 20,000 entries streams in, shows its count, then sorts, scrolls and selects all', async ({ page, server }) => {
+  const dir = join(server.vol, 'huge')
+  mkdirSync(dir)
+  for (let i = 0; i < 20000; i++) closeSync(openSync(join(dir, `h-${String(i).padStart(5, '0')}.txt`), 'w'))
+  await page.addInitScript(() => {
+    const seen: string[] = ((window as unknown as { seen: string[] }).seen = [])
+    new MutationObserver(() => {
+      const s = document.querySelector('.files > [role=status]')?.textContent
+      if (s && s !== seen.at(-1)) seen.push(s)
+    }).observe(document, { subtree: true, childList: true, characterData: true })
+  })
+  await login(page)
+  const start = Date.now()
+  await page.goto('/files/v/huge/')
+  await expect(page.locator('.row').first()).toBeVisible()
+  const first = Date.now() - start
+  await expect(page.locator('.files > [role=status]')).toHaveCount(0)
+  const seen: string[] = await page.evaluate(() => (window as unknown as { seen: string[] }).seen)
+  expect(seen.length).toBeGreaterThan(0)
+  expect(seen[0]).toMatch(/^正在加载 \d+ 项…$/)
+  expect(first).toBeLessThan(5000)
+  await expect(page.locator('.row').first()).toContainText('h-00000.txt')
+  await page.locator('.scroller').evaluate((el) => el.scrollTo(0, el.scrollHeight))
+  await expect(row(page, 'h-19999.txt')).toBeInViewport()
+  expect(await page.locator('.row').count()).toBeLessThan(80)
+  await page.getByLabel(t.selectAll).check()
+  await expect(page.locator('.list-head .count')).toHaveText(t.selected(20000))
+})
+
 test('a name clash asks to replace, keep both or skip', async ({ page, server }) => {
   for (const n of ['a', 'b', 'c', 'x', 'y']) writeFileSync(join(server.vol, `${n}.txt`), 'old')
   await login(page)

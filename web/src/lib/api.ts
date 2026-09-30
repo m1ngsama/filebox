@@ -40,6 +40,10 @@ async function req<T>(method: string, url: string, body?: unknown, signal?: Abor
     headers: body === undefined ? {} : { 'Content-Type': 'application/json' },
     body: body === undefined ? undefined : JSON.stringify(body),
   })
+  return settle<T>(r, url)
+}
+
+async function settle<T>(r: Response, url: string): Promise<T> {
   const text = await r.text()
   if (r.status === 401 && url.startsWith('/api/') && url !== '/api/login') session.lost()
   if (!r.ok) {
@@ -52,6 +56,26 @@ async function req<T>(method: string, url: string, body?: unknown, signal?: Abor
     throw new HttpError(r.status, limited || errorText(r.status) || body.error || r.statusText)
   }
   return (text ? JSON.parse(text) : undefined) as T
+}
+
+async function list(url: string, signal?: AbortSignal, onchunk?: (entries: Entry[]) => void): Promise<Entry[]> {
+  const r = await fetch(url, { signal })
+  if (!r.ok || !r.body || !r.headers.get('Content-Type')?.includes('ndjson')) return (await settle<{ entries: Entry[] }>(r, url)).entries
+  const out: Entry[] = []
+  const rd = r.body.pipeThrough(new TextDecoderStream()).getReader()
+  let buf = ''
+  for (;;) {
+    const { value, done } = await rd.read()
+    if (done) return out
+    const lines = (buf + value).split('\n')
+    buf = lines.pop()!
+    for (const l of lines) {
+      const m: { entries?: Entry[]; error?: string } = JSON.parse(l)
+      if (m.error) throw new HttpError(500, t.serverError)
+      for (const e of m.entries!) out.push(e)
+    }
+    if (lines.length) onchunk?.(out)
+  }
 }
 
 export const enc = (p: string) => p.split('/').filter(Boolean).map(encodeURIComponent).join('/')
@@ -89,7 +113,7 @@ export const api = {
   me: () => req<Me>('GET', '/api/me'),
   login: (name: string, password: string) => req<void>('POST', '/api/login', { name, password }),
   logout: () => req<void>('POST', '/api/logout'),
-  ls: (vol: string, path: string) => req<{ entries: Entry[] }>('GET', `/api/ls?${q({ vol, path })}`),
+  ls: (vol: string, path: string, signal?: AbortSignal, onchunk?: (entries: Entry[]) => void) => list(`/api/ls?${q({ vol, path })}`, signal, onchunk),
   search: (q: string, signal: AbortSignal) =>
     req<{ entries: RecentFile[]; scanning: boolean }>('GET', `/api/search?${new URLSearchParams({ q })}`, undefined, signal),
   vols: () => req<{ vols: Usage[] }>('GET', '/api/vols'),

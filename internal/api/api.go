@@ -1,7 +1,10 @@
 package api
 
 import (
+	"encoding/json"
 	"errors"
+	"fmt"
+	"io"
 	"io/fs"
 	"log/slog"
 	"net/http"
@@ -10,6 +13,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"syscall"
 	"time"
 	"unicode/utf8"
 
@@ -60,6 +64,10 @@ func List(root *os.Root, rel string) ([]Entry, error) {
 	if err != nil {
 		return nil, err
 	}
+	return sorted(entries(root, rel, des)), nil
+}
+
+func entries(root *os.Root, rel string, des []fs.DirEntry) []Entry {
 	out := make([]Entry, 0, len(des))
 	for _, de := range des {
 		name := de.Name()
@@ -67,6 +75,7 @@ func List(root *os.Root, rel string) ([]Entry, error) {
 			continue
 		}
 		var fi fs.FileInfo
+		var err error
 		if de.Type()&fs.ModeSymlink != 0 {
 			fi, err = root.Stat(path.Join(rel, name))
 		} else {
@@ -77,13 +86,70 @@ func List(root *os.Root, rel string) ([]Entry, error) {
 		}
 		out = append(out, entry(name, fi))
 	}
-	sort.Slice(out, func(i, j int) bool {
-		if out[i].Dir != out[j].Dir {
-			return out[i].Dir
+	return out
+}
+
+func sorted(es []Entry) []Entry {
+	sort.Slice(es, func(i, j int) bool {
+		if es[i].Dir != es[j].Dir {
+			return es[i].Dir
 		}
-		return out[i].Name < out[j].Name
+		return es[i].Name < es[j].Name
 	})
-	return out, nil
+	return es
+}
+
+const lsChunk = 1000
+
+func (a *API) ls(w http.ResponseWriter, r *http.Request) {
+	v, rel, err := a.query(r)
+	if err != nil {
+		httpx.Error(w, err)
+		return
+	}
+	f, err := v.Root.Open(rel)
+	if err != nil {
+		httpx.Error(w, err)
+		return
+	}
+	defer f.Close()
+	des, err := f.ReadDir(lsChunk)
+	if err != nil && err != io.EOF {
+		httpx.Error(w, err)
+		return
+	}
+	if len(des) < lsChunk {
+		httpx.Tagged(w, r, map[string]any{"entries": sorted(entries(v.Root, rel, des))})
+		return
+	}
+	fi, err := f.Stat()
+	if err != nil {
+		httpx.Error(w, err)
+		return
+	}
+	var ino uint64
+	if st, ok := fi.Sys().(*syscall.Stat_t); ok {
+		ino = uint64(st.Ino)
+	}
+	if httpx.Fresh(w, r, fmt.Sprintf(`W/"d%x.%x"`, ino, fi.ModTime().UnixNano())) {
+		return
+	}
+	w.Header().Set("Content-Type", "application/x-ndjson")
+	enc := json.NewEncoder(w)
+	rc := http.NewResponseController(w)
+	for err == nil {
+		if len(des) > 0 {
+			if enc.Encode(map[string][]Entry{"entries": entries(v.Root, rel, des)}) != nil {
+				return
+			}
+			rc.Flush()
+		}
+		des, err = f.ReadDir(lsChunk)
+	}
+	if err != io.EOF {
+		_, msg := httpx.Status(err)
+		enc.Encode(map[string]string{"error": msg})
+	}
 }
 
 type API struct {
@@ -178,20 +244,6 @@ func (a *API) me(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	httpx.JSON(w, 200, map[string]any{"name": u.Name, "vols": a.Vols.Names()})
-}
-
-func (a *API) ls(w http.ResponseWriter, r *http.Request) {
-	v, rel, err := a.query(r)
-	if err != nil {
-		httpx.Error(w, err)
-		return
-	}
-	es, err := List(v.Root, rel)
-	if err != nil {
-		httpx.Error(w, err)
-		return
-	}
-	httpx.Tagged(w, r, map[string]any{"entries": es})
 }
 
 func (a *API) stat(w http.ResponseWriter, r *http.Request) {

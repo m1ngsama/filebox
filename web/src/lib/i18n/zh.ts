@@ -21,6 +21,7 @@ const zh = {
   loadFailed: '加载失败，请检查网络后重试。',
   retry: '重试',
   loading: '正在加载',
+  loadingItems: (n: number) => `正在加载 ${n} 项…`,
   justNow: '刚刚',
   noVolumes: '服务器没有配置任何卷。',
   navigation: '导航',

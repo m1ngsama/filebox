@@ -32,17 +32,25 @@ func Tagged(w http.ResponseWriter, r *http.Request, v any) {
 	}
 	sum := sha256.Sum256(b)
 	tag := `"` + base64.RawURLEncoding.EncodeToString(sum[:18]) + `"`
+	if Fresh(w, r, tag) {
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.Write(b)
+}
+
+func Fresh(w http.ResponseWriter, r *http.Request, tag string) bool {
 	h := w.Header()
 	h.Set("ETag", tag)
 	h.Set("Cache-Control", "private, no-cache")
+	tag = strings.TrimPrefix(tag, "W/")
 	for c := range strings.SplitSeq(r.Header.Get("If-None-Match"), ",") {
 		if c = strings.TrimPrefix(strings.TrimSpace(c), "W/"); c == tag || c == "*" {
 			w.WriteHeader(http.StatusNotModified)
-			return
+			return true
 		}
 	}
-	h.Set("Content-Type", "application/json")
-	w.Write(b)
+	return false
 }
 
 func Fail(w http.ResponseWriter, status int, msg string) {

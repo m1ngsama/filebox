@@ -50,6 +50,7 @@
   let entries = $state.raw<Entry[]>([])
   let error = $state('')
   let at = $state('')
+  let streaming = $state(false)
   let filter = $state('')
   let scope = $state<'here' | 'all'>('here')
   let hits = $state.raw<RecentFile[] | null>(null)
@@ -82,20 +83,29 @@
   const here = $derived(`${vol}/${path}`)
   const join = (n: string) => child(path, n)
   const crumbs = $derived(path ? path.split('/') : [])
-  const shown = $derived(arrange(at === here ? entries : [], query, sort, desc))
+  const shown = $derived(at !== here ? [] : streaming ? entries : arrange(entries, query, sort, desc))
   const one = $derived(selected.size === 1 ? entries.find((e) => selected.has(e.name)) : undefined)
   const thumb = (e: Entry) => (!e.dir && thumbable(e.name) ? thumbURL(vol, join(e.name)) : null)
   const raw = (e: Entry) => (rawThumb(e) ? rawURL(vol, join(e.name)) : null)
 
-  async function refresh() {
+  async function refresh(signal?: AbortSignal) {
     const want = here
-    const [list, err] = await api.ls(vol, path).then(
-      (r) => [r.entries, ''] as const,
+    let last = -Infinity
+    const partial = (es: Entry[]) => {
+      if (want !== here || (at === want && !streaming) || performance.now() - last < 150) return
+      last = performance.now()
+      entries = es.slice()
+      streaming = true
+      at = want
+    }
+    const [list, err] = await api.ls(vol, path, signal, partial).then(
+      (es) => [es, ''] as const,
       (e: Error) => [[], e.message] as const,
     )
-    if (want !== here) return false
+    if (want !== here || signal?.aborted) return false
     entries = [...list]
     error = err
+    streaming = false
     at = want
     return true
   }
@@ -108,9 +118,11 @@
     details = null
     reveal = ''
     const focus = new URLSearchParams(untrack(() => route.search)).get('details')
-    refresh().then((ok) => {
+    const stop = new AbortController()
+    refresh(stop.signal).then((ok) => {
       if (ok && focus) details = entries.find((e) => e.name === focus) ?? null
     })
+    return () => stop.abort()
   })
 
   function closeDetails() {
@@ -153,7 +165,7 @@
 
   $effect(() => {
     const name = new URLSearchParams(route.search).get('select')
-    if (!name || at !== here) return
+    if (!name || at !== here || streaming) return
     untrack(async () => {
       filter = query = ''
       searching = false
@@ -213,7 +225,7 @@
     const dir = path
     let items = [...list].map((file) => ({ file, rel: asFolder ? file.webkitRelativePath : '' }))
     const top = (x: { file: File; rel: string }) => (x.rel ? x.rel.slice(0, x.rel.indexOf('/')) : x.file.name)
-    const taken = new Set((await api.ls(v, dir).catch(() => ({ entries }))).entries.map((e) => e.name))
+    const taken = new Set((await api.ls(v, dir).catch(() => entries)).map((e) => e.name))
     const clash = [...new Set(items.map(top))].filter((n) => taken.has(n))
     const choices = new Map<string, Choice>()
     let every: Choice | null = null
@@ -547,6 +559,7 @@
     </header>
 
     {#if error && at === here}<p class="error banner">{error}</p>{/if}
+    {#if streaming && at === here}<p class="hint banner" role="status">{t.loadingItems(entries.length)}</p>{/if}
 
     {#if ranked}
       {#if partial}<p class="hint banner">{t.indexing}</p>{/if}
@@ -684,7 +697,7 @@
         title={t.newFolder}
         label={t.folderName}
         action={t.create}
-        onsave={(n) => api.mkdir(vol, join(n)).then(refresh)}
+        onsave={(n) => api.mkdir(vol, join(n)).then(() => refresh())}
         onclose={() => (dialog = null)}
       />
     {:else if dialog?.kind === 'rename'}

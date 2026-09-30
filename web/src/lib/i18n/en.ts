@@ -21,6 +21,7 @@ export default (locale: string) => {
     loadFailed: 'Couldn’t load. Check your connection and try again.',
     retry: 'Try again',
     loading: 'Loading',
+    loadingItems: (n: number) => `Loading ${count(n, 'item')}…`,
     justNow: 'just now',
     noVolumes: 'The server has no volumes configured.',
     navigation: 'Navigation',
