@@ -495,7 +495,7 @@ func TestRecoverDropsAVersionThatIsTheLiveFile(t *testing.T) {
 
 func (e *env) trash(t *testing.T, at time.Time, name, body string) string {
 	t.Helper()
-	id := strconv.FormatInt(at.UnixMilli(), 10) + "-0a"
+	id := strconv.FormatInt(at.UnixMilli(), 10) + "-0a0b0c0d"
 	e.write(t, filepath.Join(vol.TrashDir, id, ".origin"), name)
 	e.write(t, filepath.Join(vol.TrashDir, id, name, "f"), body)
 	return id
@@ -538,5 +538,32 @@ func TestGuardPurgesOldestTrashAndVersions(t *testing.T) {
 	}
 	if e.read("live.txt") != "keep" {
 		t.Fatal("guard touched a live file")
+	}
+}
+
+func TestTrashPurgeLeavesForeignEntries(t *testing.T) {
+	e := setup(t)
+	e.write(t, ".trash/2024/photo.jpg", "keep")
+	e.write(t, ".trash/Pictures/a.jpg", "keep")
+	old := e.now.Add(-2 * TrashTTL)
+	orphan := strconv.FormatInt(old.UnixMilli(), 10) + "-0f0f0f0f"
+	e.write(t, ".trash/"+orphan+"/x/f", "keep")
+	short := strconv.FormatInt(old.UnixMilli(), 10) + "-0a"
+	e.write(t, ".trash/"+short+"/.origin", "x")
+	past := time.Now().Add(-3 * TrashTTL)
+	for _, n := range []string{"2024", "Pictures", orphan, short} {
+		os.Chtimes(filepath.Join(e.dir, ".trash", n), past, past)
+	}
+	real := e.trash(t, old, "real", "x")
+	e.s.Usage = func(*vol.Volume) (vol.Usage, error) { return vol.Usage{Total: 1000, Free: 1}, nil }
+	e.s.Prune(e.vols)
+	e.s.Prune(e.vols)
+	for _, n := range []string{"2024", "Pictures", orphan, short} {
+		if !e.inTrash(n) {
+			t.Errorf("%s purged", n)
+		}
+	}
+	if e.inTrash(real) {
+		t.Error("filebox's own expired item kept")
 	}
 }

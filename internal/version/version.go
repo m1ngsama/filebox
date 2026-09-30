@@ -51,10 +51,11 @@ type Version struct {
 }
 
 type Store struct {
-	DB    *db.DB
-	Now   func() time.Time
-	Usage func(*vol.Volume) (vol.Usage, error)
-	mu    sync.Mutex
+	DB      *db.DB
+	Now     func() time.Time
+	Usage   func(*vol.Volume) (vol.Usage, error)
+	mu      sync.Mutex
+	foreign map[string]bool
 }
 
 func (s *Store) now() time.Time {
@@ -326,28 +327,34 @@ type trashItem struct {
 	at int64
 }
 
-func trashItems(v *vol.Volume) []trashItem {
+var trashID = regexp.MustCompile(`^[0-9]{13}-[0-9a-f]{8}$`)
+
+func (s *Store) trashItems(v *vol.Volume) []trashItem {
 	f, err := v.Root.Open(vol.TrashDir)
 	if err != nil {
 		return nil
 	}
-	des, _ := f.ReadDir(-1)
+	names, _ := f.Readdirnames(-1)
 	f.Close()
 	var out []trashItem
-	for _, de := range des {
-		if !de.IsDir() || !vol.ValidName(de.Name()) {
+	for _, n := range names {
+		if vol.Purging(n) {
 			continue
 		}
-		ms, _, _ := strings.Cut(de.Name(), "-")
-		at, err := strconv.ParseInt(ms, 10, 64)
-		if err != nil {
-			fi, err := de.Info()
-			if err != nil {
-				continue
+		_, err := v.Root.ReadFile(path.Join(vol.TrashDir, n, ".origin"))
+		if !trashID.MatchString(n) || err != nil {
+			key := v.Name + "/" + n
+			if !s.foreign[key] {
+				if s.foreign == nil {
+					s.foreign = map[string]bool{}
+				}
+				s.foreign[key] = true
+				slog.Info("trash entry not made by filebox, never purged automatically", "vol", v.Name, "name", n)
 			}
-			at = fi.ModTime().UnixMilli()
+			continue
 		}
-		out = append(out, trashItem{de.Name(), at})
+		at, _ := strconv.ParseInt(n[:13], 10, 64)
+		out = append(out, trashItem{n, at})
 	}
 	slices.SortFunc(out, func(a, b trashItem) int { return cmp.Compare(a.at, b.at) })
 	return out
@@ -356,7 +363,7 @@ func trashItems(v *vol.Volume) []trashItem {
 func (s *Store) expireTrash(v *vol.Volume) {
 	v.SweepPurges()
 	cutoff := s.now().Add(-TrashTTL).UnixMilli()
-	for _, it := range trashItems(v) {
+	for _, it := range s.trashItems(v) {
 		if it.at >= cutoff {
 			return
 		}
@@ -523,7 +530,7 @@ func (s *Store) guard(v *vol.Volume, now int64) {
 	if err != nil {
 		return
 	}
-	trash := slices.DeleteFunc(trashItems(v), func(it trashItem) bool { return it.at >= cutoff })
+	trash := slices.DeleteFunc(s.trashItems(v), func(it trashItem) bool { return it.at >= cutoff })
 	for need > 0 && (len(old) > 0 || len(trash) > 0) {
 		if len(trash) > 0 && (len(old) == 0 || trash[0].at < old[0].Created) {
 			if freed, err := v.PurgeTrash(trash[0].id); err == nil {
