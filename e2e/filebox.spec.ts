@@ -110,6 +110,64 @@ function png(w: number, h: number) {
   return Buffer.concat([Buffer.from('89504e470d0a1a0a', 'hex'), chunk('IHDR', ihdr), chunk('IDAT', deflateSync(rows)), chunk('IEND', Buffer.alloc(0))])
 }
 
+function zip(files: [string, Buffer | string][]) {
+  const parts: Buffer[] = []
+  const dir: Buffer[] = []
+  let off = 0
+  for (const [name, body] of files) {
+    const d = Buffer.from(body)
+    const n = Buffer.from(name)
+    const c = crc32(d)
+    const l = Buffer.alloc(30)
+    l.writeUInt32LE(0x04034b50, 0)
+    l.writeUInt16LE(20, 4)
+    l.writeUInt16LE(0x800, 6)
+    l.writeUInt32LE(c, 14)
+    l.writeUInt32LE(d.length, 18)
+    l.writeUInt32LE(d.length, 22)
+    l.writeUInt16LE(n.length, 26)
+    const h = Buffer.alloc(46)
+    h.writeUInt32LE(0x02014b50, 0)
+    h.writeUInt16LE(20, 4)
+    h.writeUInt16LE(20, 6)
+    h.writeUInt16LE(0x800, 8)
+    h.writeUInt32LE(c, 16)
+    h.writeUInt32LE(d.length, 20)
+    h.writeUInt32LE(d.length, 24)
+    h.writeUInt16LE(n.length, 28)
+    h.writeUInt32LE(off, 42)
+    parts.push(l, n, d)
+    dir.push(h, n)
+    off += 30 + n.length + d.length
+  }
+  const cd = Buffer.concat(dir)
+  const end = Buffer.alloc(22)
+  end.writeUInt32LE(0x06054b50, 0)
+  end.writeUInt16LE(files.length, 8)
+  end.writeUInt16LE(files.length, 10)
+  end.writeUInt32LE(cd.length, 12)
+  end.writeUInt32LE(off, 16)
+  return Buffer.concat([...parts, cd, end])
+}
+
+function epub() {
+  const chapter = (n: number, extra = '') =>
+    `<?xml version="1.0" encoding="utf-8"?><html xmlns="http://www.w3.org/1999/xhtml"><head><title>${n}</title></head><body>${extra}<h1>第${n}章</h1>` +
+    `<p>${'天地玄黄，宇宙洪荒。日月盈昃，辰宿列张。'.repeat(12)}</p>`.repeat(30) +
+    '</body></html>'
+  return zip([
+    ['mimetype', 'application/epub+zip'],
+    ['META-INF/container.xml', '<?xml version="1.0"?><container version="1.0" xmlns="urn:oasis:names:tc:opendocument:xmlns:container"><rootfiles><rootfile full-path="OEBPS/content.opf" media-type="application/oebps-package+xml"/></rootfiles></container>'],
+    [
+      'OEBPS/content.opf',
+      '<?xml version="1.0"?><package xmlns="http://www.idpf.org/2007/opf" version="3.0" unique-identifier="id"><metadata xmlns:dc="http://purl.org/dc/elements/1.1/"><dc:identifier id="id">x</dc:identifier><dc:title>书</dc:title><dc:language>zh</dc:language></metadata>' +
+        '<manifest><item id="c1" href="c1.xhtml" media-type="application/xhtml+xml"/><item id="c2" href="c2.xhtml" media-type="application/xhtml+xml"/></manifest><spine><itemref idref="c1"/><itemref idref="c2"/></spine></package>',
+    ],
+    ['OEBPS/c1.xhtml', chapter(1, '<script>parent.document.title = "pwned"</script>')],
+    ['OEBPS/c2.xhtml', chapter(2)],
+  ])
+}
+
 async function shareDocs(page: Page, mode: 'read' | 'upload' | 'drop', password = '', l: Table = t) {
   await row(page, 'docs').locator('button.more').click()
   const loaded = page.waitForResponse((r) => r.request().method() === 'GET' && new URL(r.url()).pathname === '/api/shares')
@@ -248,6 +306,110 @@ test('images open in a lightbox that zooms, steps, shows info and closes back to
   await page.keyboard.press('Escape')
   await expect(page.getByRole('dialog')).toHaveCount(0)
   await expect(row(page, 'big1.png').locator('button.name')).toBeFocused()
+})
+
+test('preview steps through every previewable file in folder order, images included', async ({ page, server }) => {
+  await page.emulateMedia({ reducedMotion: 'reduce' })
+  writeFileSync(join(server.vol, 'docs', 'a.png'), png(40, 30))
+  writeFileSync(join(server.vol, 'docs', 'b.md'), '# Bee\n')
+  writeFileSync(join(server.vol, 'docs', 'c.bin'), 'x')
+  await login(page)
+  await row(page, 'docs').locator('button.name').click()
+  await row(page, 'a.png').locator('button.name').click()
+  const img = page.getByRole('dialog', { name: 'a.png' }).locator('.pswp__img:not(.pswp__img--placeholder)')
+  await expect(img).toHaveJSProperty('complete', true)
+  await page.keyboard.press('ArrowRight')
+  const md = page.getByRole('dialog', { name: 'b.md' })
+  await expect(md.locator('article.doc h1')).toHaveText('Bee')
+  await md.getByRole('button', { name: t.nextFile }).click()
+  const txt = page.getByRole('dialog', { name: 'readme.txt' })
+  await expect(txt.locator('pre')).toHaveText('hello\n')
+  await expect(txt.getByRole('button', { name: t.nextFile })).toBeDisabled()
+  await page.keyboard.press('ArrowLeft')
+  await expect(md).toBeVisible()
+  await page.keyboard.press('ArrowLeft')
+  await expect(img).toHaveJSProperty('complete', true)
+  await page.keyboard.press('Escape')
+  await expect(page.getByRole('dialog')).toHaveCount(0)
+})
+
+test('comics open in the lightbox, read right to left and reopen at the last page', async ({ page, server }) => {
+  await page.emulateMedia({ reducedMotion: 'reduce' })
+  writeFileSync(join(server.vol, 'docs', 'vol 1.cbz'), zip([['p10.png', png(300, 400)], ['p2.png', png(300, 400)], ['p1.png', png(300, 400)], ['notes.txt', 'x']]))
+  writeFileSync(join(server.vol, 'docs', 'vol 2.cbr'), 'Rar!')
+  await login(page)
+  await row(page, 'docs').locator('button.name').click()
+  await row(page, 'vol 1.cbz').locator('button.name').click()
+  const box = page.getByRole('dialog', { name: 'vol 1.cbz' })
+  const current = box.locator('.pswp__item:not([aria-hidden="true"]) .pswp__img:not(.pswp__img--placeholder)')
+  await expect(box.locator('.fb-page')).toHaveText('1 / 3')
+  await expect(current).toHaveAttribute('src', /[?&]e=p1\.png$/)
+  await expect(current).toHaveJSProperty('complete', true)
+  await page.keyboard.press('ArrowRight')
+  await expect(box.locator('.fb-page')).toHaveText('2 / 3')
+  const rtl = box.getByRole('button', { name: t.rtl })
+  await rtl.click()
+  await expect(page.locator('.pswp')).toHaveCount(1)
+  await expect(rtl).toHaveAttribute('aria-pressed', 'true')
+  await expect(box.locator('.fb-page')).toHaveText('2 / 3')
+  await page.keyboard.press('ArrowLeft')
+  await expect(box.locator('.fb-page')).toHaveText('3 / 3')
+  await expect(current).toHaveAttribute('src', /[?&]e=p10\.png$/)
+  await page.keyboard.press('Escape')
+  await expect(page.getByRole('dialog')).toHaveCount(0)
+  await row(page, 'vol 1.cbz').locator('button.name').click()
+  await expect(box.locator('.fb-page')).toHaveText('3 / 3')
+  await expect(rtl).toHaveAttribute('aria-pressed', 'true')
+  await page.keyboard.press('Escape')
+  await row(page, 'vol 2.cbr').locator('button.name').click()
+  await expect(page.getByRole('dialog', { name: 'vol 2.cbr' })).toContainText(t.noPreview)
+})
+
+test('EPUB opens in the reader, turns pages, blocks its scripts and reopens where it stopped', async ({ page, server }) => {
+  writeFileSync(join(server.vol, 'docs', 'book.epub'), epub())
+  await login(page)
+  await row(page, 'docs').locator('button.name').click()
+  const spot = () => page.evaluate(() => localStorage.getItem('pos:/raw/v/docs/book.epub'))
+  const text = () => page.frames().find((f) => f.url().startsWith('blob:'))?.locator('h1').first().textContent().catch(() => null) ?? null
+  await row(page, 'book.epub').locator('button.name').click()
+  const view = page.getByRole('dialog', { name: 'book.epub' })
+  await expect(view.locator('foliate-paginator')).toBeAttached()
+  await expect.poll(text).toBe('第1章')
+  await expect.poll(spot).toBe('[0,0]')
+  const turned = async () => {
+    await view.getByRole('button', { name: t.nextPage }).click()
+    return spot()
+  }
+  await expect.poll(turned, { timeout: 10_000 }).not.toBe('[0,0]')
+  const first = await spot()
+  const pressed = async () => {
+    await page.keyboard.press('ArrowRight')
+    return spot()
+  }
+  await expect.poll(pressed).not.toBe(first)
+  const at = await spot()
+  expect(await page.title()).not.toBe('pwned')
+  await page.keyboard.press('Escape')
+  await expect(page.getByRole('dialog')).toHaveCount(0)
+  await row(page, 'book.epub').locator('button.name').click()
+  await expect(view.locator('foliate-paginator')).toBeAttached()
+  await expect.poll(text).toBe('第1章')
+  await page.waitForTimeout(500)
+  expect(await spot()).toBe(at)
+})
+
+test.describe('on iOS', () => {
+  test.use({ userAgent: 'Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.0 Mobile/15E148 Safari/604.1' })
+  test('a PDF opens in a new tab instead of an iframe', async ({ page, server }) => {
+    writeFileSync(join(server.vol, 'docs', 'a.pdf'), '%PDF-1.4\n')
+    await login(page)
+    await row(page, 'docs').locator('button.name').click()
+    await row(page, 'a.pdf').locator('button.name').click()
+    const view = page.getByRole('dialog', { name: 'a.pdf' })
+    await expect(view.getByRole('link', { name: t.openInTab })).toHaveAttribute('href', '/raw/v/docs/a.pdf')
+    await expect(view.getByRole('link', { name: t.openInTab })).toHaveAttribute('target', '_blank')
+    await expect(view.locator('iframe')).toHaveCount(0)
+  })
 })
 
 test('videos pick up sibling subtitles and an unplayable one offers a download', async ({ page, server }) => {
