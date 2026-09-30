@@ -6,6 +6,7 @@ import (
 	"io/fs"
 	"os"
 	"path"
+	"regexp"
 	"sort"
 	"strings"
 	"syscall"
@@ -140,6 +141,10 @@ const purging = ".purge-"
 
 func Purging(name string) bool { return strings.HasPrefix(name, purging) }
 
+var trashID = regexp.MustCompile(`^[0-9]{13}-[0-9a-f]{8}$`)
+
+func TrashID(name string) bool { return trashID.MatchString(name) }
+
 func Shared(fi fs.FileInfo) bool {
 	st, ok := fi.Sys().(*syscall.Stat_t)
 	return ok && st.Nlink > 1
@@ -173,7 +178,7 @@ func (v *Volume) SweepPurges() {
 	names, _ := f.Readdirnames(-1)
 	f.Close()
 	for _, n := range names {
-		if Purging(n) {
+		if Purging(n) && TrashID(strings.TrimPrefix(n, purging)) {
 			v.Root.RemoveAll(path.Join(TrashDir, n))
 		}
 	}

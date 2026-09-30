@@ -47,7 +47,9 @@ func TestTrashPurgeNeverEatsARestore(t *testing.T) {
 			t.Fatalf("round %d: restore failed with %d but the folder is live", round, restored)
 		}
 	}
-	os.MkdirAll(filepath.Join(f.Dir, vol.TrashDir, ".purge-1-x", "a"), 0o755)
+	claim := ".purge-1790000000000-0123abcd"
+	os.MkdirAll(filepath.Join(f.Dir, vol.TrashDir, claim, "a"), 0o755)
+	os.MkdirAll(filepath.Join(f.Dir, vol.TrashDir, ".purge-mine", "a"), 0o755)
 	w := f.do("GET", "/api/trash?vol=v", nil)
 	for _, it := range decode[struct{ Items []struct{ ID string } }](t, w).Items {
 		if vol.Purging(it.ID) {
@@ -55,7 +57,10 @@ func TestTrashPurgeNeverEatsARestore(t *testing.T) {
 		}
 	}
 	v.SweepPurges()
-	if _, err := os.Stat(filepath.Join(f.Dir, vol.TrashDir, ".purge-1-x")); err == nil {
+	if _, err := os.Stat(filepath.Join(f.Dir, vol.TrashDir, claim)); err == nil {
 		t.Fatal("leftover claim kept")
+	}
+	if _, err := os.Stat(filepath.Join(f.Dir, vol.TrashDir, ".purge-mine", "a")); err != nil {
+		t.Fatal("a folder filebox did not claim was swept")
 	}
 }

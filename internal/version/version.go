@@ -327,8 +327,6 @@ type trashItem struct {
 	at int64
 }
 
-var trashID = regexp.MustCompile(`^[0-9]{13}-[0-9a-f]{8}$`)
-
 func (s *Store) trashItems(v *vol.Volume) []trashItem {
 	f, err := v.Root.Open(vol.TrashDir)
 	if err != nil {
@@ -342,7 +340,7 @@ func (s *Store) trashItems(v *vol.Volume) []trashItem {
 			continue
 		}
 		_, err := v.Root.ReadFile(path.Join(vol.TrashDir, n, ".origin"))
-		if !trashID.MatchString(n) || err != nil {
+		if !vol.TrashID(n) || err != nil {
 			key := v.Name + "/" + n
 			if !s.foreign[key] {
 				if s.foreign == nil {
