@@ -182,6 +182,12 @@
     refresh()
   }
 
+  const isFile = (v: string, p: string) =>
+    api.ls(v, parent(p)).then(
+      (es) => es.some((e) => e.name === base(p) && !e.dir),
+      () => false,
+    )
+
   async function refresh() {
     const want = here
     const started = ++clock
@@ -206,6 +212,11 @@
       (e: Error) => [[], e instanceof HttpError ? { status: e.status, message: e.message } : { status: 0, message: t.loadFailed }] as const,
     )
     if (want !== here || signal?.aborted) return false
+    if (err && err.status >= 500 && path && (await isFile(vol, path))) {
+      if (want === here) navigate(`${selectURL(vol, path)}&preview`, true)
+      return false
+    }
+    if (want !== here) return false
     entries = overlay([...list], started, want)
     listed = started
     error = err
@@ -293,7 +304,8 @@
   let asked = 0
   let listed = 0
   $effect(() => {
-    const names = new URLSearchParams(route.search).getAll('select')
+    const params = new URLSearchParams(route.search)
+    const names = params.getAll('select')
     if (!names.length) return void (asked = 0)
     if (at !== here || streaming) return
     entries
@@ -309,6 +321,7 @@
         selected.clear()
         for (const n of hit) selected.add(n)
         reveal = { name: hit[0], center: true }
+        if (params.has('preview')) open(entries.find((e) => e.name === hit[0])!)
       }
       navigate(route.path, true)
     })

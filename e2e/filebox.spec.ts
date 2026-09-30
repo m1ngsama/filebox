@@ -415,7 +415,7 @@ test('empty folders and empty filters say what to do next', async ({ page, serve
   await expect(page.getByText(t.noShares)).toBeVisible()
 })
 
-test('a missing folder, an unknown volume, a locked folder and a failed listing each offer a way on', async ({ page, server }) => {
+test('a missing folder, an unknown volume, a locked folder, a file link and a failed listing each offer a way on', async ({ page, server }) => {
   mkdirSync(join(server.vol, 'locked'))
   await login(page)
   await page.goto('/files/v/docs/nope/deeper/')
@@ -439,6 +439,12 @@ test('a missing folder, an unknown volume, a locked folder and a failed listing 
   } finally {
     chmodSync(join(server.vol, 'locked'), 0o755)
   }
+  await page.goto('/files/v/docs/readme.txt/')
+  await expect(page.locator('.viewer pre')).toHaveText('hello\n')
+  await expect(page).toHaveURL(/\/files\/v\/docs\/$/)
+  await expect(page.getByText(t.serverError)).toHaveCount(0)
+  await page.keyboard.press('Escape')
+  await expect(row(page, 'readme.txt')).toHaveAttribute('aria-selected', 'true')
   await page.route('**/api/ls?*', (r) => r.fulfill({ status: 500, body: '{"error":"boom"}' }))
   await page.goto('/files/v/docs/')
   await expect(page.getByRole('heading', { name: t.loadFailedTitle })).toBeVisible()
