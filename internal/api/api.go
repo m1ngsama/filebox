@@ -352,7 +352,12 @@ func (a *API) search(w http.ResponseWriter, r *http.Request) {
 		httpx.Error(w, err)
 		return
 	}
-	httpx.JSON(w, 200, map[string]any{"entries": hits, "scanning": !a.Index.Ready()})
+	content, err := a.Index.SearchContent(r.Context(), in)
+	if err != nil {
+		httpx.Error(w, err)
+		return
+	}
+	httpx.JSON(w, 200, map[string]any{"entries": hits, "content": content, "indexing": a.Index.Progress(), "scanning": !a.Index.Ready()})
 }
 
 func (a *API) vols(w http.ResponseWriter, r *http.Request) {

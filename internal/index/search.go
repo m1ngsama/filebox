@@ -25,7 +25,7 @@ func likeEscape(s string) string {
 
 const candidates = 5000
 
-func (x *Index) Search(ctx context.Context, q Query) ([]Hit, error) {
+func scoped(q Query) (string, []any) {
 	scope, where := visible, []any{}
 	if q.Vol != "" {
 		scope += ` AND f.vol = ?`
@@ -35,6 +35,11 @@ func (x *Index) Search(ctx context.Context, q Query) ([]Hit, error) {
 			where = append(where, q.Under+"/", q.Under+"0")
 		}
 	}
+	return scope, where
+}
+
+func (x *Index) Search(ctx context.Context, q Query) ([]Hit, error) {
+	scope, where := scoped(q)
 	const cols = `SELECT f.vol, f.path, f.name, f.dir, f.size, f.mtime FROM files f`
 	with := func(first any, rest ...any) []any { return append(append([]any{first}, where...), rest...) }
 	if utf8.RuneCountInString(q.Text) < 3 {
@@ -97,4 +102,66 @@ func (x *Index) hits(ctx context.Context, sql string, args ...any) ([]Hit, error
 		out = append(out, h)
 	}
 	return out, rows.Err()
+}
+
+func (x *Index) SearchContent(ctx context.Context, q Query) ([]ContentHit, error) {
+	out := []ContentHit{}
+	if x.content.Load() == nil || utf8.RuneCountInString(q.Text) < 3 {
+		return out, nil
+	}
+	scope, where := scoped(q)
+	phrase := `"` + strings.ReplaceAll(q.Text, `"`, `""`) + `"`
+	rows, err := x.db.QueryContext(ctx, `SELECT f.id, f.vol, f.path, f.name, f.size, f.mtime FROM files f
+		WHERE f.id IN (SELECT rowid FROM contents_fts WHERE contents_fts MATCH ? LIMIT ?)`+scope+` ORDER BY f.mtime DESC LIMIT ?`,
+		append(append([]any{phrase, candidates}, where...), min(q.Limit, contentLimit))...)
+	if err != nil {
+		return nil, err
+	}
+	byID := map[int64]int{}
+	var ids []int64
+	for rows.Next() {
+		var id int64
+		var h ContentHit
+		if err := rows.Scan(&id, &h.Vol, &h.Path, &h.Name, &h.Size, &h.Mtime); err != nil {
+			rows.Close()
+			return nil, err
+		}
+		byID[id] = len(out)
+		ids = append(ids, id)
+		out = append(out, h)
+	}
+	rows.Close()
+	if err := rows.Err(); err != nil || len(ids) == 0 {
+		return out, err
+	}
+	list, _ := json.Marshal(ids)
+	rows, err = x.db.QueryContext(ctx, `SELECT rowid, snippet(contents_fts, 0, char(2), char(3), '…', ?) FROM contents_fts
+		WHERE contents_fts MATCH ? AND rowid IN (SELECT value FROM json_each(?))`, snippetWords, phrase, string(list))
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var id int64
+		var s string
+		if err := rows.Scan(&id, &s); err != nil {
+			return nil, err
+		}
+		out[byID[id]].Snippet = segments(s)
+	}
+	return out, rows.Err()
+}
+
+func segments(s string) []string {
+	out := []string{}
+	for {
+		plain, rest, ok := strings.Cut(s, "\x02")
+		out = append(out, plain)
+		if !ok {
+			return out
+		}
+		mark, after, _ := strings.Cut(rest, "\x03")
+		out = append(out, mark)
+		s = after
+	}
 }

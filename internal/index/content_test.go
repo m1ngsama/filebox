@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -151,5 +152,70 @@ func TestContentKindsMatchSQL(t *testing.T) {
 		if err := e.x.db.QueryRow(`SELECT `+ext+` FROM (SELECT ? AS name) f`, name).Scan(&got); err != nil || got != want {
 			t.Errorf("%s: %q %v, want %q", name, got, err, want)
 		}
+	}
+}
+
+func (e *env) findText(t *testing.T, q Query) map[string][]string {
+	t.Helper()
+	if q.Limit == 0 {
+		q.Limit = 200
+	}
+	hits, err := e.x.SearchContent(context.Background(), q)
+	if err != nil {
+		t.Fatalf("content search %q: %v", q.Text, err)
+	}
+	out := map[string][]string{}
+	for _, h := range hits {
+		out[h.Vol+":"+h.Path] = h.Snippet
+	}
+	return out
+}
+
+func TestSearchContent(t *testing.T) {
+	e := setup(t)
+	t0 := time.Unix(1_700_000_000, 0)
+	e.write(t, "notes/a.txt", "The Quick brown fox jumps over the lazy dog", t0)
+	e.write(t, "notes/evil.html", `<p>click &lt;script&gt;alert(1)&lt;/script&gt; for the quick win</p>`, t0.Add(time.Hour))
+	e.write(t, "forged.txt", "quick \x02fake\x03 marker", t0)
+	e.write(t, "年报.md", "二〇二四年度报告正文", t0)
+	e.scan(t)
+	if got := e.findText(t, Query{Text: "quick"}); len(got) != 0 {
+		t.Fatalf("content search before the index is enabled %v", got)
+	}
+	e.pass(t, e.extractor())
+
+	got := e.findText(t, Query{Text: "QUICK BROWN"})
+	if s := got["v:notes/a.txt"]; len(got) != 1 || len(s) != 3 || s[0] != "The " || s[1] != "Quick brown" || !strings.HasPrefix(s[2], " fox jumps over") {
+		t.Fatalf("snippet %#v", got)
+	}
+	got = e.findText(t, Query{Text: "script"})
+	if s := got["v:notes/evil.html"]; len(s) != 5 || s[0] != "click <" || s[1] != "script" || s[2] != ">alert(1)</" {
+		t.Fatalf("markup must come back as plain segments: %#v", got)
+	}
+	got = e.findText(t, Query{Text: "fake"})
+	if s := got["v:forged.txt"]; len(s) != 3 || s[0] != "quick " || s[1] != "fake" || s[2] != " marker" {
+		t.Fatalf("control bytes in content must not forge highlights: %#v", got)
+	}
+	if got := e.findText(t, Query{Text: "年度报告"}); len(got["v:年报.md"]) != 3 {
+		t.Fatalf("cjk %#v", got)
+	}
+	if got := e.findText(t, Query{Text: "quick", Vol: "v", Under: "notes"}); len(got) != 2 {
+		t.Fatalf("scope %#v", got)
+	}
+	if got := e.findText(t, Query{Text: "qu"}); len(got) != 0 {
+		t.Fatalf("two runes cannot use the trigram index %#v", got)
+	}
+	for _, q := range []string{`" OR *`, `quick" OR "fox`, `NEAR(quick fox)`, `body : quick`, `quick*`, `^quick`, `-quick`, `quick AND fox`, `""""`, `(quick)`} {
+		if _, err := e.x.SearchContent(context.Background(), Query{Text: q, Limit: 10}); err != nil {
+			t.Errorf("%q: %v", q, err)
+		}
+	}
+	if got := e.findText(t, Query{Text: `quick" OR "fox`}); len(got) != 0 {
+		t.Fatalf("quotes must stay literal %#v", got)
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	if _, err := e.x.SearchContent(ctx, Query{Text: "quick", Limit: 10}); err == nil {
+		t.Fatal("canceled search succeeded")
 	}
 }

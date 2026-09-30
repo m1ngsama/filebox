@@ -1,9 +1,13 @@
 package app
 
 import (
+	"context"
 	"net/url"
 	"slices"
 	"testing"
+	"time"
+
+	"github.com/m1ngsama/filebox/internal/extract"
 )
 
 func (f *fixture) search(t *testing.T, query string) []string {
@@ -55,5 +59,43 @@ func TestSearchAPI(t *testing.T) {
 	}
 	if w := f.do("GET", "/api/search?q=plan", nil, "X-No-Auth", "1"); w.Code != 401 {
 		t.Fatalf("anonymous search %d", w.Code)
+	}
+}
+
+func TestSearchContentAPI(t *testing.T) {
+	f := newTestApp(t)
+	f.write(t, "notes/plan.txt", "ship the <b>content</b> index")
+	f.App.Index.Scan(f.App.Vols)
+	type result struct {
+		Content []struct {
+			Vol, Path, Name string
+			Snippet         []string
+		}
+		Indexing *struct{ Done, Total int64 }
+	}
+	if r := decode[result](t, f.do("GET", "/api/search?q=content", nil)); r.Content == nil || len(r.Content) != 0 || r.Indexing != nil {
+		t.Fatalf("disabled %+v", r)
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	done := make(chan struct{})
+	go func() {
+		f.App.Index.Extract(ctx, f.App.Vols, extract.New(ctx))
+		close(done)
+	}()
+	t.Cleanup(func() { cancel(); <-done })
+	for deadline := time.Now().Add(15 * time.Second); ; time.Sleep(50 * time.Millisecond) {
+		r := decode[result](t, f.do("GET", "/api/search?q="+url.QueryEscape("<b>content"), nil))
+		if len(r.Content) == 1 {
+			if c := r.Content[0]; c.Path != "notes/plan.txt" || c.Name != "plan.txt" || !slices.Equal(c.Snippet, []string{"ship the ", "<b>content", "</b> index"}) {
+				t.Fatalf("hit %+v", c)
+			}
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatal("content never indexed")
+		}
+	}
+	if r := decode[result](t, f.do("GET", "/api/search?q=content&vol=w", nil)); len(r.Content) != 0 {
+		t.Fatalf("other volume %+v", r)
 	}
 }
