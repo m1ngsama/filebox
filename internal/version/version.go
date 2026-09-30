@@ -353,27 +353,14 @@ func trashItems(v *vol.Volume) []trashItem {
 	return out
 }
 
-func (s *Store) purge(v *vol.Volume, it trashItem) (int64, error) {
-	dir := path.Join(vol.TrashDir, it.id)
-	var freed int64
-	fs.WalkDir(v.Root.FS(), dir, func(p string, d fs.DirEntry, err error) error {
-		if err == nil && d.Type().IsRegular() {
-			if fi, err := d.Info(); err == nil && !shared(fi) {
-				freed += fi.Size()
-			}
-		}
-		return nil
-	})
-	return freed, v.Root.RemoveAll(dir)
-}
-
 func (s *Store) expireTrash(v *vol.Volume) {
+	v.SweepPurges()
 	cutoff := s.now().Add(-TrashTTL).UnixMilli()
 	for _, it := range trashItems(v) {
 		if it.at >= cutoff {
 			return
 		}
-		if _, err := s.purge(v, it); err != nil {
+		if _, err := v.PurgeTrash(it.id); err != nil {
 			slog.Warn("expire trash", "vol", v.Name, "id", it.id, "err", err)
 		}
 	}
@@ -539,7 +526,7 @@ func (s *Store) guard(v *vol.Volume, now int64) {
 	trash := slices.DeleteFunc(trashItems(v), func(it trashItem) bool { return it.at >= cutoff })
 	for need > 0 && (len(old) > 0 || len(trash) > 0) {
 		if len(trash) > 0 && (len(old) == 0 || trash[0].at < old[0].Created) {
-			if freed, err := s.purge(v, trash[0]); err == nil {
+			if freed, err := v.PurgeTrash(trash[0].id); err == nil {
 				need -= freed
 			}
 			trash = trash[1:]
@@ -548,18 +535,13 @@ func (s *Store) guard(v *vol.Volume, now int64) {
 		x := old[0]
 		old = old[1:]
 		freed := x.Size
-		if fi, err := v.Root.Lstat(File(x.ID)); err == nil && shared(fi) {
+		if fi, err := v.Root.Lstat(File(x.ID)); err == nil && vol.Shared(fi) {
 			freed = 0
 		}
 		if s.drop(v, x.ID) == nil {
 			need -= freed
 		}
 	}
-}
-
-func shared(fi fs.FileInfo) bool {
-	st, ok := fi.Sys().(*syscall.Stat_t)
-	return ok && st.Nlink > 1
 }
 
 func (s *Store) Recover(vols *vol.Set) error {

@@ -3,6 +3,7 @@ package api
 import (
 	"crypto/rand"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"io/fs"
 	"net/http"
@@ -93,6 +94,9 @@ func (a *API) trashList(w http.ResponseWriter, r *http.Request) {
 		des, _ := f.ReadDir(-1)
 		f.Close()
 		for _, de := range des {
+			if vol.Purging(de.Name()) {
+				continue
+			}
 			if it, err := trashItem(v, de.Name()); err == nil {
 				items = append(items, it)
 			}
@@ -165,7 +169,7 @@ func (a *API) trashDelete(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	for _, id := range in.IDs {
-		if err := v.Root.RemoveAll(path.Join(vol.TrashDir, id)); err != nil {
+		if _, err := v.PurgeTrash(id); err != nil && !errors.Is(err, fs.ErrNotExist) {
 			httpx.Error(w, err)
 			return
 		}
@@ -186,9 +190,29 @@ func (a *API) trashEmpty(w http.ResponseWriter, r *http.Request) {
 		httpx.Error(w, fs.ErrNotExist)
 		return
 	}
-	if err := v.Root.RemoveAll(vol.TrashDir); err != nil {
+	f, err := v.Root.Open(vol.TrashDir)
+	if errors.Is(err, fs.ErrNotExist) {
+		w.WriteHeader(204)
+		return
+	}
+	if err != nil {
 		httpx.Error(w, err)
 		return
+	}
+	names, err := f.Readdirnames(-1)
+	f.Close()
+	if err != nil {
+		httpx.Error(w, err)
+		return
+	}
+	for _, n := range names {
+		if vol.Purging(n) {
+			continue
+		}
+		if _, err := v.PurgeTrash(n); err != nil && !errors.Is(err, fs.ErrNotExist) {
+			httpx.Error(w, err)
+			return
+		}
 	}
 	w.WriteHeader(204)
 }

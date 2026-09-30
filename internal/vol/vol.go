@@ -136,6 +136,49 @@ func (v *Volume) Clean(p string) (string, error) {
 	return c, nil
 }
 
+const purging = ".purge-"
+
+func Purging(name string) bool { return strings.HasPrefix(name, purging) }
+
+func Shared(fi fs.FileInfo) bool {
+	st, ok := fi.Sys().(*syscall.Stat_t)
+	return ok && st.Nlink > 1
+}
+
+func (v *Volume) PurgeTrash(id string) (int64, error) {
+	if !ValidName(id) || Purging(id) {
+		return 0, ErrBadPath
+	}
+	claimed := path.Join(TrashDir, purging+id)
+	if err := v.Root.Rename(path.Join(TrashDir, id), claimed); err != nil {
+		return 0, err
+	}
+	var freed int64
+	fs.WalkDir(v.Root.FS(), claimed, func(p string, d fs.DirEntry, err error) error {
+		if err == nil && d.Type().IsRegular() {
+			if fi, err := d.Info(); err == nil && !Shared(fi) {
+				freed += fi.Size()
+			}
+		}
+		return nil
+	})
+	return freed, v.Root.RemoveAll(claimed)
+}
+
+func (v *Volume) SweepPurges() {
+	f, err := v.Root.Open(TrashDir)
+	if err != nil {
+		return
+	}
+	names, _ := f.Readdirnames(-1)
+	f.Close()
+	for _, n := range names {
+		if Purging(n) {
+			v.Root.RemoveAll(path.Join(TrashDir, n))
+		}
+	}
+}
+
 func Junk(name string, dir bool) bool {
 	if dir {
 		return strings.EqualFold(name, ".Trashes")
