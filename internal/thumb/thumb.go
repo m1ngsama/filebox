@@ -27,9 +27,9 @@ import (
 )
 
 const (
-	maxFailed  = 10000
-	maxEntries = 10000
-	maxCover   = 64 << 20
+	maxFailed = 10000
+	maxNames  = 10000
+	maxCover  = 64 << 20
 )
 
 var probeTimeout = 10 * time.Second
@@ -71,6 +71,7 @@ type Service struct {
 	mu       sync.Mutex
 	inflight map[string]chan struct{}
 	failed   map[string]struct{}
+	covers   map[string]string
 }
 
 func New(ffmpeg, dir string) *Service {
@@ -80,7 +81,7 @@ func New(ffmpeg, dir string) *Service {
 		}
 	}
 	s := &Service{FFmpeg: ffmpeg, Dir: dir, format: webp, sem: make(chan struct{}, runtime.NumCPU()), probes: make(chan struct{}, runtime.NumCPU()),
-		inflight: map[string]chan struct{}{}, failed: map[string]struct{}{}}
+		inflight: map[string]chan struct{}{}, failed: map[string]struct{}{}, covers: map[string]string{}}
 	s.nice, _ = exec.LookPath("nice")
 	if ffmpeg != "" {
 		if p := filepath.Join(filepath.Dir(ffmpeg), "ffprobe"); fileExists(p) {
@@ -181,21 +182,30 @@ func (s *Service) ServeFrom(w http.ResponseWriter, r *http.Request, root *os.Roo
 		httpx.Fail(w, 404, "no thumbnail")
 		return
 	}
-	defer f.Close()
+	defer func() { f.Close() }()
 	fi, err := f.Stat()
 	if err == nil && fi.IsDir() {
-		name := s.cover(f)
-		f.Close()
-		if f, err = root.Open(path.Join(open, name)); name == "" || err != nil {
+		name := s.cover(f, volName+"\x00"+rel, fi.ModTime().UnixNano())
+		if name == "" {
 			httpx.Fail(w, 404, "no thumbnail")
 			return
 		}
-		defer f.Close()
+		child, err := root.Open(path.Join(open, name))
+		if err != nil {
+			httpx.Fail(w, 404, "no thumbnail")
+			return
+		}
+		f.Close()
+		f = child
 		open, rel = path.Join(open, name), path.Join(rel, name)
 		fi, err = f.Stat()
+		if err != nil {
+			httpx.Fail(w, 404, "no thumbnail")
+			return
+		}
 	}
 	kind := Kind(rel)
-	if err != nil || !fi.Mode().IsRegular() || !s.can(kind) {
+	if !fi.Mode().IsRegular() || !s.can(kind) {
 		httpx.Fail(w, 404, "no thumbnail")
 		return
 	}
@@ -312,9 +322,27 @@ func (s *Service) duration(ctx context.Context, src *os.File) float64 {
 	return d
 }
 
-// A folder's cover is its first image, else its first book, by name; only the first maxEntries names are read.
-func (s *Service) cover(dir *os.File) string {
-	list, _ := dir.ReadDir(maxEntries)
+// A folder's cover is its first image, else its first book, by name; only the first maxNames are read.
+func (s *Service) cover(dir *os.File, key string, mtime int64) string {
+	key = fmt.Sprintf("%s\x00%d", key, mtime)
+	s.mu.Lock()
+	name, ok := s.covers[key]
+	s.mu.Unlock()
+	if ok {
+		return name
+	}
+	name = s.scan(dir)
+	s.mu.Lock()
+	if len(s.covers) >= maxFailed {
+		s.covers = map[string]string{}
+	}
+	s.covers[key] = name
+	s.mu.Unlock()
+	return name
+}
+
+func (s *Service) scan(dir *os.File) string {
+	list, _ := dir.ReadDir(maxNames)
 	var image, book string
 	for _, e := range list {
 		n := e.Name()

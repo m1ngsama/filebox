@@ -9,6 +9,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"testing"
+	"time"
 )
 
 func png(t *testing.T, ff, color string) []byte {
@@ -120,5 +121,34 @@ func TestCovers(t *testing.T) {
 	}
 	if leftovers, _ := filepath.Glob(filepath.Join(s.Dir, "*", "*.src")); len(leftovers) > 0 {
 		t.Fatalf("temporary files left: %v", leftovers)
+	}
+}
+
+func TestCoverCachedPerFolder(t *testing.T) {
+	ff, err := exec.LookPath("ffmpeg")
+	if err != nil {
+		t.Skip("ffmpeg not installed")
+	}
+	s, v, dir := setup(t, ff)
+	s.format = jpeg
+	os.MkdirAll(filepath.Join(dir, "empty"), 0o755)
+	os.WriteFile(filepath.Join(dir, "empty/notes.txt"), []byte("x"), 0o644)
+	os.MkdirAll(filepath.Join(dir, "art"), 0o755)
+	os.WriteFile(filepath.Join(dir, "art/1.png"), png(t, ff, "red"), 0o644)
+	for range 3 {
+		if w := get(s, v, "empty"); w.Code != 404 {
+			t.Fatalf("empty folder = %d", w.Code)
+		}
+		if w := get(s, v, "art"); w.Code != 200 {
+			t.Fatalf("art folder = %d", w.Code)
+		}
+	}
+	if len(s.covers) != 2 {
+		t.Fatalf("cached %d folders", len(s.covers))
+	}
+	os.WriteFile(filepath.Join(dir, "empty/0.png"), png(t, ff, "blue"), 0o644)
+	os.Chtimes(filepath.Join(dir, "empty"), time.Now().Add(time.Second), time.Now().Add(time.Second))
+	if w := get(s, v, "empty"); w.Code != 200 {
+		t.Fatalf("after the folder changed = %d", w.Code)
 	}
 }
