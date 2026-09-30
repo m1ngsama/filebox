@@ -683,6 +683,27 @@ test('the tab title names the folder, page or share', async ({ page, browser }) 
   await anon.close()
 })
 
+test('from 900 px details push the list aside and keep the search usable, below it they overlay', async ({ page }) => {
+  await login(page)
+  for (const [w, push] of [[1024, true], [900, true], [899, false]] as const) {
+    await page.setViewportSize({ width: w, height: 768 })
+    await row(page, 'docs').locator('button.more').click()
+    await page.getByRole('menuitem', { name: t.details }).click()
+    const details = page.getByRole('complementary', { name: t.details })
+    await expect(details).toBeVisible()
+    const [d, bar] = await Promise.all([details.boundingBox(), page.locator('.files .bar').boundingBox()])
+    expect(d!.x >= bar!.x + bar!.width - 1).toBe(push)
+    const filter = page.getByLabel(t.filter)
+    if (push) {
+      await filter.click()
+      await expect(filter).toBeFocused()
+    }
+    expect(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth)).toBe(false)
+    await details.getByRole('button', { name: t.close }).click()
+    await expect(details).toHaveCount(0)
+  }
+})
+
 test('closing details opened from my shares clears the query', async ({ page }) => {
   await login(page)
   await shareDocs(page, 'read')

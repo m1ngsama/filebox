@@ -151,7 +151,7 @@ p.error::before { content: ''; flex: none; width: 1em; height: 1lh; background: 
   box-shadow: var(--shadow); animation: appear var(--dur-2) var(--ease-out);
 }
 
-.files-wrap { display: flex; flex: 1; min-height: 0; }
+.files-wrap { display: flex; flex: 1; min-height: 0; overflow-x: clip; }
 .files { position: relative; display: flex; flex-direction: column; flex: 1; min-width: 0; }
 .list-head, .row { display: grid; grid-template-columns: var(--hit) var(--hit) minmax(0, 1fr) 40px 96px 128px; align-items: center; }
 .list-head { height: var(--hit); padding: 0 var(--space-2); border-bottom: 1px solid var(--line); color: var(--muted); font-size: var(--text-sm); }
@@ -517,7 +517,15 @@ button.busy::before { content: ''; width: 14px; height: 14px; border: 2px solid 
   .scrim:active:not(:disabled) { background: var(--scrim); }
 }
 
-@media (max-width: 1100px) {
+@media (min-width: 900px) and (max-width: 1100px) {
+  .details { width: 320px; }
+  .files-wrap:has(> .details) .files .bar { flex-wrap: wrap; }
+  .files-wrap:has(> .details) .find { flex: 1 1 16em; min-width: 0; }
+  .files-wrap:has(> .details) .filter { flex: 1; width: auto; }
+  .files-wrap:has(> .details) :is(.row, .list-head:not(.grid, .batch)) { grid-template-columns: var(--hit) var(--hit) minmax(0, 1fr) 40px; }
+  .files-wrap:has(> .details) :is(.row > .num, .list-head .sort.size, .list-head .sort.mtime) { display: none; }
+}
+@media (max-width: 899px) {
   .details { position: fixed; top: 0; right: 0; bottom: 0; z-index: 20; box-shadow: var(--shadow); width: min(380px, 100vw); }
 }
 @media (max-width: 767px) {
