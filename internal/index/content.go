@@ -16,8 +16,8 @@ import (
 
 const (
 	contentBatch = 256
-	contentLimit = 50
-	snippetWords = 40
+	contentLimit = 20
+	snippetWords = 64
 )
 
 var settle = 2 * time.Second

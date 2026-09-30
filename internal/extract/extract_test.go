@@ -67,7 +67,7 @@ func TestPlainText(t *testing.T) {
 		"Makefile":  []byte("all:\n\tgo build\n"),
 		"bin.txt":   []byte("abc\x00def"),
 		"photo.jpg": []byte("\xff\xd8"),
-		"wrap.txt":  []byte("中文段落在这里\n换行继续 and English\nwords"),
+		"wrap.txt":  []byte("中文段落在这里\n换行继续 and English\nwords\n\n新段落\r\n\r\n再一段"),
 	})
 	x := &Extractor{}
 	for name, want := range map[string]string{
@@ -75,7 +75,7 @@ func TestPlainText(t *testing.T) {
 		"gbk.txt":  "年度报告第二行 内容",
 		"main.go":  "package main func main() {}",
 		"Makefile": "all: go build",
-		"wrap.txt": "中文段落在这里换行继续 and English words",
+		"wrap.txt": "中文段落在这里换行继续 and English words 新段落 再一段",
 	} {
 		got, err := x.Extract(context.Background(), r, name)
 		if err != nil || got != want {

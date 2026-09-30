@@ -173,7 +173,7 @@ var errFull = errors.New("extract: text cap reached")
 type text struct {
 	b       strings.Builder
 	space   bool
-	newline bool
+	newline int
 	last    rune
 	pend    []byte
 	full    bool
@@ -188,17 +188,19 @@ func (t *text) write(p []byte) error {
 		p = p[n:]
 		if unicode.IsSpace(r) || unicode.IsControl(r) || r == utf8.RuneError {
 			t.space = t.b.Len() > 0
-			t.newline = t.newline || r == '\n'
+			if r == '\n' {
+				t.newline++
+			}
 			continue
 		}
-		if t.space && !(t.newline && unicode.Is(unicode.Han, t.last) && unicode.Is(unicode.Han, r)) {
+		if t.space && !(t.newline == 1 && unicode.Is(unicode.Han, t.last) && unicode.Is(unicode.Han, r)) {
 			if t.b.Len()+1 > MaxText {
 				t.full = true
 				return errFull
 			}
 			t.b.WriteByte(' ')
 		}
-		t.space, t.newline = false, false
+		t.space, t.newline = false, 0
 		if t.b.Len()+utf8.RuneLen(r) > MaxText {
 			t.full = true
 			return errFull
@@ -221,7 +223,7 @@ func (t *text) Write(p []byte) (int, error) {
 
 func (t *text) brk() {
 	if t.b.Len() > 0 {
-		t.space, t.newline = true, false
+		t.space, t.newline = true, 2
 	}
 }
 
