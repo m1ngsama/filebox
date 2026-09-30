@@ -108,8 +108,9 @@ func (a *API) trashList(w http.ResponseWriter, r *http.Request) {
 
 func (a *API) trashRestore(w http.ResponseWriter, r *http.Request) {
 	var in struct {
-		Vol string `json:"vol"`
-		ID  string `json:"id"`
+		Vol string   `json:"vol"`
+		ID  string   `json:"id"`
+		IDs []string `json:"ids"`
 	}
 	if err := httpx.Read(r, &in); err != nil {
 		httpx.Fail(w, 400, "bad request")
@@ -120,32 +121,51 @@ func (a *API) trashRestore(w http.ResponseWriter, r *http.Request) {
 		httpx.Error(w, fs.ErrNotExist)
 		return
 	}
-	it, err := trashItem(v, in.ID)
-	if err != nil {
-		httpx.Error(w, err)
+	if in.IDs == nil {
+		if err := a.restore(v, in.ID); err != nil {
+			httpx.Error(w, err)
+			return
+		}
+		w.WriteHeader(204)
 		return
+	}
+	type failure struct {
+		ID     string `json:"id"`
+		Status int    `json:"status"`
+		Error  string `json:"error"`
+	}
+	failed := []failure{}
+	for _, id := range in.IDs {
+		if err := a.restore(v, id); err != nil {
+			code, msg := httpx.Status(err)
+			failed = append(failed, failure{id, code, msg})
+		}
+	}
+	httpx.JSON(w, 200, map[string]any{"failed": failed})
+}
+
+func (a *API) restore(v *vol.Volume, id string) error {
+	it, err := trashItem(v, id)
+	if err != nil {
+		return err
 	}
 	dst, err := v.Clean(it.Path)
 	if err != nil {
-		httpx.Error(w, err)
-		return
+		return err
 	}
 	if _, err := v.Root.Lstat(dst); err == nil {
-		httpx.Error(w, fs.ErrExist)
-		return
+		return fs.ErrExist
 	}
 	if err := v.Root.MkdirAll(path.Dir(dst), 0o755); err != nil {
-		httpx.Error(w, err)
-		return
+		return err
 	}
-	dir := path.Join(vol.TrashDir, in.ID)
+	dir := path.Join(vol.TrashDir, id)
 	if err := vol.Move(v.Root, path.Join(dir, it.Name), dst); err != nil {
-		httpx.Error(w, err)
-		return
+		return err
 	}
 	v.Root.RemoveAll(dir)
 	a.Index.Touch(v, dst)
-	w.WriteHeader(204)
+	return nil
 }
 
 func (a *API) trashDelete(w http.ResponseWriter, r *http.Request) {

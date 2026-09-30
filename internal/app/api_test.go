@@ -471,3 +471,33 @@ func TestListETag(t *testing.T) {
 		t.Fatalf("other volume %d", w.Code)
 	}
 }
+
+func TestTrashRestoreBatch(t *testing.T) {
+	f := newTestApp(t)
+	for _, n := range []string{"a.txt", "b.txt", "c.txt"} {
+		f.write(t, n, n)
+	}
+	ids := decode[struct{ Trashed []struct{ ID string } }](t, f.do("POST", "/api/rm", body(`{"vol":"v","paths":["a.txt","b.txt","c.txt"]}`))).Trashed
+	if len(ids) != 3 {
+		t.Fatalf("trashed %+v", ids)
+	}
+	f.write(t, "c.txt", "new")
+	w := f.do("POST", "/api/trash/restore", body(`{"vol":"v","ids":["`+ids[0].ID+`","`+ids[1].ID+`","`+ids[2].ID+`","nope"]}`))
+	r := decode[struct {
+		Failed []struct {
+			ID     string
+			Status int
+		}
+	}](t, w)
+	if w.Code != 200 || len(r.Failed) != 2 || r.Failed[0].ID != ids[2].ID || r.Failed[0].Status != 409 || r.Failed[1].ID != "nope" {
+		t.Fatalf("batch restore %d %s", w.Code, w.Body)
+	}
+	for _, n := range []string{"a.txt", "b.txt"} {
+		if b, _ := os.ReadFile(filepath.Join(f.Dir, n)); string(b) != n {
+			t.Fatalf("%s restored %q", n, b)
+		}
+	}
+	if b, _ := os.ReadFile(filepath.Join(f.Dir, "c.txt")); string(b) != "new" {
+		t.Fatalf("c.txt overwritten %q", b)
+	}
+}
