@@ -479,10 +479,19 @@ func (s *Store) guard(v *vol.Volume, now int64) {
 		if need <= 0 {
 			return
 		}
+		freed := x.Size
+		if fi, err := v.Root.Lstat(File(x.ID)); err == nil && shared(fi) {
+			freed = 0
+		}
 		if s.drop(v, x.ID) == nil {
-			need -= x.Size
+			need -= freed
 		}
 	}
+}
+
+func shared(fi fs.FileInfo) bool {
+	st, ok := fi.Sys().(*syscall.Stat_t)
+	return ok && st.Nlink > 1
 }
 
 func (s *Store) Recover(vols *vol.Set) error {

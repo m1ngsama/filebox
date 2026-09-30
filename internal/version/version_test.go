@@ -453,3 +453,20 @@ func TestExpireOnlyWhenTheFileIsReallyGone(t *testing.T) {
 		t.Fatal("expired versions whose path could not be checked")
 	}
 }
+
+func TestGuardDoesNotCountSharedBytes(t *testing.T) {
+	e := setup(t)
+	a := e.capture(t, "a.txt", "0123456789")
+	os.Link(filepath.Join(e.dir, vol.VersionsDir, a), filepath.Join(e.dir, "elsewhere.txt"))
+	e.now = e.now.Add(time.Minute)
+	e.capture(t, "b.txt", "0123456789")
+	e.now = e.now.Add(time.Hour)
+	e.s.Usage = func(*vol.Volume) (vol.Usage, error) { return vol.Usage{Total: 1000, Free: 95}, nil }
+	e.s.Prune(e.vols)
+	if e.count(t, "a.txt") != 0 || e.count(t, "b.txt") != 0 {
+		t.Fatal("guard stopped after dropping a version whose bytes are still linked elsewhere")
+	}
+	if e.read("elsewhere.txt") != "0123456789" {
+		t.Fatal("guard touched the other link")
+	}
+}

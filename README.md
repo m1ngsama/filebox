@@ -29,6 +29,10 @@ filebox token -data /srv/data/filebox new "laptop"         # app password for We
 
 Behind a reverse proxy, turn off request and response buffering (nginx: `proxy_request_buffering off; proxy_buffering off;`) and forward `X-Real-IP` and `X-Forwarded-Proto` from loopback. filebox trusts `X-Real-IP`, then the last `X-Forwarded-For` entry, only when the direct peer is loopback, and uses the address for rate limits and the activity log. The proxy must set these headers itself (nginx: `proxy_set_header X-Real-IP $remote_addr;`) and must not pass a client-supplied value through. Caddy and Traefik pass them through by default.
 
+## Versions
+
+When a file is overwritten by an upload, WebDAV or a restore, filebox keeps the previous content in `<volume>/.filebox/versions` and lists it in the file's details. A file that has other hard links shares its bytes with its versions, so a program that edits it in place through another link also changes those versions.
+
 ## Passkeys
 
 Passkeys ([WebAuthn](https://www.w3.org/TR/webauthn-3/)) work only on origins passed with `-origin https://files.example.com` (repeatable). The relying party ID is that host, so a reverse proxy must pass the original `Host` header. Browsers require HTTPS, so plain-HTTP LAN access shows no passkey UI; `http://localhost` is allowed for testing. Add passkeys under Settings. The password always keeps working, and `filebox passkey -data DIR ls | rm ID` removes a lost one.
