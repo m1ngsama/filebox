@@ -65,7 +65,11 @@ let early: { url: string; res: Promise<Response>; stop: AbortController } | unde
 export function prefetchLs(vol: string, path: string) {
   const url = lsURL(vol, path)
   const stop = new AbortController()
-  early = { url, stop, res: fetch(url, { signal: stop.signal }) }
+  const res = fetch(url, { signal: stop.signal })
+  res.catch((e) => {
+    if (e?.name !== 'AbortError') throw e
+  })
+  early = { url, stop, res }
 }
 
 export function dropPrefetch() {

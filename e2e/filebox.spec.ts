@@ -153,8 +153,17 @@ test('with a second user the login asks for a name again', async ({ page, server
 })
 
 test('a deep link lists its folder alongside the session check, and after signing in when signed out', async ({ page }) => {
+  const errors: string[] = []
+  page.on('pageerror', (e) => errors.push(e.message))
+  await page.route('/api/ls?*', async (r) => {
+    await new Promise((f) => setTimeout(f, 300))
+    await r.continue().catch(() => {})
+  })
   await page.goto('/files/v/docs/')
   await expect(page.getByLabel(t.username)).toHaveValue('')
+  await page.waitForTimeout(500)
+  expect(errors).toEqual([])
+  await page.unroute('/api/ls?*')
   await page.getByLabel(t.password, { exact: true }).fill('pw-pw-pw-pw')
   await page.getByRole('button', { name: t.login, exact: true }).click()
   await expect(row(page, 'readme.txt')).toHaveCount(1)
