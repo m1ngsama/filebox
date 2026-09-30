@@ -74,7 +74,7 @@ func (s *Store) Capture(v *vol.Volume, rel, source string, user int64) (string, 
 	defer s.mu.Unlock()
 	id, err := s.capture(v, rel, source, user)
 	if err == nil {
-		s.prune(v)
+		s.prune(v, rel)
 	}
 	return id, err
 }
@@ -221,12 +221,16 @@ func (s *Store) Prune(vols *vol.Set) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	for _, v := range vols.All() {
-		s.prune(v)
+		s.prune(v, "")
 	}
 }
 
-func (s *Store) prune(v *vol.Volume) {
-	rows, err := s.DB.Query(`SELECT `+columns+` FROM versions WHERE vol = ? ORDER BY path, created DESC, id DESC`, v.Name)
+func (s *Store) prune(v *vol.Volume, only string) {
+	q, args := `SELECT `+columns+` FROM versions WHERE vol = ?`, []any{v.Name}
+	if only != "" {
+		q, args = q+` AND path = ?`, append(args, only)
+	}
+	rows, err := s.DB.Query(q+` ORDER BY path, created DESC, id DESC`, args...)
 	if err != nil {
 		slog.Warn("prune versions", "vol", v.Name, "err", err)
 		return
@@ -237,20 +241,18 @@ func (s *Store) prune(v *vol.Volume) {
 		return
 	}
 	now := s.now().UnixMilli()
-	live := xs[:0]
 	for i := 0; i < len(xs); {
 		j := i
 		for j < len(xs) && xs[j].Path == xs[i].Path {
 			j++
 		}
-		keep, drop := Thin(xs[i:j], now)
+		_, drop := Thin(xs[i:j], now)
 		for _, x := range drop {
 			s.drop(v, x.ID)
 		}
-		live = append(live, keep...)
 		i = j
 	}
-	s.guard(v, live, now)
+	s.guard(v, now)
 }
 
 type bucket struct{ tier, n int64 }
@@ -281,7 +283,7 @@ func Thin(newestFirst []Version, now int64) (keep, drop []Version) {
 	return keep, drop
 }
 
-func (s *Store) guard(v *vol.Volume, xs []Version, now int64) {
+func (s *Store) guard(v *vol.Volume, now int64) {
 	u, err := s.usage(v)
 	if err != nil || u.Total == 0 || u.Free*100 >= u.Total*MinFreePct {
 		return
