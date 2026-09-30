@@ -50,6 +50,17 @@ func Trash(v *vol.Volume, rel string, now time.Time) (string, error) {
 	return id, nil
 }
 
+func Untrash(v *vol.Volume, id, rel string) error {
+	dir := path.Join(vol.TrashDir, id)
+	if err := v.Root.RemoveAll(rel); err != nil {
+		return err
+	}
+	if err := v.Root.Rename(path.Join(dir, path.Base(rel)), rel); err != nil {
+		return err
+	}
+	return v.Root.RemoveAll(dir)
+}
+
 func trashItem(v *vol.Volume, id string) (TrashItem, error) {
 	if !vol.ValidName(id) {
 		return TrashItem{}, vol.ErrBadPath

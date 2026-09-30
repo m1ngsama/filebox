@@ -185,6 +185,27 @@ func (s *Store) Restore(v *vol.Volume, id string, user int64) (string, string, e
 	return dst, prev, nil
 }
 
+func (s *Store) Revert(v *vol.Volume, id string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	x, err := s.Get(v.Name, id)
+	if err != nil {
+		return err
+	}
+	dst, err := vol.Clean(x.Path)
+	if err != nil {
+		return err
+	}
+	if err := v.Root.RemoveAll(dst); err != nil {
+		return err
+	}
+	if err := v.Root.Rename(File(id), dst); err != nil {
+		return err
+	}
+	s.forget(v, id)
+	return nil
+}
+
 func (s *Store) unwind(v *vol.Volume, id, dst string) {
 	if err := vol.Move(v.Root, File(id), dst); err != nil {
 		slog.Error("restore version", "vol", v.Name, "id", id, "err", err)

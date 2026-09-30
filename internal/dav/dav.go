@@ -53,20 +53,26 @@ func Handler(vols *vol.Set, a *auth.Auth, ix *index.Index, vs *version.Store) ht
 		}
 		// Browsers with cached Basic credentials would otherwise render uploaded HTML on this origin.
 		serve.SafeHeaders(w.Header(), "")
-		if (r.Method == "COPY" || r.Method == "MOVE") && r.Header.Get("Overwrite") != "F" {
-			if u, err := url.Parse(r.Header.Get("Destination")); err == nil {
-				r = r.WithContext(context.WithValue(r.Context(), overwriteKey{}, strings.TrimPrefix(u.Path, "/dav")))
-			}
-		}
-		if r.Method == "COPY" && ix != nil {
-			sw := &status{ResponseWriter: w}
-			h.ServeHTTP(sw, r)
-			if sw.code == http.StatusCreated || sw.code == http.StatusNoContent {
-				fsys.copyProps(r)
-			}
+		if r.Method != "COPY" && r.Method != "MOVE" {
+			h.ServeHTTP(w, r)
 			return
 		}
-		h.ServeHTTP(w, r)
+		ow := &overwrite{}
+		if u, err := url.Parse(r.Header.Get("Destination")); err == nil && r.Header.Get("Overwrite") != "F" {
+			ow.dst = strings.TrimPrefix(u.Path, "/dav")
+			r = r.WithContext(context.WithValue(r.Context(), overwriteKey{}, ow))
+		}
+		sw := &status{ResponseWriter: w}
+		h.ServeHTTP(sw, r)
+		ok := sw.code == http.StatusCreated || sw.code == http.StatusNoContent
+		if !ok && ow.undo != nil {
+			if err := ow.undo(); err != nil {
+				slog.Error("webdav: put back overwritten destination", "path", ow.dst, "err", err)
+			}
+		}
+		if ok && r.Method == "COPY" && ix != nil {
+			fsys.copyProps(r)
+		}
 	}))
 }
 
@@ -107,6 +113,11 @@ type FS struct {
 }
 
 type overwriteKey struct{}
+
+type overwrite struct {
+	dst  string
+	undo func() error
+}
 
 func user(ctx context.Context) int64 {
 	p, _ := auth.From(ctx)
@@ -193,14 +204,36 @@ func (f *FS) RemoveAll(ctx context.Context, name string) error {
 	if v == nil || rel == "." {
 		return os.ErrPermission
 	}
+	if ow, ok := ctx.Value(overwriteKey{}).(*overwrite); ok && ow.undo == nil && path.Clean("/"+ow.dst) == path.Clean("/"+name) {
+		return f.setAside(ctx, ow, v, rel)
+	}
 	defer f.ix.Touch(v, rel)
-	if dst, ok := ctx.Value(overwriteKey{}).(string); ok && path.Clean("/"+dst) == path.Clean("/"+name) {
-		if fi, err := v.Root.Lstat(rel); err == nil && fi.Mode().IsRegular() {
-			_, err := f.vs.Capture(v, rel, version.WebDAV, user(ctx))
-			return err
+	return v.Root.RemoveAll(rel)
+}
+
+func (f *FS) setAside(ctx context.Context, ow *overwrite, v *vol.Volume, rel string) error {
+	fi, err := v.Root.Lstat(rel)
+	if err != nil {
+		return err
+	}
+	if fi.Mode().IsRegular() {
+		id, err := f.vs.Capture(v, rel, version.WebDAV, user(ctx))
+		if err == nil {
+			ow.undo = func() error {
+				defer f.ix.Touch(v, rel)
+				return f.vs.Revert(v, id)
+			}
+		}
+		return err
+	}
+	id, err := api.Trash(v, rel, time.Now())
+	if err == nil {
+		ow.undo = func() error {
+			defer f.ix.Touch(v, rel)
+			return api.Untrash(v, id, rel)
 		}
 	}
-	return v.Root.RemoveAll(rel)
+	return err
 }
 
 func (f *FS) Rename(ctx context.Context, oldName, newName string) error {

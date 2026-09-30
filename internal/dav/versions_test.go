@@ -133,3 +133,77 @@ func TestDavCurlUploadTwice(t *testing.T) {
 		t.Fatalf("versions %q", got)
 	}
 }
+
+func TestDavFailedOverwriteKeepsDestination(t *testing.T) {
+	if os.Getuid() == 0 {
+		t.Skip("root reads unreadable files")
+	}
+	e := setup(t)
+	e.req(t, e.rw, "PUT", "/dav/v/src.txt", "new")
+	e.req(t, e.rw, "PUT", "/dav/w/dst.txt", "precious")
+	os.Chmod(filepath.Join(e.dir, "src.txt"), 0)
+	t.Cleanup(func() { os.Chmod(filepath.Join(e.dir, "src.txt"), 0o644) })
+	res, _ := e.req(t, e.rw, "MOVE", "/dav/v/src.txt", "", "Destination", e.srv.URL+"/dav/w/dst.txt", "Overwrite", "T")
+	if res.StatusCode < 400 {
+		t.Fatalf("MOVE %d", res.StatusCode)
+	}
+	if b, _ := os.ReadFile(filepath.Join(e.dir2, "dst.txt")); string(b) != "precious" {
+		t.Fatalf("destination after a failed MOVE: %q", b)
+	}
+	if xs, _ := e.vs.List("w", "dst.txt"); len(xs) != 0 {
+		t.Fatalf("version row left behind: %v", xs)
+	}
+
+	e.req(t, e.rw, "MKCOL", "/dav/v/dir", "")
+	e.req(t, e.rw, "PUT", "/dav/v/dir/ok.txt", "ok")
+	e.req(t, e.rw, "PUT", "/dav/v/dir/locked.txt", "x")
+	os.Chmod(filepath.Join(e.dir, "dir/locked.txt"), 0)
+	t.Cleanup(func() { os.Chmod(filepath.Join(e.dir, "dir/locked.txt"), 0o644) })
+	e.req(t, e.rw, "PUT", "/dav/v/keep.txt", "keep")
+	res, _ = e.req(t, e.rw, "COPY", "/dav/v/dir", "", "Destination", e.srv.URL+"/dav/v/keep.txt")
+	if res.StatusCode < 400 {
+		t.Fatalf("COPY %d", res.StatusCode)
+	}
+	if fi, err := os.Lstat(filepath.Join(e.dir, "keep.txt")); err != nil || !fi.Mode().IsRegular() {
+		t.Fatalf("destination after a failed COPY: %v", err)
+	}
+	if b, _ := os.ReadFile(filepath.Join(e.dir, "keep.txt")); string(b) != "keep" || len(e.versions(t, "keep.txt")) != 0 {
+		t.Fatalf("destination after a failed COPY: %q", b)
+	}
+
+	e.req(t, e.rw, "MKCOL", "/dav/w/folder", "")
+	e.req(t, e.rw, "PUT", "/dav/w/folder/inner.txt", "inner")
+	res, _ = e.req(t, e.rw, "MOVE", "/dav/v/src.txt", "", "Destination", e.srv.URL+"/dav/w/folder", "Overwrite", "T")
+	if res.StatusCode < 400 {
+		t.Fatalf("MOVE onto folder %d", res.StatusCode)
+	}
+	if b, _ := os.ReadFile(filepath.Join(e.dir2, "folder/inner.txt")); string(b) != "inner" {
+		t.Fatalf("folder after a failed MOVE: %q", b)
+	}
+	if _, err := os.Stat(filepath.Join(e.dir2, vol.TrashDir)); err == nil {
+		if des, _ := os.ReadDir(filepath.Join(e.dir2, vol.TrashDir)); len(des) != 0 {
+			t.Fatal("trash entry left behind")
+		}
+	}
+}
+
+func TestDavOverwrittenFolderGoesToTrash(t *testing.T) {
+	e := setup(t)
+	e.req(t, e.rw, "PUT", "/dav/v/a.txt", "a")
+	e.req(t, e.rw, "MKCOL", "/dav/v/folder", "")
+	e.req(t, e.rw, "PUT", "/dav/v/folder/inner.txt", "inner")
+	res, _ := e.req(t, e.rw, "MOVE", "/dav/v/a.txt", "", "Destination", e.srv.URL+"/dav/v/folder", "Overwrite", "T")
+	if res.StatusCode != 204 {
+		t.Fatalf("MOVE %d", res.StatusCode)
+	}
+	des, _ := os.ReadDir(filepath.Join(e.dir, vol.TrashDir))
+	if len(des) != 1 {
+		t.Fatalf("trash %v", des)
+	}
+	if b, _ := os.ReadFile(filepath.Join(e.dir, vol.TrashDir, des[0].Name(), "folder/inner.txt")); string(b) != "inner" {
+		t.Fatalf("trashed folder content %q", b)
+	}
+	if b, _ := os.ReadFile(filepath.Join(e.dir, "folder")); string(b) != "a" {
+		t.Fatalf("destination %q", b)
+	}
+}
