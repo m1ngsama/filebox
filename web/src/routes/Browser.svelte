@@ -608,7 +608,14 @@
   {#if details}
     {#await import('../components/Details.svelte') then { default: Details }}
       {#key details.name}
-        <Details {vol} path={join(details.name)} entry={details} thumbs={[thumb(details), raw(details)]} onclose={closeDetails} />
+        <Details
+          {vol}
+          path={join(details.name)}
+          entry={details}
+          thumbs={[thumb(details), raw(details)]}
+          onclose={closeDetails}
+          onchange={() => refresh().then(() => (details = entries.find((e) => e.name === details?.name) ?? details))}
+        />
       {/key}
     {/await}
   {/if}

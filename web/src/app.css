@@ -265,13 +265,18 @@ kbd { display: inline-block; min-width: 24px; padding: 1px 6px; border: 1px soli
 .details dl { display: grid; grid-template-columns: auto 1fr; gap: 2px 12px; margin: var(--space-2) 0 0; font-size: var(--text-sm); }
 .details dt { color: var(--muted); }
 .details dd { margin: 0; overflow-wrap: anywhere; }
+.details dd .link, .details dd .link:hover:not(:disabled) { border: 0; padding: 0; background: none; color: var(--accent); }
+.versions + .hint { margin: 0; }
 .tab-list { display: flex; gap: var(--space-1); padding: 0 var(--space-4); border-bottom: 1px solid var(--line); }
 .tab { border: 0; border-bottom: 2px solid transparent; border-radius: 0; background: none; padding: 10px 4px; color: var(--muted); }
 .tab[data-state='active'] { color: var(--fg); border-bottom-color: var(--accent); font-weight: 600; }
 .tab-body { padding: var(--space-4); display: flex; flex-direction: column; gap: var(--space-4); }
+.tab-body[hidden] { display: none; }
 .shares { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: var(--space-2); }
 .shares li { display: flex; align-items: center; gap: var(--space-2); }
 .shares li > svg { color: var(--accent); flex: none; }
+.versions { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: var(--space-2); }
+.versions li { display: flex; align-items: center; gap: var(--space-1); }
 .share-meta { flex: 1; min-width: 0; display: flex; flex-direction: column; }
 .share-meta a { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: var(--text-sm); }
 .share-form { display: flex; flex-direction: column; gap: var(--space-3); border-top: 1px solid var(--line); padding-top: 16px; }
