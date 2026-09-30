@@ -93,8 +93,55 @@
   const thumb = (e: Entry) => (!e.dir && thumbable(e.name) ? thumbURL(vol, join(e.name)) : null)
   const raw = (e: Entry) => (rawThumb(e) ? rawURL(vol, join(e.name)) : null)
 
+  type Op = { name: string; entry: Entry | null; settled: number }
+  let listing: Entry[] = []
+  let ops: Op[] = []
+  let clock = 0
+  let chain: Promise<unknown> = Promise.resolve()
+
+  function overlay(list: Entry[], started: number) {
+    listing = list
+    ops = ops.filter((o) => !o.settled || o.settled >= started)
+    if (!ops.length) return list
+    const m = new Map(list.map((e) => [e.name, e]))
+    for (const o of ops) {
+      if (o.entry) m.set(o.name, o.entry)
+      else m.delete(o.name)
+    }
+    return [...m.values()]
+  }
+
+  const reapply = () => (entries = overlay(listing, 0))
+
+  function begin(changes: [string, Entry | null][]) {
+    const mine = changes.map(([name, entry]) => ({ name, entry, settled: 0 }))
+    ops.push(...mine)
+    reapply()
+    return mine
+  }
+
+  function settle(mine: Op[]) {
+    const c = ++clock
+    for (const o of mine) o.settled = c
+    reapply()
+  }
+
+  function rollback(mine: Op[], err: unknown) {
+    ops = ops.filter((o) => !mine.includes(o))
+    reapply()
+    fail(err)
+    refresh()
+  }
+
+  function serial<T>(f: () => Promise<T>) {
+    const p = chain.then(f, f)
+    chain = p.catch(() => {})
+    return p
+  }
+
   async function refresh() {
     const want = here
+    const started = ++clock
     loading?.abort()
     const { signal } = (loading = new AbortController())
     let last = -Infinity
@@ -106,7 +153,7 @@
         said = last
         announce = t.loadingItems(es.length)
       }
-      entries = es.slice()
+      entries = overlay(es.slice(), started)
       streaming = true
       error = ''
       at = want
@@ -116,7 +163,7 @@
       (e: Error) => [[], e.message] as const,
     )
     if (want !== here || signal?.aborted) return false
-    entries = [...list]
+    entries = overlay([...list], started)
     error = err
     streaming = false
     announce = ''
@@ -131,6 +178,8 @@
     searching = false
     details = null
     reveal = ''
+    ops = []
+    listing = []
     const focus = new URLSearchParams(untrack(() => route.search)).get('details')
     refresh().then((ok) => {
       if (ok && focus) details = entries.find((e) => e.name === focus) ?? null
@@ -373,10 +422,6 @@
     return bad
   }
 
-  function put(e: Entry, drop = e.name) {
-    entries = [...entries.filter((x) => x.name !== e.name && x.name !== drop), e]
-  }
-
   function pick(name: string) {
     selected.clear()
     if (!narrow.current) selected.add(name)
@@ -389,63 +434,63 @@
 
   function mkdir(n: string) {
     vacant(n)
-    const key = here
-    put({ name: n, dir: true, size: 0, mtime: Date.now() })
+    const mine = begin([[n, { name: n, dir: true, size: 0, mtime: Date.now() }]])
     pick(n)
-    api.mkdir(vol, join(n)).then(
-      (e) => here === key && put(e),
-      (err) => {
-        if (here === key) entries = entries.filter((x) => x.name !== n)
-        fail(err)
+    const p = join(n)
+    serial(() => api.mkdir(vol, p)).then(
+      (e) => {
+        mine[0].entry = e
+        settle(mine)
       },
+      (err) => rollback(mine, err),
     )
   }
 
   function rename(e: Entry, n: string) {
     vacant(n)
-    const key = here
     const m = { from: { vol, path: join(e.name) }, to: { vol, path: join(n) } }
     if (details?.name === e.name) closeDetails()
-    put({ ...e, name: n }, e.name)
+    const mine = begin([
+      [e.name, null],
+      [n, { ...e, name: n }],
+    ])
     pick(n)
-    api.mv(m.from, m.to).then(
+    serial(() => api.mv(m.from, m.to)).then(
       () => {
+        settle(mine)
         toast(t.renamed(n), { actions: [undo(() => reverse([m]))] })
         loadStars(true)
       },
-      (err) => {
-        if (here === key) put(e, n)
-        fail(err)
-      },
+      (err) => rollback(mine, err),
     )
   }
 
   async function remove(names: string[]) {
     const v = vol
-    const key = here
-    const gone = new Set(names)
-    const held = entries.filter((e) => gone.has(e.name))
-    const back = (keep: Set<string>) => {
-      if (here === key) entries = [...entries.filter((e) => !keep.has(e.name)), ...held.filter((e) => keep.has(e.name))]
-    }
-    entries = entries.filter((e) => !gone.has(e.name))
+    const paths = names.map(join)
+    const mine = begin(names.map((n) => [n, null]))
     selected.clear()
-    if (details && gone.has(details.name)) closeDetails()
-    const pending = api.rm(v, names.map(join))
+    if (details && names.includes(details.name)) closeDetails()
+    const pending = serial(() => api.rm(v, paths))
     const id = toast(t.trashed(t.what(names)), { actions: [undo(async () => restore(v, (await pending).trashed))] })
     try {
       const r = await pending
       loadStars(true)
-      if (!r.failed.length) return
-      if (r.trashed.length) retext(id, t.trashed(t.what(r.trashed.map((x) => base(x.path)))))
+      settle(mine)
+      const bad = r.failed.filter((f) => f.status !== 404)
+      if (!bad.length) return
+      const keep = new Set(bad.map((f) => base(f.path)))
+      const done = names.filter((n) => !keep.has(n))
+      if (done.length) retext(id, t.trashed(t.what(done)))
       else dismiss(id)
-      back(new Set(r.failed.map((f) => base(f.path))))
-      const f = r.failed[0]
-      fail(new Error(r.failed.length > 1 ? t.removeFailed(r.failed.map((x) => base(x.path))) : t.failedItem(t.what([base(f.path)]), errorText(f.status) ?? f.error)))
+      const f = bad[0]
+      rollback(
+        mine.filter((o) => keep.has(o.name)),
+        new Error(bad.length > 1 ? t.removeFailed([...keep]) : t.failedItem(t.what([base(f.path)]), errorText(f.status) ?? f.error)),
+      )
     } catch (err) {
       dismiss(id)
-      back(gone)
-      fail(err)
+      rollback(mine, err)
     }
   }
 
