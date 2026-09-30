@@ -1,7 +1,9 @@
 package index
 
 import (
+	"bytes"
 	"context"
+	"database/sql"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -228,6 +230,50 @@ func (x *Index) stopFunc() context.CancelFunc {
 	x.cmu.Lock()
 	defer x.cmu.Unlock()
 	return x.stop
+}
+
+// corruptFile checkpoints content.db from another connection, so pooled connections drop their page cache, and overwrites its pages.
+func corruptFile(t *testing.T, p string) {
+	t.Helper()
+	d, err := sql.Open("sqlite", p)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := d.Exec(`PRAGMA wal_checkpoint(TRUNCATE)`); err != nil {
+		t.Fatal(err)
+	}
+	d.Close()
+	f, err := os.OpenFile(p, os.O_RDWR, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer f.Close()
+	st, _ := f.Stat()
+	f.WriteAt(bytes.Repeat([]byte{0xab}, int(st.Size())-4096), 4096)
+}
+
+func TestContentHealsCorruption(t *testing.T) {
+	e := setup(t)
+	e.write(t, "a.txt", "alpha words", time.Unix(1_700_000_000, 0))
+	e.scan(t)
+	old := e.open(t)
+	e.pass(t)
+	if got := e.findText(t, Query{Text: "alpha"}); len(got) != 1 {
+		t.Fatalf("before %v", got)
+	}
+	corruptFile(t, e.cdb)
+	if _, err := e.x.SearchContent(context.Background(), Query{Text: "alpha", Limit: 10}); err == nil {
+		t.Fatal("search read a corrupt content.db without error")
+	}
+	if e.x.content.Load() == old {
+		t.Fatal("corrupt content.db was kept")
+	}
+	if n := e.pass(t); n != 1 {
+		t.Fatalf("rebuild extracted %d", n)
+	}
+	if got := e.findText(t, Query{Text: "alpha"}); len(got) != 1 {
+		t.Fatalf("after rebuild %v", got)
+	}
 }
 
 func TestContentReextractsOnNewVersion(t *testing.T) {

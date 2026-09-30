@@ -1,8 +1,11 @@
 package app
 
 import (
+	"bytes"
 	"context"
+	"database/sql"
 	"net/url"
+	"os"
 	"path/filepath"
 	"slices"
 	"testing"
@@ -77,7 +80,8 @@ func TestSearchContentAPI(t *testing.T) {
 	if r := decode[result](t, f.do("GET", "/api/search?q=content", nil)); r.Content == nil || len(r.Content) != 0 || r.Indexing != nil {
 		t.Fatalf("disabled %+v", r)
 	}
-	if err := f.App.Index.OpenContent(filepath.Join(t.TempDir(), "content.db")); err != nil {
+	cdb := filepath.Join(t.TempDir(), "content.db")
+	if err := f.App.Index.OpenContent(cdb); err != nil {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { f.App.Index.CloseContent() })
@@ -102,5 +106,21 @@ func TestSearchContentAPI(t *testing.T) {
 	}
 	if r := decode[result](t, f.do("GET", "/api/search?q=content&vol=w", nil)); len(r.Content) != 0 {
 		t.Fatalf("other volume %+v", r)
+	}
+
+	d, err := sql.Open("sqlite", cdb)
+	if err != nil {
+		t.Fatal(err)
+	}
+	d.Exec(`PRAGMA wal_checkpoint(TRUNCATE)`)
+	d.Close()
+	b, _ := os.ReadFile(cdb)
+	os.WriteFile(cdb, append(b[:4096], bytes.Repeat([]byte{0xab}, len(b)-4096)...), 0o644)
+	w := f.do("GET", "/api/search?q=plan.txt", nil)
+	if r := decode[recentList](t, w); w.Code != 200 || len(r.Entries) != 1 {
+		t.Fatalf("a damaged content index broke name search: %d %s", w.Code, w.Body)
+	}
+	if r := decode[result](t, f.do("GET", "/api/search?q=plan.txt", nil)); r.Content == nil {
+		t.Fatalf("content must stay an empty list %+v", r)
 	}
 }

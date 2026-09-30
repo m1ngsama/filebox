@@ -14,6 +14,9 @@ import (
 	"sync/atomic"
 	"time"
 
+	"modernc.org/sqlite"
+	sqlite3 "modernc.org/sqlite/lib"
+
 	"github.com/m1ngsama/filebox/internal/extract"
 	"github.com/m1ngsama/filebox/internal/vol"
 )
@@ -56,6 +59,7 @@ type ContentHit struct {
 type content struct {
 	db          *sql.DB
 	w           sync.Mutex
+	warned      atomic.Bool
 	running     atomic.Bool
 	done, total atomic.Int64
 }
@@ -98,6 +102,38 @@ func (x *Index) CloseContent() error {
 	defer c.w.Unlock()
 	c.db.Exec(`DELETE FROM contents WHERE status = 'running'`)
 	return c.db.Close()
+}
+
+func corrupt(err error) bool {
+	var e *sqlite.Error
+	return errors.As(err, &e) && (e.Code()&0xff == sqlite3.SQLITE_CORRUPT || e.Code()&0xff == sqlite3.SQLITE_NOTADB)
+}
+
+func (x *Index) failed(c *content, err error) {
+	if !corrupt(err) {
+		if !c.warned.Swap(true) {
+			slog.Warn("content index", "err", err)
+		}
+		return
+	}
+	x.cmu.Lock()
+	defer x.cmu.Unlock()
+	if x.content.Load() != c {
+		return
+	}
+	slog.Error("content index damaged, rebuilding", "path", x.cpath, "err", err)
+	c.w.Lock()
+	c.db.Close()
+	c.w.Unlock()
+	removeContent(x.cpath)
+	fresh, err := openContent(x.cpath)
+	if err != nil {
+		slog.Error("content index off", "err", err)
+		x.content.Store(nil)
+		return
+	}
+	x.content.Store(fresh)
+	x.poke()
 }
 
 func openContent(p string) (*content, error) {
@@ -175,7 +211,7 @@ func (x *Index) Extract(ctx context.Context, vols *vol.Set, ex *extract.Extracto
 		n, err := x.extractAll(ctx, vols, c, ex)
 		switch {
 		case err != nil && ctx.Err() == nil:
-			slog.Error("content index", "err", err)
+			x.failed(c, err)
 		case n > 0:
 			slog.Info("content index", "files", n, "took", time.Since(start).Round(time.Millisecond))
 		}

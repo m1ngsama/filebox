@@ -106,11 +106,19 @@ func (x *Index) hits(ctx context.Context, sql string, args ...any) ([]Hit, error
 }
 
 func (x *Index) SearchContent(ctx context.Context, q Query) ([]ContentHit, error) {
-	out := []ContentHit{}
 	c := x.content.Load()
 	if c == nil || utf8.RuneCountInString(q.Text) < 3 {
-		return out, nil
+		return []ContentHit{}, nil
 	}
+	out, err := x.searchContent(ctx, c, q)
+	if err != nil && ctx.Err() == nil {
+		x.failed(c, err)
+	}
+	return out, err
+}
+
+func (x *Index) searchContent(ctx context.Context, c *content, q Query) ([]ContentHit, error) {
+	out := []ContentHit{}
 	phrase := `"` + strings.ReplaceAll(q.Text, `"`, `""`) + `"`
 	rows, err := c.db.QueryContext(ctx, `SELECT json_group_array(json_array(id, size, mtime)) FROM contents
 		WHERE status = 'ok' AND id IN (SELECT rowid FROM contents_fts WHERE contents_fts MATCH ? ORDER BY rowid DESC LIMIT ?)`, phrase, candidates)
