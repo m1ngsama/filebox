@@ -213,7 +213,10 @@ func Clean(p string) (string, error) {
 func Move(r *os.Root, from, to string) error {
 	err := r.Link(from, to)
 	if err == nil {
-		return r.Remove(from)
+		if err := r.Remove(from); err != nil && !errors.Is(err, fs.ErrNotExist) {
+			return err
+		}
+		return nil
 	}
 	if errors.Is(err, fs.ErrExist) {
 		return err
