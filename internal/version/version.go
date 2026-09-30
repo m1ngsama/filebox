@@ -541,6 +541,13 @@ func (s *Store) recover(v *vol.Volume) error {
 			s.forget(v, x.ID)
 			continue
 		}
+		kept, err1 := v.Root.Lstat(File(x.ID))
+		live, err2 := v.Root.Lstat(x.Path)
+		if err1 == nil && err2 == nil && os.SameFile(kept, live) {
+			slog.Warn("version is the live file after a crash, dropping it", "vol", v.Name, "id", x.ID)
+			s.drop(v, x.ID)
+			continue
+		}
 		known[x.ID] = true
 	}
 	for _, n := range names {

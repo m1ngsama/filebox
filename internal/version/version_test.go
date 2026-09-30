@@ -470,3 +470,25 @@ func TestGuardDoesNotCountSharedBytes(t *testing.T) {
 		t.Fatal("guard touched the other link")
 	}
 }
+
+func TestRecoverDropsAVersionThatIsTheLiveFile(t *testing.T) {
+	e := setup(t)
+	id := e.capture(t, "a.txt", "live")
+	os.Link(filepath.Join(e.dir, vol.VersionsDir, id), filepath.Join(e.dir, "a.txt"))
+	other := e.capture(t, "b.txt", "old")
+	e.write(t, "b.txt", "new")
+	if err := e.s.Recover(e.vols); err != nil {
+		t.Fatal(err)
+	}
+	if e.count(t, "a.txt") != 0 || e.read("a.txt") != "live" {
+		t.Fatal("version sharing the live inode kept, or live file lost")
+	}
+	for _, n := range []string{id, id + ".path"} {
+		if _, err := os.Lstat(filepath.Join(e.dir, vol.VersionsDir, n)); !errors.Is(err, fs.ErrNotExist) {
+			t.Fatalf("%s left behind", n)
+		}
+	}
+	if xs, _ := e.s.List("v", "b.txt"); len(xs) != 1 || xs[0].ID != other {
+		t.Fatal("an ordinary version was dropped")
+	}
+}
