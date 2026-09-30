@@ -28,7 +28,7 @@
   import EllipsisVertical from '@lucide/svelte/icons/ellipsis-vertical'
   import ArrowUp from '@lucide/svelte/icons/arrow-up'
   import ArrowDown from '@lucide/svelte/icons/arrow-down'
-  import { api, filesURL, fileURL, rawURL, thumbURL, zipURL, saveURL, type Entry, type Move, type RecentFile } from '../lib/api'
+  import { api, filesURL, fileURL, rawURL, thumbURL, zipURL, saveURL, type Entry, type Move, type RecentFile, type ContentHit, type Progress } from '../lib/api'
   import { toast, fail, runLatest } from '../lib/toast.svelte'
   import { navigate, link, route } from '../lib/router.svelte'
   import { enqueue, type Replaced } from '../lib/uploads.svelte'
@@ -40,6 +40,7 @@
   import NavToggle from '../components/NavToggle.svelte'
   import EmptyState from '../components/EmptyState.svelte'
   import EntryList, { type Action } from '../components/EntryList.svelte'
+  import ContentHits from '../components/ContentHits.svelte'
   import type { Choice } from '../components/ConflictDialog.svelte'
   import { target, inside, type Carried, type Target } from '../lib/dnd'
 
@@ -56,6 +57,8 @@
   let filter = $state('')
   let scope = $state<'here' | 'all'>('here')
   let hits = $state.raw<RecentFile[] | null>(null)
+  let content = $state.raw<ContentHit[]>([])
+  let indexing = $state.raw<Progress | null>(null)
   let hitSort = $state<Sort | null>(null)
   let hitDesc = $state(false)
   const ranked = $derived(hits && hitSort ? arrange(hits, '', hitSort, hitDesc) : hits)
@@ -155,6 +158,8 @@
           (r) => {
             if (stop.signal.aborted) return
             hits = r.entries
+            content = r.content
+            indexing = r.indexing
             partial = r.scanning
             hitSort = null
             finding = false
@@ -589,7 +594,10 @@
         loc={hitLoc}
       >
         {#snippet empty()}
-          {#if !finding}<EmptyState icon={SearchX} title={t.noResults} hint={t.noResultsHint} />{/if}
+          {#if !finding && !content.length}<EmptyState icon={SearchX} title={t.noResults} hint={t.noResultsHint} />{/if}
+        {/snippet}
+        {#snippet footer()}
+          {#if !finding && (content.length || indexing)}<ContentHits hits={content} {indexing} onopen={(h) => actOn('folder', { ...h, dir: false })} />{/if}
         {/snippet}
       </EntryList>
     {:else}

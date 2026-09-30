@@ -17,6 +17,8 @@ export type RecentFile = Entry & Loc
 export type Favorite = RecentFile & { missing: boolean }
 export type Usage = { name: string; used: number; free: number; total: number }
 export type Loc = { vol: string; path: string }
+export type ContentHit = Loc & { name: string; size: number; mtime: number; snippet: string[] }
+export type Progress = { done: number; total: number }
 export type Move = { from: Loc; to: Loc }
 export type Share = { id: number; token: string; vol: string; path: string; mode: 'read' | 'upload' | 'drop'; has_password: boolean; expires: number; created: number; hits: number; views: number; note: string; max_upload: number; dir: boolean }
 export type ShareEdit = Partial<{ mode: Share['mode']; password: string; expires_in: number; note: string; max_upload: number }>
@@ -123,7 +125,12 @@ export const api = {
   logout: () => req<void>('POST', '/api/logout'),
   ls: (vol: string, path: string, signal?: AbortSignal, onchunk?: (entries: Entry[]) => void) => list(`/api/ls?${q({ vol, path })}`, signal, onchunk),
   search: (q: string, signal: AbortSignal) =>
-    req<{ entries: RecentFile[]; scanning: boolean }>('GET', `/api/search?${new URLSearchParams({ q })}`, undefined, signal),
+    req<{ entries: RecentFile[]; content: ContentHit[]; indexing: Progress | null; scanning: boolean }>(
+      'GET',
+      `/api/search?${new URLSearchParams({ q })}`,
+      undefined,
+      signal,
+    ),
   vols: () => req<{ vols: Usage[] }>('GET', '/api/vols'),
   size: (vol: string, path: string) => req<{ size: number; files: number; scanning: boolean }>('GET', `/api/size?${q({ vol, path })}`),
   favorites: () => req<{ entries: Favorite[] }>('GET', '/api/favorites'),

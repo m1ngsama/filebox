@@ -978,6 +978,42 @@ test('searching everything finds a file in another folder and opens it there, se
   await expect(page.getByText(t.noMatch)).toBeVisible()
 })
 
+test('searching finds words inside text and markdown files and opens the match in its folder', async ({ page }) => {
+  await login(page)
+  await row(page, 'docs').locator('button.name').click()
+  await expect(page).toHaveURL(/\/files\/v\/docs\/$/)
+  await fileInput(page).setInputFiles([
+    { name: 'minutes.txt', mimeType: 'text/plain', buffer: Buffer.from('We agreed on the quarterly budget <b>review</b> for next spring.\n') },
+    { name: 'plan.md', mimeType: 'text/markdown', buffer: Buffer.from('# Plan\n\nMigrate the **zebrafish** database before launch.\n') },
+  ])
+  await expect(row(page, 'plan.md')).toHaveCount(1)
+  await expect(row(page, 'minutes.txt')).toHaveCount(1)
+  await page.locator('.crumbs a', { hasText: 'v' }).click()
+  await page.getByRole('radio', { name: t.scopeAll }).click()
+  const section = page.getByRole('region', { name: t.contentMatches })
+  const search = async (q: string) =>
+    expect(async () => {
+      await page.getByLabel(t.filter).fill('')
+      await page.getByLabel(t.filter).fill(q)
+      await expect(section.locator('.hit')).toHaveCount(1, { timeout: 1500 })
+    }).toPass({ timeout: 30_000 })
+
+  await search('the **zebrafish')
+  await expect(section.locator('.hit .name')).toHaveText('plan.md')
+  await expect(section.locator('mark')).toHaveText('the **zebrafish')
+
+  await search('budget <b>rev')
+  const hit = section.locator('.hit')
+  await expect(hit.locator('.name')).toHaveText('minutes.txt')
+  await expect(hit.locator('.where')).toHaveText('v/docs')
+  await expect(hit.locator('mark')).toHaveText('budget <b>rev')
+  await expect(hit.locator('.snippet b')).toHaveCount(0)
+  await expect(page.getByText(t.noResults)).toHaveCount(0)
+  await hit.click()
+  await expect(page).toHaveURL(/\/files\/v\/docs\/$/)
+  await expect(row(page, 'minutes.txt')).toHaveAttribute('aria-selected', 'true')
+})
+
 const han = /[\u3000-\u303f\u4e00-\u9fff\uff00-\uffef]/
 
 test.describe('with an English browser', () => {

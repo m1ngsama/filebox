@@ -34,6 +34,7 @@
     onopen,
     batch,
     empty,
+    footer,
     loading = false,
     busy = false,
     id = (e) => e.name,
@@ -55,6 +56,7 @@
     onopen: (e: Entry) => void
     batch?: Snippet
     empty?: Snippet
+    footer?: Snippet
     loading?: boolean
     busy?: boolean
     id?: (e: Entry) => string
@@ -431,6 +433,7 @@
             {/if}
           {/each}
         </div>
+        {@render footer?.()}
       </div>
     {/snippet}
   </ContextMenu.Trigger>
