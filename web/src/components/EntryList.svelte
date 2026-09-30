@@ -71,8 +71,9 @@
   let scroller = $state<HTMLDivElement>()
   let width = $state(0)
   let ctx = $state.raw<Entry | null>(null)
-  let anchor = -1
-  let cur = $state(0)
+  let anchor = ''
+  let cur = $state('')
+  let inside = false
   let want = -1
   let touch = false
   let swallow = false
@@ -97,7 +98,7 @@
   })
   const rows = $derived(layout ? layout.items.length : Math.ceil(entries.length / cols))
   const rowOf = (i: number) => (layout ? layout.rowOf[i] : Math.floor(i / cols))
-  const tab = $derived(Math.min(cur, entries.length - 1))
+  const tab = $derived(Math.max(0, cur ? entries.findIndex((e) => id(e) === cur) : 0))
   const all = $derived(!!selected && entries.length > 0 && entries.every((e) => selected.has(id(e))))
 
   const v = createVirtualizer<HTMLDivElement, HTMLDivElement>({
@@ -147,7 +148,7 @@
     timer = setTimeout(() => {
       pressing = -1
       swallow = true
-      anchor = entries.findIndex((e) => id(e) === key)
+      anchor = key
       selected.add(key)
       navigator.vibrate?.(10)
     }, 450)
@@ -179,12 +180,13 @@
   function pick(ev: MouseEvent, i: number) {
     if (!selected || (ev.target as Element).closest('button, input, a')) return
     if (touch) return tap(i)
-    if (ev.shiftKey && anchor >= 0) {
+    const a = anchor ? entries.findIndex((e) => id(e) === anchor) : -1
+    if (ev.shiftKey && a >= 0) {
       getSelection()?.removeAllRanges()
-      for (const e of entries.slice(Math.min(anchor, i), Math.max(anchor, i) + 1)) selected.add(id(e))
+      for (const e of entries.slice(Math.min(a, i), Math.max(a, i) + 1)) selected.add(id(e))
       return
     }
-    anchor = i
+    anchor = id(entries[i])
     toggle(id(entries[i]))
   }
 
@@ -205,7 +207,7 @@
     const step = { ArrowDown: cols, ArrowUp: -cols, ArrowRight: grid ? 1 : 0, ArrowLeft: grid ? -1 : 0 }[ev.key]
     if (ev.key === ' ') {
       ev.preventDefault()
-      anchor = i
+      anchor = id(entries[i])
       toggle(id(entries[i]))
     } else if (ev.key === 'Enter') {
       ev.preventDefault()
@@ -213,11 +215,25 @@
     } else if (step !== undefined || ev.key === 'Home' || ev.key === 'End') {
       ev.preventDefault()
       const to = ev.key === 'Home' ? 0 : ev.key === 'End' ? entries.length - 1 : Math.min(entries.length - 1, Math.max(0, i + step!))
-      cur = want = to
+      cur = id(entries[to])
+      want = to
       $v.scrollToIndex(rowOf(to))
       focusWanted()
     }
   }
+
+  $effect(() => {
+    entries
+    if (!untrack(() => inside && cur)) return
+    tick().then(() => {
+      if (document.activeElement !== document.body) return
+      const i = entries.findIndex((e) => id(e) === cur)
+      if (i < 0) return
+      want = i
+      $v.scrollToIndex(rowOf(i))
+      tick().then(focusWanted)
+    })
+  })
 
   let revealed = ''
   $effect(() => {
@@ -227,7 +243,8 @@
     if (i < 0) return
     revealed = key
     untrack(() => {
-      cur = want = i
+      cur = key
+      want = i
       $v.scrollToIndex(rowOf(i), { align: 'center' })
       tick().then(focusWanted)
     })
@@ -313,7 +330,7 @@
 <ContextMenu.Root onOpenChange={(o) => !o && (ctx = null)}>
   <ContextMenu.Trigger disabled={held || (!ctx && !actions(null).length)}>
     {#snippet child({ props })}
-      <div {...props} class="scroller" class:selecting={!!selected?.size} bind:this={scroller} bind:clientWidth={width} oncontextmenucapture={() => (ctx = null)} onscroll={release}>
+      <div {...props} class="scroller" class:selecting={!!selected?.size} bind:this={scroller} bind:clientWidth={width} oncontextmenucapture={() => (ctx = null)} onscroll={release} onfocusin={() => (inside = true)} onfocusout={(ev) => (inside = !ev.relatedTarget || !!scroller?.contains(ev.relatedTarget as Node))}>
         {#if !entries.length && loading}
           <div class="skeleton" class:grid role="status" aria-label={t.loading}>
             {#each { length: grid ? 12 : 10 }, i (i)}
@@ -342,7 +359,7 @@
                     class:pressing={pressing === i}
                     onclick={(ev) => pick(ev, i)}
                     onkeydown={(ev) => key(ev, i)}
-                    onfocus={() => (cur = i)}
+                    onfocus={() => (cur = id(e))}
                     oncontextmenu={(ev) => menu(ev, e)}
                     onpointerdown={(ev) => press(ev, i)}
                     onpointermove={drift}
@@ -386,7 +403,7 @@
                 class:pressing={pressing === n}
                 onclick={(ev) => pick(ev, n)}
                 onkeydown={(ev) => key(ev, n)}
-                onfocus={() => (cur = n)}
+                onfocus={() => (cur = id(e))}
                 oncontextmenu={(ev) => menu(ev, e)}
                 onpointerdown={(ev) => press(ev, n)}
                 onpointermove={drift}

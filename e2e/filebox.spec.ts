@@ -473,6 +473,26 @@ test('rows select and open from the keyboard', async ({ page, server }) => {
   await expect(page.locator('.viewer pre')).toHaveText('k0')
 })
 
+test('focus and the shift-click anchor stay on the same item when the list re-sorts', async ({ page, server }) => {
+  mkdirSync(join(server.vol, 'many'), { recursive: true })
+  for (let i = 0; i < 20; i++) writeFileSync(join(server.vol, 'many', `k-${String(i).padStart(2, '0')}.txt`), 'x'.repeat(i + 1))
+  await login(page)
+  await row(page, 'many').locator('button.name').click()
+  await row(page, 'k-00.txt').focus()
+  for (let i = 0; i < 3; i++) await page.keyboard.press('ArrowDown')
+  await expect(row(page, 'k-03.txt')).toBeFocused()
+  await page.keyboard.press('Space')
+  await page.keyboard.press('Escape')
+  await page.getByRole('button', { name: t.size }).click()
+  await expect(page.locator('.row').first()).toContainText('k-19.txt')
+  await expect(page.locator('.row[tabindex="0"]')).toContainText('k-03.txt')
+  await row(page, 'k-08.txt').locator('.size').click({ modifiers: ['Shift'] })
+  const picked = page.getByRole('grid', { name: t.fileList }).getByRole('row', { selected: true })
+  await expect(picked).toHaveCount(6)
+  await expect(picked.first()).toContainText('k-08.txt')
+  await expect(picked.last()).toContainText('k-03.txt')
+})
+
 test('resumable upload survives a dropped connection and a page reload', async ({ page, server }) => {
   const src = bigFile(200)
   const total = statSync(src).size
