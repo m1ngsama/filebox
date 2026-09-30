@@ -118,7 +118,8 @@ p.error::before { content: ''; flex: none; width: 1em; height: 1lh; background: 
 }
 .crumbs > :last-child { color: var(--fg); font-weight: 600; }
 .crumbs > svg { flex: none; }
-.up, .search-open, .search-close, .overflow:not(.keep), .fab { display: none; }
+.up, .search-open, .search-close, .overflow, .fab { display: none; }
+.overflow.keep { display: inline-grid; }
 .up { align-items: center; gap: var(--space-0); min-width: 0; max-width: 30%; margin-left: -6px; padding: var(--space-2) var(--space-1-5) var(--space-2) 0; color: var(--accent); flex: none; }
 .up span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .bar .title { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
