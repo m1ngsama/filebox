@@ -114,7 +114,9 @@ func (s *Set) Resolve(volName, p string) (*Volume, string, error) {
 	return v, rel, nil
 }
 
-func Reserved(name string) bool { return name == ".filebox" || name == TrashDir }
+func Reserved(name string) bool {
+	return strings.EqualFold(name, ".filebox") || strings.EqualFold(name, TrashDir)
+}
 
 func ValidName(name string) bool {
 	return name != "" && name != "." && name != ".." && !strings.ContainsAny(name, "/\\\x00")

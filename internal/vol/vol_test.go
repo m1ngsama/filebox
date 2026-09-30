@@ -164,3 +164,11 @@ func TestMoveNeverReplaces(t *testing.T) {
 		}
 	}
 }
+
+func TestReservedIgnoresCase(t *testing.T) {
+	for _, p := range []string{".FILEBOX/versions/x", ".Trash/1", "/.FileBox"} {
+		if _, err := Clean(p); !errors.Is(err, ErrBadPath) {
+			t.Errorf("%s accepted", p)
+		}
+	}
+}
