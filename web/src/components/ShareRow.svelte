@@ -36,7 +36,7 @@
 <CopyButton text={shareLink(share.token)} />
 <DropdownMenu.Root>
   <DropdownMenu.Trigger class="icon-btn" aria-label={t.shareActions} title={t.shareActions} bind:ref={more}><Ellipsis size={icon.md} /></DropdownMenu.Trigger>
-  <DropdownMenu.Portal>
+  <DropdownMenu.Portal to="main">
     <DropdownMenu.Content class="menu" preventScroll={false} align="end" sideOffset={4}>
       <DropdownMenu.Item class="menu-item" onSelect={() => (qr = true)}><QrCode size={icon.sm} />{t.qrCode}</DropdownMenu.Item>
       <DropdownMenu.Item class="menu-item" onSelect={() => (editing = true)}><Pencil size={icon.sm} />{t.editShare}</DropdownMenu.Item>

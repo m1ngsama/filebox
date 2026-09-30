@@ -6,7 +6,7 @@
 </script>
 
 <Popover.Root open onOpenChange={(o) => !o && onclose()}>
-  <Popover.Portal>
+  <Popover.Portal to="main">
     <Popover.Content class="menu qr" sideOffset={6} customAnchor={anchor} role="dialog" aria-label={t.qrCode}>
       {#await import('../lib/qr')}
         <div class="spinner" role="status" aria-label={t.loading}></div>
