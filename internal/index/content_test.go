@@ -185,7 +185,8 @@ func TestContentCrashCountsAsFailure(t *testing.T) {
 	if err := c.claim(&job{id: e.id(t, "a.txt"), size: 5, mtime: time.Unix(1_700_000_000, 0).UnixMilli()}); err != nil {
 		t.Fatal(err)
 	}
-	e.x.CloseContent()
+	c.db.Close()
+	e.x.content.Store(nil)
 	e.open(t)
 	if s, tries := e.status(t, "a.txt"); s != "failed" || tries != 1 {
 		t.Fatalf("%s after %d tries", s, tries)
@@ -193,6 +194,40 @@ func TestContentCrashCountsAsFailure(t *testing.T) {
 	if n := e.pass(t); n != 0 {
 		t.Fatalf("crashed file retried at once: %d", n)
 	}
+}
+
+func TestContentCloseStopsTheWorkerAndForgetsClaims(t *testing.T) {
+	e := setup(t)
+	e.write(t, "a.txt", "alpha", time.Unix(1_700_000_000, 0))
+	e.scan(t)
+	c := e.open(t)
+	if err := c.claim(&job{id: e.id(t, "a.txt"), size: 5, mtime: time.Unix(1_700_000_000, 0).UnixMilli()}); err != nil {
+		t.Fatal(err)
+	}
+	done := make(chan struct{})
+	go func() {
+		e.x.Extract(context.Background(), e.vols, extract.New(context.Background()))
+		close(done)
+	}()
+	for e.x.stopFunc() == nil {
+		time.Sleep(time.Millisecond)
+	}
+	e.x.CloseContent()
+	select {
+	case <-done:
+	default:
+		t.Fatal("CloseContent returned before the worker stopped")
+	}
+	e.open(t)
+	if s, _ := e.status(t, "a.txt"); s != "" {
+		t.Fatalf("a claim cut short by a clean shutdown became %q", s)
+	}
+}
+
+func (x *Index) stopFunc() context.CancelFunc {
+	x.cmu.Lock()
+	defer x.cmu.Unlock()
+	return x.stop
 }
 
 func TestContentReextractsOnNewVersion(t *testing.T) {

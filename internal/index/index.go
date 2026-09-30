@@ -65,10 +65,15 @@ type Index struct {
 	touched map[pending]struct{}
 	ready   atomic.Bool
 	content atomic.Pointer[content]
+	cmu     sync.Mutex
+	cpath   string
+	stop    context.CancelFunc
+	workers sync.WaitGroup
+	wake    chan struct{}
 	Moved   func(v *vol.Volume, to string)
 }
 
-func New(d *db.DB) *Index { return &Index{db: d} }
+func New(d *db.DB) *Index { return &Index{db: d, wake: make(chan struct{}, 1)} }
 
 func (x *Index) Ready() bool { return x.ready.Load() }
 

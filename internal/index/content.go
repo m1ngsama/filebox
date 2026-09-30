@@ -56,34 +56,48 @@ type ContentHit struct {
 type content struct {
 	db          *sql.DB
 	w           sync.Mutex
-	wake        chan struct{}
 	running     atomic.Bool
 	done, total atomic.Int64
 }
 
 // content.db only holds what the extractor can rebuild, so any trouble opening it starts it over.
 func (x *Index) OpenContent(p string) error {
+	x.cmu.Lock()
+	defer x.cmu.Unlock()
 	c, err := openContent(p)
 	if err != nil {
 		slog.Warn("content index unusable, rebuilding", "path", p, "err", err)
-		for _, s := range []string{"", "-wal", "-shm"} {
-			os.Remove(p + s)
-		}
+		removeContent(p)
 		if c, err = openContent(p); err != nil {
 			return err
 		}
 	}
+	x.cpath = p
 	x.content.Store(c)
 	return nil
 }
 
-func (x *Index) CloseContent() error {
-	if c := x.content.Swap(nil); c != nil {
-		c.w.Lock()
-		defer c.w.Unlock()
-		return c.db.Close()
+func removeContent(p string) {
+	for _, s := range []string{"", "-wal", "-shm"} {
+		os.Remove(p + s)
 	}
-	return nil
+}
+
+func (x *Index) CloseContent() error {
+	x.cmu.Lock()
+	c := x.content.Swap(nil)
+	if x.stop != nil {
+		x.stop()
+	}
+	x.cmu.Unlock()
+	x.workers.Wait()
+	if c == nil {
+		return nil
+	}
+	c.w.Lock()
+	defer c.w.Unlock()
+	c.db.Exec(`DELETE FROM contents WHERE status = 'running'`)
+	return c.db.Close()
 }
 
 func openContent(p string) (*content, error) {
@@ -109,17 +123,13 @@ func openContent(p string) (*content, error) {
 		d.Close()
 		return nil, err
 	}
-	c := &content{db: d, wake: make(chan struct{}, 1)}
-	c.wake <- struct{}{}
-	return c, nil
+	return &content{db: d}, nil
 }
 
 func (x *Index) poke() {
-	if c := x.content.Load(); c != nil {
-		select {
-		case c.wake <- struct{}{}:
-		default:
-		}
+	select {
+	case x.wake <- struct{}{}:
+	default:
 	}
 }
 
@@ -132,21 +142,31 @@ func (x *Index) Progress() *Progress {
 }
 
 func (x *Index) Extract(ctx context.Context, vols *vol.Set, ex *extract.Extractor) {
-	c := x.content.Load()
-	if c == nil {
+	x.cmu.Lock()
+	if x.content.Load() == nil {
+		x.cmu.Unlock()
 		return
 	}
+	ctx, x.stop = context.WithCancel(ctx)
+	x.workers.Add(1)
+	x.cmu.Unlock()
+	defer x.workers.Done()
 	lowPriority()
+	x.poke()
 	for {
 		select {
 		case <-ctx.Done():
 			return
-		case <-c.wake:
+		case <-x.wake:
 		}
 		select {
 		case <-ctx.Done():
 			return
 		case <-time.After(settle):
+		}
+		c := x.content.Load()
+		if c == nil {
+			return
 		}
 		if !x.Ready() {
 			continue
