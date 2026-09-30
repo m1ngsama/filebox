@@ -4,6 +4,7 @@ import (
 	"archive/zip"
 	"bytes"
 	"context"
+	"encoding/binary"
 	"encoding/xml"
 	"errors"
 	"io"
@@ -316,7 +317,23 @@ type opf struct {
 	} `xml:"spine>itemref"`
 }
 
+// zip.NewReader loads the whole central directory, so its entry count is checked first.
+func entries(f io.ReaderAt, size int64) int {
+	tail := make([]byte, min(size, 22+65535))
+	if _, err := f.ReadAt(tail, size-int64(len(tail))); err != nil {
+		return -1
+	}
+	i := bytes.LastIndex(tail, []byte("PK\x05\x06"))
+	if i < 0 || len(tail)-i < 22 {
+		return -1
+	}
+	return int(binary.LittleEndian.Uint16(tail[i+10:]))
+}
+
 func epub(w *text, f io.ReaderAt, size int64) error {
+	if n := entries(f, size); n < 0 || n >= 0xffff || n > maxEntries {
+		return ErrSkipped
+	}
 	z, err := zip.NewReader(f, size)
 	if err != nil {
 		return ErrSkipped
