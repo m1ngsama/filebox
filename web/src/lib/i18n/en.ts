@@ -134,6 +134,8 @@ export default (locale: string) => {
     next: 'Next',
     prevFile: 'Previous file',
     nextFile: 'Next file',
+    prevPage: 'Previous page',
+    nextPage: 'Next page',
     rtl: 'Right-to-left pages',
     page: (i: number, n: number) => `${i} / ${n}`,
     noPages: 'This archive has no images. You can download it instead.',

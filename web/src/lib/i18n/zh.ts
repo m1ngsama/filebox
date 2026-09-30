@@ -134,6 +134,8 @@ const zh = {
   next: '下一张',
   prevFile: '上一个文件',
   nextFile: '下一个文件',
+  prevPage: '上一页',
+  nextPage: '下一页',
   rtl: '从右往左翻页',
   page: (i: number, n: number) => `${i} / ${n}`,
   noPages: '这个压缩包里没有图片，可以下载后查看。',

@@ -30,8 +30,9 @@ import (
 	"github.com/m1ngsama/filebox/internal/vol"
 )
 
-const spaCSP = "default-src 'self'; img-src 'self' blob: data:; media-src 'self' blob:; " +
-	"frame-src 'self'; object-src 'none'; base-uri 'none'; frame-ancestors 'none'; form-action 'self'"
+// EPUB sections render in blob: iframes that inherit this policy, so it must keep blocking their scripts.
+const spaCSP = "default-src 'self'; img-src 'self' blob: data:; media-src 'self' blob:; style-src 'self' 'unsafe-inline' blob:; " +
+	"font-src 'self' blob: data:; frame-src 'self' blob:; object-src 'none'; base-uri 'none'; frame-ancestors 'self'; form-action 'self'"
 
 type App struct {
 	Vols     *vol.Set

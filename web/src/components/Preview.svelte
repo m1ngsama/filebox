@@ -271,6 +271,10 @@
       <audio {src} controls autoplay={!inline} preload="metadata" onloadedmetadata={resume} ontimeupdate={track} onpause={track} onended={() => save(spot, '')} onerror={failed}></audio>
     {:else if k === 'pdf'}
       <iframe src={src} title={entry.name} onload={ready}></iframe>
+    {:else if k === 'book'}
+      {#await import('./Reader.svelte') then { default: Reader }}
+        {#key src}<Reader list={url(entry, 'zip-entries')} entry={url(entry, 'zip-entry')} {spot} onready={ready} onfail={failed} />{/key}
+      {/await}
     {:else if k === 'text'}
       {#if html !== null}
         <article class="doc" class:code={!md} tabindex="-1">{@html html}</article>
