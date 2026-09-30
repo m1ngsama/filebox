@@ -508,7 +508,7 @@
     if (next) reveal = { name: next }
     if (details && names.includes(details.name)) closeDetails()
     const pending = serial(() => api.rm(v, paths))
-    const id = toast(t.trashed(t.what(names)), { actions: [undo(async () => restore(v, (await pending).trashed))] })
+    const id = toast(t.trashed(t.what(names)), { actions: [undo(async () => restore(v, (await pending).trashed))], ms: narrow.current ? 2 ** 31 - 1 : undefined })
     try {
       const r = await pending
       loadStars(true)
@@ -841,8 +841,8 @@
     <button onclick={() => download([...selected])}><Download size={20} /><span>{t.download}</span></button>
     <button onclick={() => (dialog = { kind: 'move', names: [...selected] })}><FolderInput size={20} /><span>{t.moveOrCopy}</span></button>
     <button disabled={!one} onclick={() => pass('share')}><Share2 size={20} /><span>{t.share}</span></button>
-    <button class="danger" onclick={() => remove([...selected])}><Trash size={20} /><span>{t.remove}</span></button>
     <button onclick={() => (sheet = 'more')}><Ellipsis size={20} /><span>{t.more}</span></button>
+    <button class="danger" onclick={() => remove([...selected])}><Trash size={20} /><span>{t.remove}</span></button>
   </div>
 {/if}
 

@@ -1468,6 +1468,7 @@ test.describe('on a phone', () => {
     await row(page, 'm-01.txt').locator('button.name').tap()
     await expect(row(page, 'm-01.txt')).toHaveAttribute('aria-selected', 'false')
     await expect(row(page, 'm-02.txt')).toHaveAttribute('aria-selected', 'true')
+    await expect(bar.getByRole('button').last()).toHaveAccessibleName(t.remove)
     for (const b of await bar.getByRole('button').all()) expect((await b.boundingBox())!.height).toBeLessThan(70)
 
     await page.getByRole('button', { name: t.selectAll, exact: true }).tap()
