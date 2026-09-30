@@ -42,10 +42,10 @@ func (s *Service) Register(mux *http.ServeMux) {
 	mux.HandleFunc("GET /s/{token}/raw/{path...}", s.raw)
 	mux.HandleFunc("GET /s/{token}/thumb/{path...}", s.thumb)
 	mux.HandleFunc("GET /s/{token}/zip", s.zip)
-	mux.HandleFunc("GET /s/{token}/render", s.render)
-	mux.HandleFunc("GET /s/{token}/meta", s.meta)
-	mux.HandleFunc("GET /s/{token}/zip-entries", s.scoped(api.ZipEntries))
-	mux.HandleFunc("GET /s/{token}/zip-entry", s.scoped(api.ZipEntry))
+	mux.HandleFunc("GET /s/{token}/render", s.scoped(s.render))
+	mux.HandleFunc("GET /s/{token}/meta", s.scoped(func(opened) handler { return s.Thumbs.ServeMeta }))
+	mux.HandleFunc("GET /s/{token}/zip-entries", s.scoped(func(opened) handler { return api.ZipEntries }))
+	mux.HandleFunc("GET /s/{token}/zip-entry", s.scoped(func(opened) handler { return api.ZipEntry }))
 	mux.HandleFunc("/s/{token}/upload/{rest...}", s.upload)
 	s.Uploads.Received = s.received
 	s.Uploads.Allow = s.allow
@@ -470,36 +470,14 @@ func (s *Service) zip(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func (s *Service) render(w http.ResponseWriter, r *http.Request) {
-	o, ok := s.open(w, r, "read", "upload")
-	if !ok {
-		return
+func (s *Service) render(o opened) handler {
+	return func(w http.ResponseWriter, r *http.Request, root *os.Root, rel string) {
+		raw := ""
+		if o.dir {
+			raw = "/s/" + url.PathEscape(o.sh.Token) + "/raw/"
+		}
+		render.Serve(w, r, root, rel, raw)
 	}
-	root, rel, done, err := o.root(r.URL.Query().Get("p"))
-	if err != nil {
-		httpx.Error(w, err)
-		return
-	}
-	defer done()
-	raw := ""
-	if o.dir {
-		raw = "/s/" + url.PathEscape(o.sh.Token) + "/raw/"
-	}
-	render.Serve(w, r, root, rel, raw)
-}
-
-func (s *Service) meta(w http.ResponseWriter, r *http.Request) {
-	o, ok := s.open(w, r, "read", "upload")
-	if !ok {
-		return
-	}
-	root, rel, done, err := o.root(r.URL.Query().Get("p"))
-	if err != nil {
-		httpx.Error(w, err)
-		return
-	}
-	defer done()
-	s.Thumbs.ServeMeta(w, r, root, rel)
 }
 
 func (s *Service) thumb(w http.ResponseWriter, r *http.Request) {
@@ -545,7 +523,9 @@ func (s *Service) upload(w http.ResponseWriter, r *http.Request) {
 	}).ServeHTTP(w, r)
 }
 
-func (s *Service) scoped(fn func(http.ResponseWriter, *http.Request, *os.Root, string)) http.HandlerFunc {
+type handler func(http.ResponseWriter, *http.Request, *os.Root, string)
+
+func (s *Service) scoped(fn func(opened) handler) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		o, ok := s.open(w, r, "read", "upload")
 		if !ok {
@@ -557,6 +537,6 @@ func (s *Service) scoped(fn func(http.ResponseWriter, *http.Request, *os.Root, s
 			return
 		}
 		defer done()
-		fn(w, r, root, rel)
+		fn(o)(w, r, root, rel)
 	}
 }
