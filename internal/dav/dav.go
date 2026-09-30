@@ -29,10 +29,11 @@ import (
 
 func Handler(vols *vol.Set, a *auth.Auth, ix *index.Index, vs *version.Store) http.Handler {
 	fsys := &FS{vols: vols, ix: ix, vs: vs}
+	ls := newLocks()
 	h := &webdav.Handler{
 		Prefix:     "/dav",
 		FileSystem: fsys,
-		LockSystem: webdav.NewMemLS(),
+		LockSystem: ls,
 		Logger: func(r *http.Request, err error) {
 			if err != nil {
 				slog.Debug("webdav", "method", r.Method, "path", r.URL.Path, "err", err)
@@ -61,8 +62,23 @@ func Handler(vols *vol.Set, a *auth.Auth, ix *index.Index, vs *version.Store) ht
 			r.Body = pb
 			r = r.WithContext(context.WithValue(r.Context(), putKey{}, pb))
 		}
+		removes := r.Method == "DELETE" || r.Method == "MOVE"
+		src := path.Clean("/" + strings.TrimPrefix(r.URL.Path, "/dav"))
+		if removes {
+			have := submitted(r.Header.Get("If"))
+			for _, tok := range ls.covering(time.Now(), src) {
+				if !have[tok] {
+					http.Error(w, "locked", http.StatusLocked)
+					return
+				}
+			}
+		}
 		if r.Method != "COPY" && r.Method != "MOVE" {
-			h.ServeHTTP(w, r)
+			sw := &status{ResponseWriter: w}
+			h.ServeHTTP(sw, r)
+			if removes && sw.code == http.StatusNoContent {
+				ls.release(time.Now(), src)
+			}
 			return
 		}
 		ow := &overwrite{}
@@ -80,6 +96,9 @@ func Handler(vols *vol.Set, a *auth.Auth, ix *index.Index, vs *version.Store) ht
 		}
 		if ok && r.Method == "COPY" && ix != nil {
 			fsys.copyProps(r)
+		}
+		if ok && removes {
+			ls.release(time.Now(), src)
 		}
 	}))
 }
