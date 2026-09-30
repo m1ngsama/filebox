@@ -317,7 +317,14 @@ func (f *FS) Rename(ctx context.Context, oldName, newName string) error {
 		return os.ErrPermission
 	}
 	if v1 != v2 {
-		return api.Transfer(f.ix, v1, v2, r1, r2, true)
+		err := api.Transfer(f.ix, v1, v2, r1, r2, true)
+		if errors.Is(err, api.ErrSourceLeft) {
+			if ow, ok := ctx.Value(overwriteKey{}).(*overwrite); ok {
+				ow.undo = nil
+			}
+			slog.Warn("webdav move", "from", oldName, "to", newName, "err", err)
+		}
+		return err
 	}
 	if err := vol.Move(v1.Root, r1, r2); err != nil {
 		return err

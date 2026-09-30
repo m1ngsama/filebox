@@ -4,6 +4,7 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"errors"
+	"fmt"
 	"io"
 	"io/fs"
 	"log/slog"
@@ -117,7 +118,10 @@ func (c counter) Read(p []byte) (int, error) {
 	return n, err
 }
 
-var errSpecial = errors.New("symlink or special file")
+var (
+	errSpecial    = errors.New("symlink or special file")
+	ErrSourceLeft = errors.New("moved, but part of the source could not be removed")
+)
 
 func ClearStaging(vols *vol.Set) {
 	for _, v := range vols.All() {
@@ -156,7 +160,9 @@ func run(ix *index.Index, src, dst *vol.Volume, srel, drel, id string, move bool
 	ix.CopyProps(src, srel, dst, drel, true)
 	if move {
 		ix.CarryFavorites(src, srel, dst, drel)
-		return src.Root.RemoveAll(srel)
+		if err := src.Root.RemoveAll(srel); err != nil {
+			return fmt.Errorf("%w: %w", ErrSourceLeft, err)
+		}
 	}
 	return nil
 }

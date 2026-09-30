@@ -288,3 +288,35 @@ func TestDavShortPutKeepsLiveFile(t *testing.T) {
 		t.Fatalf("PUT onto a folder %d", res.StatusCode)
 	}
 }
+
+func TestDavCrossVolumeMoveNeverUndoesAPlacedCopy(t *testing.T) {
+	if os.Getuid() == 0 {
+		t.Skip("root removes files from read-only folders")
+	}
+	e := setup(t)
+	e.req(t, e.rw, "PUT", "/dav/w/d", "old dst file")
+	for _, p := range []string{"d", "d/a", "d/z"} {
+		e.req(t, e.rw, "MKCOL", "/dav/v/"+p, "")
+	}
+	e.req(t, e.rw, "PUT", "/dav/v/d/a/x.txt", "x")
+	e.req(t, e.rw, "PUT", "/dav/v/d/z/y.txt", "y")
+	locked := filepath.Join(e.dir, "d/z")
+	os.Chmod(locked, 0o555)
+	t.Cleanup(func() { os.Chmod(locked, 0o755) })
+	res, _ := e.req(t, e.rw, "MOVE", "/dav/v/d", "", "Destination", e.srv.URL+"/dav/w/d", "Overwrite", "T")
+	if res.StatusCode < 400 {
+		t.Fatalf("MOVE %d, want the partial cleanup reported", res.StatusCode)
+	}
+	for p, want := range map[string]string{"d/a/x.txt": "x", "d/z/y.txt": "y"} {
+		if b, _ := os.ReadFile(filepath.Join(e.dir2, p)); string(b) != want {
+			t.Errorf("destination %s = %q", p, b)
+		}
+	}
+	xs, _ := e.vs.List("w", "d")
+	if len(xs) != 1 {
+		t.Fatalf("overwritten destination not kept: %v", xs)
+	}
+	if b, _ := os.ReadFile(filepath.Join(e.dir2, vol.VersionsDir, xs[0].ID)); string(b) != "old dst file" {
+		t.Fatalf("overwritten destination %q", b)
+	}
+}
