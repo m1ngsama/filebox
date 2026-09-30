@@ -37,7 +37,7 @@
 <Modal title={t.moveCopyTitle(t.what(names))} {onclose} onsubmit={() => !same && run(false)}>
   <FolderPicker {vols} bind:at bind:error />
   {#if status}<p class="hint">{status}</p>{/if}
-  {#if error}<p class="error">{error}</p>{/if}
+  {#if error}<p class="error" role="alert">{error}</p>{/if}
   {#snippet footer()}
     <button type="button" onclick={onclose}>{t.cancel}</button>
     <button type="button" disabled={busy || same} onclick={() => run(true)}>{t.copy}</button>

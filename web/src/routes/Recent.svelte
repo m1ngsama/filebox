@@ -1,6 +1,7 @@
 <script lang="ts">
   import Eye from '@lucide/svelte/icons/eye'
   import Clock from '@lucide/svelte/icons/clock'
+  import CloudOff from '@lucide/svelte/icons/cloud-off'
   import EmptyState from '../components/EmptyState.svelte'
   import EntryList, { type Action } from '../components/EntryList.svelte'
   import Preview from '../components/Preview.svelte'
@@ -8,6 +9,7 @@
   import { thumbable, rawThumb, arrange, days, type Sort } from '../lib/format'
   import { t } from '../lib/i18n'
   import { folderAction, downloadAction, actOn } from '../lib/located'
+  import { fail } from '../lib/toast.svelte'
 
   let files = $state.raw<RecentFile[]>([])
   let scanning = $state(false)
@@ -21,7 +23,9 @@
   const day = $derived(files && days())
   const loc = (e: Entry) => e as RecentFile
 
+  let tries = $state(0)
   $effect(() => {
+    void tries
     let timer = 0
     const load = () =>
       api.recent().then(
@@ -31,7 +35,7 @@
           loaded = true
           if (r.scanning) timer = setTimeout(load, 3000)
         },
-        (e: Error) => (error = e.message),
+        (e: Error) => (loaded ? fail(e) : (error = e.message)),
       )
     load()
     return () => clearTimeout(timer)
@@ -48,11 +52,22 @@
 </script>
 
 {#snippet recentEmpty()}
-  <EmptyState icon={Clock} title={scanning ? t.recentScanning : t.recentEmpty} />
+  {#if error}
+    <EmptyState icon={CloudOff} as="h2" title={t.loadFailedTitle} hint={error}>
+      <button
+        class="primary"
+        onclick={() => {
+          error = ''
+          tries++
+        }}>{t.retry}</button
+      >
+    </EmptyState>
+  {:else}
+    <EmptyState icon={Clock} title={scanning ? t.recentScanning : t.recentEmpty} />
+  {/if}
 {/snippet}
 
 <section class="files" aria-label={t.recent}>
-  {#if error}<p class="error banner">{error}</p>{/if}
   <EntryList
     entries={shown}
     grid={false}

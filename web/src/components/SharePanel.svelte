@@ -87,7 +87,7 @@
       {#each t.expiries as [sec, label] (sec)}<option value={sec}>{label}</option>{/each}
     </select>
   </label>
-  {#if error}<p class="error">{error}</p>{/if}
+  {#if error}<p class="error" role="alert">{error}</p>{/if}
   <button class="primary" disabled={busy}>{t.newShare}</button>
 </form>
 

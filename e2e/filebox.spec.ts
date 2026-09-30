@@ -1,7 +1,7 @@
 import { test as base, expect, type Locator, type Page, type Route } from '@playwright/test'
 import { execFileSync, spawn } from 'node:child_process'
 import { createHash } from 'node:crypto'
-import { closeSync, cpSync, utimesSync, createReadStream, existsSync, mkdirSync, mkdtempSync, openSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync, writeSync } from 'node:fs'
+import { chmodSync, closeSync, cpSync, utimesSync, createReadStream, existsSync, mkdirSync, mkdtempSync, openSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync, writeSync } from 'node:fs'
 import { createServer, type AddressInfo } from 'node:net'
 import { crc32, deflateSync } from 'node:zlib'
 import { networkInterfaces, tmpdir } from 'node:os'
@@ -413,6 +413,39 @@ test('empty folders and empty filters say what to do next', async ({ page, serve
   await chooser
   await page.goto('/shares')
   await expect(page.getByText(t.noShares)).toBeVisible()
+})
+
+test('a missing folder, an unknown volume, a locked folder and a failed listing each offer a way on', async ({ page, server }) => {
+  mkdirSync(join(server.vol, 'locked'))
+  await login(page)
+  await page.goto('/files/v/docs/nope/deeper/')
+  await expect(page.getByRole('heading', { name: t.folderMissing })).toBeVisible()
+  await expect(page.getByRole('button', { name: t.new, exact: true })).toBeDisabled()
+  await expect(page.getByLabel(t.selectAll)).toHaveCount(0)
+  await expect(page.locator('p.error')).toHaveCount(0)
+  await page.getByRole('link', { name: t.openNamed('docs') }).click()
+  await expect(page).toHaveURL(/\/files\/v\/docs\/$/)
+  await expect(row(page, 'readme.txt')).toBeVisible()
+  await expect(page.getByRole('button', { name: t.new, exact: true })).toBeEnabled()
+  await page.goto('/files/novol/')
+  await expect(page.getByRole('heading', { name: t.volMissing('novol') })).toBeVisible()
+  await page.getByRole('link', { name: 'v', exact: true }).last().click()
+  await expect(row(page, 'docs')).toBeVisible()
+  chmodSync(join(server.vol, 'locked'), 0)
+  try {
+    await page.goto('/files/v/locked/')
+    await expect(page.getByRole('heading', { name: t.folderForbidden })).toBeVisible()
+    await expect(page.getByRole('link', { name: t.openNamed('v') })).toHaveAttribute('href', '/files/v/')
+  } finally {
+    chmodSync(join(server.vol, 'locked'), 0o755)
+  }
+  await page.route('**/api/ls?*', (r) => r.fulfill({ status: 500, body: '{"error":"boom"}' }))
+  await page.goto('/files/v/docs/')
+  await expect(page.getByRole('heading', { name: t.loadFailedTitle })).toBeVisible()
+  await expect(page.getByText(t.serverError)).toBeVisible()
+  await page.unroute('**/api/ls?*')
+  await page.getByRole('button', { name: t.retry }).click()
+  await expect(row(page, 'readme.txt')).toBeVisible()
 })
 
 test('theme colours do not need light-dark() support', async ({ page }) => {
@@ -1263,8 +1296,12 @@ test('app passwords that fail to load show the error, not an empty list', async 
   await page.route('**/api/tokens', (r) => r.fulfill({ status: 500, body: '{"error":"boom"}' }))
   await page.goto('/settings')
   const card = page.getByRole('region', { name: t.appPasswords })
-  await expect(card.locator('.error')).toHaveText(t.serverError)
+  await expect(card.getByText(t.serverError)).toBeVisible()
   await expect(card.getByText(t.noTokens)).toHaveCount(0)
+  await page.unroute('**/api/tokens')
+  await card.getByRole('button', { name: t.retry }).click()
+  await expect(card.getByText(t.serverError)).toHaveCount(0)
+  await expect(card.getByText(t.noTokens)).toBeVisible()
 })
 
 test('signing out another device sends it back to login', async ({ page, browser, server }) => {

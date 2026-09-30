@@ -1,6 +1,7 @@
 <script lang="ts">
   import Star from '@lucide/svelte/icons/star'
   import StarOff from '@lucide/svelte/icons/star-off'
+  import CloudOff from '@lucide/svelte/icons/cloud-off'
   import EmptyState from '../components/EmptyState.svelte'
   import EntryList, { type Action } from '../components/EntryList.svelte'
   import { filesURL, rawURL, thumbURL, type Entry, type Favorite } from '../lib/api'
@@ -20,7 +21,9 @@
   const shown = $derived(arrange(items, '', sort, desc))
   const fav = (e: Entry) => e as Favorite
 
+  let tries = $state(0)
   $effect(() => {
+    void tries
     loadStars(true).then(
       (list) => {
         items = list
@@ -48,11 +51,22 @@
 </script>
 
 {#snippet none()}
-  <EmptyState icon={Star} title={t.favoritesEmpty} hint={t.favoritesEmptyHint} />
+  {#if error}
+    <EmptyState icon={CloudOff} as="h2" title={t.loadFailedTitle} hint={error}>
+      <button
+        class="primary"
+        onclick={() => {
+          error = ''
+          tries++
+        }}>{t.retry}</button
+      >
+    </EmptyState>
+  {:else}
+    <EmptyState icon={Star} title={t.favoritesEmpty} hint={t.favoritesEmptyHint} />
+  {/if}
 {/snippet}
 
 <section class="files" aria-label={t.favorites}>
-  {#if error}<p class="error banner">{error}</p>{/if}
   <EntryList
     entries={shown}
     grid={false}

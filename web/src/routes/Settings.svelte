@@ -140,7 +140,7 @@
 
     <section class="card-section" id="sessions" aria-labelledby="sessions-title">
       {@render head('sessions', t.sessions, t.sessionsHint)}
-      <RowList items={sessions} error={sessionsError} key={(s) => s.id} label={t.sessions}>
+      <RowList items={sessions} error={sessionsError} onretry={loadSessions} key={(s) => s.id} label={t.sessions}>
         {#snippet row(s)}
           <MonitorSmartphone size={icon.md} class="row-icon" />
           <div class="row-main">
@@ -163,7 +163,7 @@
     {#if passkeysOn}
       <section class="card-section" id="passkeys" aria-labelledby="passkeys-title">
         {@render head('passkeys', t.passkeys, t.passkeysHint, addKey)}
-        <RowList items={passkeys} error={passkeysError} key={(k) => k.id}>
+        <RowList items={passkeys} error={passkeysError} onretry={loadPasskeys} key={(k) => k.id}>
           {#snippet row(k)}
             <Fingerprint size={icon.md} class="row-icon" />
             <div class="row-main">
@@ -195,7 +195,7 @@
         <label class="check"><input type="checkbox" bind:checked={readonly} />{t.readonly}</label>
         <button class="primary" disabled={busy || !label.trim()}>{t.newToken}</button>
       </form>
-      {#if error}<p class="error">{error}</p>{/if}
+      {#if error}<p class="error" role="alert">{error}</p>{/if}
 
       {#if created}
         <div class="token-new" role="status">
@@ -213,7 +213,7 @@
         </div>
       {/if}
 
-      <RowList items={tokens} error={tokensError} key={(k) => k.id}>
+      <RowList items={tokens} error={tokensError} onretry={load} key={(k) => k.id}>
         {#snippet row(k)}
           <KeyRound size={icon.md} class="row-icon" />
           <div class="row-main">

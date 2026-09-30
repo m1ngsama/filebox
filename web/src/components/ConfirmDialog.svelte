@@ -22,7 +22,7 @@
 
 <Modal {title} {onclose} onsubmit={submit}>
   <p>{message}</p>
-  {#if error}<p class="error">{error}</p>{/if}
+  {#if error}<p class="error" role="alert">{error}</p>{/if}
   {#snippet footer()}
     <button type="button" onclick={onclose}>{t.cancel}</button>
     <button class="danger-fill" class:busy disabled={busy}>{action}</button>

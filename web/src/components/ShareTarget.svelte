@@ -55,7 +55,7 @@
       {#each files as f, i (i)}<li><span>{f.name}</span><span class="hint">{size(f.size)}</span></li>{/each}
     </ul>
     <FolderPicker {vols} bind:at bind:error />
-    {#if error}<p class="error">{error}</p>{/if}
+    {#if error}<p class="error" role="alert">{error}</p>{/if}
     {#snippet footer()}
       <button type="button" onclick={done}>{t.cancel}</button>
       <button class="primary">{t.uploadHere}</button>

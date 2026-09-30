@@ -30,7 +30,7 @@
   }
 </script>
 
-<RowList items={shares} {error} key={(s) => s.id}>
+<RowList items={shares} {error} onretry={load} key={(s) => s.id}>
   {#snippet row(s)}
     <Link size={icon.md} class="row-icon" />
     <ShareRow share={s} dir={s.dir} onchange={load}>

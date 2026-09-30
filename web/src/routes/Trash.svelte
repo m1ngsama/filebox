@@ -97,7 +97,7 @@
   </div>
 {/if}
 
-<RowList {items} {error} key={(x) => x.id} label={t.trash}>
+<RowList {items} {error} onretry={load} key={(x) => x.id} label={t.trash}>
   {#snippet row(it)}
     <label class="hit">
       <input

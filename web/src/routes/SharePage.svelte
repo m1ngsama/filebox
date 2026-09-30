@@ -12,6 +12,8 @@
   import Clock from '@lucide/svelte/icons/clock'
   import Link2Off from '@lucide/svelte/icons/link-2-off'
   import X from '@lucide/svelte/icons/x'
+  import CloudOff from '@lucide/svelte/icons/cloud-off'
+  import FolderX from '@lucide/svelte/icons/folder-x'
   import type { Action } from '../components/EntryList.svelte'
   import FileIcon from '../components/FileIcon.svelte'
   import EmptyState from '../components/EmptyState.svelte'
@@ -32,7 +34,7 @@
   let unlockError = $state('')
   let entries = $state.raw<Entry[]>([])
   let at = $state<string | null>(null)
-  let error = $state('')
+  let error = $state<{ status: number; message: string } | null>(null)
   let sort = $state<Sort>('name')
   let desc = $state(false)
   let grid = $state(recall('shareGrid') === '1')
@@ -94,11 +96,16 @@
       const list = await api.shareLs(token, want, stop.signal)
       if (want !== p || stop.signal.aborted) return
       entries = list
-      error = ''
+      error = null
     } catch (e) {
       if (want !== p || stop.signal.aborted) return
       entries = []
-      error = (e as Error).message
+      const status = e instanceof HttpError ? e.status : 0
+      if (status === 410) {
+        info = null
+        fatal = 'expired'
+      }
+      error = { status, message: status ? (e as Error).message : t.loadFailed }
     }
     at = want
   }
@@ -234,13 +241,14 @@
   {/if}
 
   {#if fatal === 'error'}
-    <div class="load-error">
-      <p class="error">{t.loadFailed}</p>
-      <button onclick={load}>{t.retry}</button>
+    <div class="public-gone">
+      <EmptyState icon={CloudOff} as="h1" title={t.loadFailedTitle} hint={t.loadFailed}>
+        <button class="primary" onclick={load}>{t.retry}</button>
+      </EmptyState>
     </div>
   {:else if fatal}
     <div class="public-gone">
-      <EmptyState icon={fatal === 'expired' ? Clock : Link2Off} title={fatal === 'expired' ? t.linkExpired : t.linkGone} hint={fatal === 'expired' ? t.linkExpiredHint : t.shareGone} />
+      <EmptyState icon={fatal === 'expired' ? Clock : Link2Off} as="h1" title={fatal === 'expired' ? t.linkExpired : t.linkGone} hint={fatal === 'expired' ? t.linkExpiredHint : t.shareGone} />
     </div>
   {:else if info?.locked}
     <form class="login" onsubmit={unlock}>
@@ -280,7 +288,6 @@
     </div>
   {:else if listed}
     <section class="files" class:selecting={selected.size > 0}>
-      {#if error}<p class="error banner">{error}</p>{/if}
       {#key p}
         {#await lister!}
           <div class="loading" role="status" aria-label={t.loading}></div>
@@ -300,7 +307,17 @@
           loading={at !== p}
         >
           {#snippet empty()}
-            {#if !error}<EmptyState icon={FolderOpen} title={t.folderEmpty} hint={canUpload ? t.dropHere : ''} />{/if}
+            {#if error?.status === 404}
+              <EmptyState icon={FolderX} as="h2" title={t.folderMissing} hint={t.folderMissingHint}>
+                <a class="button primary" href={here('')} onclick={link}><FolderOpen size={icon.sm} />{t.openNamed(shared?.name ?? t.brand)}</a>
+              </EmptyState>
+            {:else if error}
+              <EmptyState icon={CloudOff} as="h2" title={t.loadFailedTitle} hint={error.message}>
+                <button class="primary" onclick={refresh}>{t.retry}</button>
+              </EmptyState>
+            {:else}
+              <EmptyState icon={FolderOpen} title={t.folderEmpty} hint={canUpload ? t.dropHere : ''} />
+            {/if}
           {/snippet}
         </EntryList>
         {/await}

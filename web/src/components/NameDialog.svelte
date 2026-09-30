@@ -56,9 +56,9 @@
 <Modal {title} {onclose} onsubmit={submit} onOpenAutoFocus={focus}>
   <label class="field">
     <span>{label}</span>
-    <input bind:this={input} bind:value={name} required autocomplete="off" />
+    <input bind:this={input} bind:value={name} required autocomplete="off" aria-invalid={!!error} aria-describedby={error ? 'name-error' : undefined} />
   </label>
-  {#if error}<p class="error">{error}</p>{/if}
+  {#if error}<p class="error" id="name-error" role="alert">{error}</p>{/if}
   {#snippet footer()}
     <button type="button" onclick={onclose}>{t.cancel}</button>
     <button class="primary" class:busy disabled={busy || !ok}>{action}</button>

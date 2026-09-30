@@ -53,7 +53,7 @@
     {#each shares as s (s.id)}<option value={String(s.id)}>{place(s.vol, s.path)}</option>{/each}
   </select>
 </div>
-<RowList items={events} {error} key={(e) => e.id} label={t.activity}>
+<RowList items={events} {error} onretry={() => load()} key={(e) => e.id} label={t.activity}>
   {#snippet row(e)}
     {@const Icon = icons[e.kind as keyof typeof icons] ?? Link}
     <Icon size={icon.md} class="row-icon" />

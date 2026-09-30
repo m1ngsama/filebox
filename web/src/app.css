@@ -83,6 +83,8 @@ button.ghost { border-color: transparent; background: none; }
 .grow { flex: 1; }
 .sr-only, .files .bar .title { position: absolute; width: 1px; height: 1px; margin: -1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
 .error { color: var(--danger); margin: 0; }
+p.error { display: flex; gap: var(--space-1-5); }
+p.error::before { content: ''; flex: none; width: 1em; height: 1lh; background: currentColor; mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='2' stroke-linecap='round'%3E%3Ccircle cx='12' cy='12' r='10'/%3E%3Cpath d='M12 8v4M12 16h.01'/%3E%3C/svg%3E") center / 1em no-repeat; }
 .hint { color: var(--muted); font-size: var(--text-xs); }
 
 .shell { display: grid; grid-template-columns: 248px minmax(0, 1fr); height: 100dvh; padding: env(safe-area-inset-top) 0 env(safe-area-inset-bottom); }
@@ -174,6 +176,7 @@ button.ghost { border-color: transparent; background: none; }
 .empty-state > :is(button, a):last-child { margin-top: var(--space-2); }
 .empty-icon { display: grid; place-items: center; width: 56px; height: 56px; border-radius: 50%; background: var(--nav); color: var(--muted); margin-bottom: var(--space-1); }
 .empty-title { font-weight: 600; }
+.empty-state .chips { justify-content: center; }
 .empty-state.compact { flex-direction: row; justify-content: flex-start; flex-wrap: wrap; gap: var(--space-2) var(--space-3); padding: var(--space-3) var(--space-2); text-align: left; }
 .empty-state.compact .empty-icon { width: 32px; height: 32px; margin: 0; }
 .empty-state.compact .empty-title { font-weight: 400; color: var(--muted); }
@@ -518,6 +521,7 @@ button.busy::before { content: ''; width: 14px; height: 14px; border: 2px solid 
   .icon-btn, .toast .icon-btn, .uploads li > .icon-btn { width: var(--hit); height: var(--hit); }
   .hit { min-width: var(--hit); min-height: var(--hit); }
   .card-check { top: 0; left: 0; }
+  .empty-state .chip { min-height: var(--hit); padding-inline: var(--space-3); }
   .password .icon-btn { top: 0; right: 0; }
   .nav a, .nav-item, .up, .menu-item, .dialog footer button, .list-head .select-all, .toast-action, .scope button, .bar.searching .filter, .login input:not([type='checkbox'], .sr-only), .login > button { min-height: var(--hit); }
   .uploads li { grid-template-columns: 20px minmax(0, 1fr) auto var(--hit); }

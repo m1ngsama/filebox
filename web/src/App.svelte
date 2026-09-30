@@ -11,6 +11,9 @@
   import Nav from './components/Nav.svelte'
   import NavToggle from './components/NavToggle.svelte'
   import Toasts from './components/Toasts.svelte'
+  import EmptyState from './components/EmptyState.svelte'
+  import CloudOff from '@lucide/svelte/icons/cloud-off'
+  import HardDrive from '@lucide/svelte/icons/hard-drive'
 
   let me = $state<Me | null>(null)
   let needLogin = $state(false)
@@ -68,10 +71,11 @@
 <svelte:head><title>{heading ? `${heading} — ${t.brand}` : t.brand}</title></svelte:head>
 
 {#if error}
-  <div class="load-error">
-    <p class="error">{error}</p>
-    <button onclick={load}>{t.retry}</button>
-  </div>
+  <main class="load-error">
+    <EmptyState icon={CloudOff} as="h1" title={t.loadFailedTitle} hint={error}>
+      <button class="primary" onclick={load}>{t.retry}</button>
+    </EmptyState>
+  </main>
 {:else if needLogin}
   <main><Login onok={load} /></main>
 {:else if me}
@@ -93,7 +97,7 @@
         {:else}
           <div class="page">
             {#if !me.vols.length}
-              <p class="error">{t.noVolumes}</p>
+              <EmptyState icon={HardDrive} as="h2" title={t.noVolumes} hint={t.noVolumesHint} />
             {:else if parts[0] === 'shares'}
               <Lazy load={() => import('./routes/Shares.svelte')} />
             {:else if parts[0] === 'settings'}

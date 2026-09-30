@@ -70,7 +70,7 @@
     </label>
   {/if}
   {#if init.mode === 'drop' && mode !== 'drop'}<p class="warn-note" role="alert">{t.dropExposed}</p>{/if}
-  {#if error}<p class="error">{error}</p>{/if}
+  {#if error}<p class="error" role="alert">{error}</p>{/if}
   {#snippet footer()}
     <button type="button" onclick={onclose}>{t.cancel}</button>
     <button class="primary" disabled={busy}>{t.save}</button>

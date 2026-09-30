@@ -48,6 +48,10 @@
   import ChevronRight from '@lucide/svelte/icons/chevron-right'
   import SearchX from '@lucide/svelte/icons/search-x'
   import SquareCheck from '@lucide/svelte/icons/square-check'
+  import FolderX from '@lucide/svelte/icons/folder-x'
+  import FolderLock from '@lucide/svelte/icons/folder-lock'
+  import HardDrive from '@lucide/svelte/icons/hard-drive'
+  import CloudOff from '@lucide/svelte/icons/cloud-off'
   import { narrow } from '../lib/shell.svelte'
   import Search from '@lucide/svelte/icons/search'
   import ChevronLeft from '@lucide/svelte/icons/chevron-left'
@@ -55,7 +59,7 @@
   import EllipsisVertical from '@lucide/svelte/icons/ellipsis-vertical'
   import ArrowUp from '@lucide/svelte/icons/arrow-up'
   import ArrowDown from '@lucide/svelte/icons/arrow-down'
-  import { api, errorText, filesURL, fileURL, rawURL, thumbURL, zipURL, saveURL, selectURL, type Entry, type Move, type RecentFile, type ContentHit, type Progress } from '../lib/api'
+  import { api, HttpError, errorText, filesURL, fileURL, rawURL, thumbURL, zipURL, saveURL, selectURL, type Entry, type Move, type RecentFile, type ContentHit, type Progress } from '../lib/api'
   import { toast, fail, runLatest, retract, retext, forgetUndo, type ToastAction } from '../lib/toast.svelte'
   import { navigate, link, route } from '../lib/router.svelte'
   import { enqueue, type Replaced } from '../lib/uploads.svelte'
@@ -76,7 +80,8 @@
   type Dialog = { kind: 'mkdir' } | { kind: 'rename'; e: Entry } | { kind: 'move'; names: string[] }
 
   let entries = $state.raw<Entry[]>([])
-  let error = $state('')
+  let error = $state<{ status: number; message: string } | null>(null)
+  let up = $state<string | null>(null)
   let at = $state('')
   let streaming = $state(false)
   let announce = $state('')
@@ -193,12 +198,12 @@
       }
       entries = overlay(es.slice(), started, want)
       streaming = true
-      error = ''
+      error = null
       at = want
     }
     const [list, err] = await api.ls(vol, path, signal, partial).then(
-      (es) => [es, ''] as const,
-      (e: Error) => [[], e.message] as const,
+      (es) => [es, null] as const,
+      (e: Error) => [[], e instanceof HttpError ? { status: e.status, message: e.message } : { status: 0, message: t.loadFailed }] as const,
     )
     if (want !== here || signal?.aborted) return false
     entries = overlay([...list], started, want)
@@ -215,6 +220,7 @@
     path
     filter = ''
     searching = false
+    error = null
     details = null
     reveal = undefined
     listing = []
@@ -224,6 +230,22 @@
       if (ok && focus) details = entries.find((e) => e.name === focus) ?? null
     })
     return () => loading?.abort()
+  })
+
+  async function nearest(p: string, live: () => boolean) {
+    while (p && live()) {
+      p = parent(p)
+      if (await api.exists(vol, p)) break
+    }
+    return p
+  }
+
+  $effect(() => {
+    up = null
+    if (error?.status !== 404 && error?.status !== 403) return
+    let live = true
+    nearest(path, () => live).then((p) => live && (up = p))
+    return () => void (live = false)
   })
 
   function closeDetails() {
@@ -344,7 +366,7 @@
   const ask = (name: string, rest: number) => new Promise<[Choice, boolean] | null>((resolve) => (conflict = { name, rest, resolve }))
 
   async function upload(list: FileList | null | undefined, asFolder = false) {
-    if (!list?.length) return
+    if (!list?.length || error) return
     forgetUndo()
     const v = vol
     const dir = path
@@ -421,7 +443,7 @@
   } satisfies Record<string, Action>
 
   const actions = (e: Entry | null): Action[] =>
-    !e ? [act.mkdir, act.upload]
+    !e ? (error ? [] : [act.mkdir, act.upload])
     : [...(narrow.current ? [act.select] : []), act.open, act.download, act.rename, act.move, act.share, starred(vol, join(e.name)) ? act.unstar : act.star, act.details, act.remove]
 
   function onaction(id: string, e: Entry | null) {
@@ -706,7 +728,7 @@
         {/each}
       </nav>
       <DropdownMenu.Root>
-        <DropdownMenu.Trigger class="primary new"><Plus size={icon.md} />{t.new}</DropdownMenu.Trigger>
+        <DropdownMenu.Trigger class="primary new" disabled={!!error}><Plus size={icon.md} />{t.new}</DropdownMenu.Trigger>
         <DropdownMenu.Portal>
           <DropdownMenu.Content class="menu" preventScroll={false} align="start" sideOffset={4}>
             {#each creators as c, i (c.label)}
@@ -779,7 +801,6 @@
       </DropdownMenu.Root>
     </header>
 
-    {#if error && at === here}<p class="error banner">{error}</p>{/if}
     {#if streaming && at === here}<p class="hint banner loading-count" aria-hidden="true">{t.loadingItems(entries.length)}</p>{/if}
     <p class="sr-only" role="status">{announce}</p>
 
@@ -825,13 +846,35 @@
         {reveal}
         loading={at !== here}
         busy={streaming}
+        head={!error}
       >
         {#snippet empty()}
           {#if query}
             <EmptyState icon={SearchX} title={t.noMatch} hint={t.noMatchHint}>
               <button onclick={() => (filter = '')}>{t.clearFilter}</button>
             </EmptyState>
-          {:else if !error}
+          {:else if error && !vols.includes(vol)}
+            <EmptyState icon={HardDrive} as="h2" title={t.volMissing(vol)} hint={t.volMissingHint}>
+              <div class="chips">
+                {#each vols as v (v)}<a class="chip" href={filesURL(v, '')} onclick={link}><HardDrive size={icon.sm} />{v}</a>{/each}
+              </div>
+            </EmptyState>
+          {:else if error?.status === 404 || error?.status === 403}
+            {@const four = error.status === 404}
+            <EmptyState icon={four ? FolderX : FolderLock} as="h2" title={four ? t.folderMissing : t.folderForbidden} hint={four ? t.folderMissingHint : t.folderForbiddenHint}>
+              {#if up !== null && up !== path}<a class="button primary" href={filesURL(vol, up)} onclick={link}><FolderOpen size={icon.sm} />{t.openNamed(up ? base(up) : vol)}</a>{/if}
+            </EmptyState>
+          {:else if error}
+            <EmptyState icon={CloudOff} as="h2" title={t.loadFailedTitle} hint={error.message}>
+              <button
+                class="primary"
+                onclick={() => {
+                  at = ''
+                  refresh()
+                }}>{t.retry}</button
+              >
+            </EmptyState>
+          {:else}
             <EmptyState icon={FolderOpen} title={t.folderEmpty} hint={t.emptyHint}>
               <button class="primary" onclick={() => files?.click()}><Upload size={icon.sm} />{t.upload}</button>
             </EmptyState>
@@ -842,7 +885,7 @@
     {/if}
 
     {#if dragging}<div class="dropzone">{t.dropHere}</div>{/if}
-    {#if !selected.size && !details}<button class="primary fab" aria-label={t.new} onclick={() => (sheet = 'new')}><Plus size={icon.lg} /></button>{/if}
+    {#if !selected.size && !details && !error}<button class="primary fab" aria-label={t.new} onclick={() => (sheet = 'new')}><Plus size={icon.lg} /></button>{/if}
   </section>
 
   {#if details}

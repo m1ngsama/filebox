@@ -167,6 +167,11 @@ export const api = {
       signal,
     ),
   vols: () => req<{ vols: Usage[] }>('GET', '/api/vols'),
+  exists: (vol: string, path: string) =>
+    fetch(lsURL(vol, path)).then(
+      (r) => (r.body?.cancel(), r.ok),
+      () => false,
+    ),
   size: (vol: string, path: string) => req<{ size: number; files: number; scanning: boolean }>('GET', `/api/size?${q({ vol, path })}`),
   favorites: () => req<{ entries: Favorite[] }>('GET', '/api/favorites'),
   star: (vol: string, paths: string[], star: boolean) => req<void>('POST', '/api/favorites', { vol, paths, star }),
