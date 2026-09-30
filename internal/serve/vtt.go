@@ -11,7 +11,11 @@ import (
 	"strings"
 	"unicode/utf8"
 
+	"golang.org/x/text/encoding"
+	"golang.org/x/text/encoding/charmap"
 	"golang.org/x/text/encoding/simplifiedchinese"
+	"golang.org/x/text/encoding/traditionalchinese"
+	xunicode "golang.org/x/text/encoding/unicode"
 
 	"github.com/m1ngsama/filebox/internal/httpx"
 )
@@ -20,14 +24,42 @@ const maxSubtitle = 8 << 20
 
 var srtTime = regexp.MustCompile(`(?m)^(\s*\d+:\d{2}:\d{2}),(\d{1,3})\s*-->\s*(\d+:\d{2}:\d{2}),(\d{1,3})`)
 
+func UTF16(b []byte) bool {
+	return bytes.HasPrefix(b, []byte("\xff\xfe")) || bytes.HasPrefix(b, []byte("\xfe\xff"))
+}
+
 func UTF8(src []byte) []byte {
-	src = bytes.TrimPrefix(src, []byte("\xef\xbb\xbf"))
-	if !utf8.Valid(src) {
-		if b, err := simplifiedchinese.GB18030.NewDecoder().Bytes(src); err == nil {
+	if UTF16(src) {
+		if b, err := xunicode.UTF16(xunicode.LittleEndian, xunicode.ExpectBOM).NewDecoder().Bytes(src); err == nil {
 			return b
 		}
 	}
-	return src
+	src = bytes.TrimPrefix(src, []byte("\xef\xbb\xbf"))
+	if utf8.Valid(src) {
+		return src
+	}
+	bad, multi := 0, 0
+	for p := src; len(p) > 0; {
+		r, n := utf8.DecodeRune(p)
+		if r == utf8.RuneError && n == 1 {
+			bad++
+		} else if n > 1 {
+			multi++
+		}
+		p = p[n:]
+	}
+	if bad*100 <= len(src) || multi >= bad {
+		return bytes.ToValidUTF8(src, nil)
+	}
+	for _, e := range []encoding.Encoding{simplifiedchinese.GB18030, traditionalchinese.Big5} {
+		if b, err := e.NewDecoder().Bytes(src); err == nil {
+			if n := bytes.Count(b, []byte("\ufffd")); n == 0 || n == 1 && bytes.HasSuffix(b, []byte("\ufffd")) {
+				return b
+			}
+		}
+	}
+	b, _ := charmap.Windows1252.NewDecoder().Bytes(src)
+	return b
 }
 
 func SRTToVTT(src []byte) []byte {
