@@ -219,7 +219,7 @@ const zh = {
   trashed: (what: string) => `${what}已移到回收站`,
   renamed: (n: string) => `已重命名为“${n}”`,
   movedTo: (what: string, where: string) => `${what}已移动到 ${where}`,
-  copiedTo: (what: string) => `${what}已复制`,
+  copiedTo: (what: string, where: string) => `${what}已复制到 ${where}`,
   undoing: '正在撤销…',
   undone: '已撤销',
   undoFailed: (what: string) => `${what}没能撤销`,

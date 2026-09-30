@@ -6,7 +6,7 @@
   import SharePanel from './SharePanel.svelte'
   import VersionsPanel from './VersionsPanel.svelte'
   import { api, type Entry, type Version } from '../lib/api'
-  import { size, date, fallback } from '../lib/format'
+  import { size, date, fallback, parent, place } from '../lib/format'
   import { t } from '../lib/i18n'
   import { starred, star } from '../lib/favorites.svelte'
   import { fail } from '../lib/toast.svelte'
@@ -53,7 +53,7 @@
     <dl>
       {#if total !== null}<dt>{t.size}</dt><dd class="size">{entry.dir ? total || '…' : size(entry.size)}</dd>{/if}
       <dt>{t.mtime}</dt><dd>{date(entry.mtime)}</dd>
-      <dt>{t.path}</dt><dd class="path">{vol}:/{path}</dd>
+      <dt>{t.path}</dt><dd class="path">{place(vol, parent(path))}</dd>
       {#if versions.length}<dt>{t.versions}</dt><dd><button class="link" onclick={() => (tab = 'versions')}>{t.versionCount(versions.length)}</button></dd>{/if}
     </dl>
   </header>

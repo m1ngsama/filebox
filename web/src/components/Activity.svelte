@@ -9,7 +9,7 @@
   import RowList from './RowList.svelte'
   import EmptyState from './EmptyState.svelte'
   import { api, type Activity, type Share } from '../lib/api'
-  import { ago, date, size, loc } from '../lib/format'
+  import { ago, date, size, place, placeOf } from '../lib/format'
   import { t } from '../lib/i18n'
 
   const icons = { download: Download, upload: Inbox, login: LogIn, login_failed: ShieldAlert, token_create: KeyRound, token_revoke: KeyRound }
@@ -49,7 +49,7 @@
   </select>
   <select bind:value={share} aria-label={t.allShares}>
     <option value="">{t.allShares}</option>
-    {#each shares as s (s.id)}<option value={String(s.id)}>{loc(s)}</option>{/each}
+    {#each shares as s (s.id)}<option value={String(s.id)}>{place(s.vol, s.path)}</option>{/each}
   </select>
 </div>
 <RowList items={events} {error} key={(e) => e.id} label={t.activity}>
@@ -57,9 +57,9 @@
     {@const Icon = icons[e.kind as keyof typeof icons] ?? Link}
     <Icon size={18} class="row-icon" />
     <div class="row-main">
-      <span class="row-title">{(t.events as Record<string, (name: string) => string>)[e.kind]?.(e.kind.startsWith('share_') ? e.target : e.name) ?? e.kind}{e.kind === 'upload' ? ` · ${size(e.size)}` : ''}</span>
+      <span class="row-title">{(t.events as Record<string, (name: string) => string>)[e.kind]?.(e.kind.startsWith('share_') ? placeOf(e.target) : e.name) ?? e.kind}{e.kind === 'upload' ? ` · ${size(e.size)}` : ''}</span>
       <span class="tags">
-        {#if e.target && !e.kind.startsWith('share_')}<span class="tag">{e.target}</span>{/if}
+        {#if e.target && !e.kind.startsWith('share_')}<span class="tag">{placeOf(e.target)}</span>{/if}
         {#if e.visitor}<span class="hint">{e.kind.startsWith('login') ? t.source(e.visitor) : t.visitor(e.visitor)}</span>{/if}
         <span class="hint" title={date(e.at * 1000)}>{ago(e.at * 1000)}</span>
       </span>

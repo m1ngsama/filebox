@@ -120,7 +120,11 @@ export function days(now = new Date()) {
   return (ms: number) => (ms >= today ? t.today : ms >= yesterday ? t.yesterday : ms >= week ? t.thisWeek : t.earlier)
 }
 
-export const loc = (s: { vol: string; path: string }) => `${s.vol}:/${s.path === '.' ? '' : s.path}`
+export const place = (vol: string, path = '') => [vol, ...path.split('/').filter((s) => s && s !== '.')].join(' › ')
+export const placeOf = (target: string) => {
+  const i = target.indexOf(':/')
+  return i < 0 ? target : place(target.slice(0, i), target.slice(i + 2))
+}
 
 export const shareSummary = (s: { mode: 'read' | 'upload' | 'drop'; expires: number; views: number; has_password: boolean }, now = Date.now()) =>
   [

@@ -28,13 +28,13 @@
   import EllipsisVertical from '@lucide/svelte/icons/ellipsis-vertical'
   import ArrowUp from '@lucide/svelte/icons/arrow-up'
   import ArrowDown from '@lucide/svelte/icons/arrow-down'
-  import { api, filesURL, fileURL, rawURL, thumbURL, zipURL, saveURL, type Entry, type Move, type RecentFile, type ContentHit, type Progress } from '../lib/api'
-  import { toast, fail, runLatest } from '../lib/toast.svelte'
+  import { api, filesURL, fileURL, rawURL, thumbURL, zipURL, saveURL, selectURL, type Entry, type Move, type RecentFile, type ContentHit, type Progress } from '../lib/api'
+  import { toast, fail, runLatest, type Action as Act } from '../lib/toast.svelte'
   import { navigate, link, route } from '../lib/router.svelte'
   import { enqueue, type Replaced } from '../lib/uploads.svelte'
   import { loadStars, starred, star } from '../lib/favorites.svelte'
   import { folderAction, downloadAction, actOn } from '../lib/located'
-  import { thumbable, rawThumb, arrange, parent, base, child, flip, sorts, type Sort } from '../lib/format'
+  import { thumbable, rawThumb, arrange, parent, base, child, flip, sorts, place, type Sort } from '../lib/format'
   import { t } from '../lib/i18n'
   import { load, save } from '../lib/storage'
   import NavToggle from '../components/NavToggle.svelte'
@@ -338,7 +338,7 @@
 
   type Failed = { name: string; error: Error }
 
-  const undo = (run: () => Promise<Failed[]>) => ({
+  const undo = (run: () => Promise<Failed[]>): Act => ({
     label: t.undo,
     keys: 'Control+Z Meta+Z',
     run: () =>
@@ -376,8 +376,10 @@
     refresh()
     if (!done.length) return
     const w = t.what(done.map((m) => base(m.from.path)))
-    if (copy) toast(t.copiedTo(w))
-    else toast(t.movedTo(w, `${done[0].to.vol}:/${parent(done[0].to.path)}`), { action: undo(() => reverse(done)) })
+    const to = done[0].to
+    const show = { label: t.open, run: () => navigate(selectURL(to.vol, to.path)) }
+    if (copy) toast(t.copiedTo(w, place(to.vol, parent(to.path))), { actions: [show] })
+    else toast(t.movedTo(w, place(to.vol, parent(to.path))), { actions: [show, undo(() => reverse(done))] })
   }
 
   async function dropInto(to: { vol: string; path: string }, c: Carried, copy: boolean) {
@@ -732,7 +734,7 @@
         onsave={async (n) => {
           const m = { from: { vol, path: join(e.name) }, to: { vol, path: join(n) } }
           await api.mv(m.from, m.to)
-          toast(t.renamed(n), { action: undo(() => reverse([m])) })
+          toast(t.renamed(n), { actions: [undo(() => reverse([m]))] })
           loadStars(true)
           selected.clear()
           if (details?.name === e.name) closeDetails()
@@ -753,7 +755,7 @@
           const left = names.filter((n) => failed.has(join(n)))
           if (r.trashed.length)
             toast(t.trashed(t.what(names.filter((n) => !failed.has(join(n))))), {
-              action: undo(() => restore(v, r.trashed)),
+              actions: [undo(() => restore(v, r.trashed))],
             })
           selected.clear()
           loadStars(true)

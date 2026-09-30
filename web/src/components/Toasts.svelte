@@ -41,8 +41,7 @@
   <div class={`toast ${x.kind}`} data-id={x.id}>
     <Icon size={18} aria-hidden="true" />
     <span class="toast-text" id={`toast-${x.id}`} aria-hidden="true">{x.text}</span>
-    {#if x.action}
-      {@const a = x.action}
+    {#each x.actions as a (a.label)}
       <button
         class="toast-action"
         aria-describedby={`toast-${x.id}`}
@@ -52,7 +51,7 @@
           a.run()
         }}>{a.label}</button
       >
-    {/if}
+    {/each}
     <button class="icon-btn" aria-label={t.close} onclick={() => dismiss(x.id)}><X size={16} /></button>
   </div>
 {/snippet}

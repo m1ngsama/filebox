@@ -219,7 +219,7 @@ export default (locale: string) => {
     trashed: (what: string) => `Moved ${what} to the trash`,
     renamed: (n: string) => `Renamed to “${n}”`,
     movedTo: (what: string, where: string) => `Moved ${what} to ${where}`,
-    copiedTo: (what: string) => `Copied ${what}`,
+    copiedTo: (what: string, where: string) => `Copied ${what} to ${where}`,
     undoing: 'Undoing…',
     undone: 'Undone',
     undoFailed: (what: string) => `Couldn’t undo ${what}`,

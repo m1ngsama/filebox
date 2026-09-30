@@ -18,7 +18,7 @@
     if (!r) return
     onchange()
     const run = () => api.restoreVersion(vol, r.prev).then(() => toast(t.undone), fail).finally(onchange)
-    toast(t.versionRestored, { action: r.prev ? { label: t.undo, keys: 'Control+Z Meta+Z', run } : undefined })
+    toast(t.versionRestored, { actions: [r.prev ? { label: t.undo, keys: 'Control+Z Meta+Z', run } : undefined] })
   }
 </script>
 

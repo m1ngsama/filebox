@@ -1,7 +1,7 @@
 import type * as tus from 'tus-js-client'
 import { t } from './i18n'
 import { errorText, session } from './api'
-import { toast, type Toast } from './toast.svelte'
+import { toast, type Action } from './toast.svelte'
 
 export type Item = {
   id: number
@@ -17,7 +17,7 @@ export type Item = {
 
 type Job = { item: Item; file: File; endpoint: string; meta: Record<string, string>; sent: number; ok: boolean; err: boolean }
 export type Replaced = { vol: string; path: string; id: string }
-type Undo = (r: Replaced[]) => Toast['action']
+type Undo = (r: Replaced[]) => Action
 type Group = { jobs: Job[]; ctl: AbortController; refresh: () => void; undo?: Undo }
 
 const LIMIT = 3
@@ -219,7 +219,7 @@ function idle() {
   const failed = uploads.filter((u) => u.state === 'error')
   for (const u of failed.slice(0, Math.max(0, failed.length - KEEP_FAILED))) forget(u)
   Object.assign(totals, { files: 0, ok: 0, bytes: 0, sent: 0, speed: 0 })
-  if (uploaded && replaced.length) toast(t.uploadedReplaced(uploaded, replaced.length), { action: undoer?.(replaced) })
+  if (uploaded && replaced.length) toast(t.uploadedReplaced(uploaded, replaced.length), { actions: [undoer?.(replaced)] })
   else if (uploaded) toast(t.uploaded(uploaded))
   uploaded = 0
   replaced = []

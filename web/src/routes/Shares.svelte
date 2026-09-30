@@ -6,7 +6,7 @@
   import ShareRow from '../components/ShareRow.svelte'
   import { api, filesURL, type Share } from '../lib/api'
   import { link } from '../lib/router.svelte'
-  import { loc } from '../lib/format'
+  import { place } from '../lib/format'
   import { t } from '../lib/i18n'
 
   let shares = $state<Share[] | null>(null)
@@ -33,7 +33,7 @@
   {#snippet row(s)}
     <Link size={18} class="row-icon" />
     <ShareRow share={s} dir={s.dir} onchange={load}>
-      <a href={where(s)} onclick={link} title={loc(s)}>{loc(s)}</a>
+      <a href={where(s)} onclick={link} title={place(s.vol, s.path)}>{place(s.vol, s.path)}</a>
     </ShareRow>
   {/snippet}
   {#snippet empty()}<EmptyState icon={Link2} title={t.noShares} hint={t.sharesEmptyHint} />{/snippet}

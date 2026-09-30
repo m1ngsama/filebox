@@ -10,7 +10,7 @@
   import EmptyState from '../components/EmptyState.svelte'
   import { api, filesURL, type TrashItem } from '../lib/api'
   import { link, navigate } from '../lib/router.svelte'
-  import { size, date, ago, parent } from '../lib/format'
+  import { size, date, ago, parent, place } from '../lib/format'
   import { t } from '../lib/i18n'
   import { toast, fail } from '../lib/toast.svelte'
 
@@ -58,7 +58,7 @@
     if (ok.length) {
       const first = ok[0]
       toast(t.restored(what(ok)), {
-        action: { label: t.show, run: () => navigate(`${filesURL(v, parent(first.path))}?details=${encodeURIComponent(first.name)}`) },
+        actions: [{ label: t.show, run: () => navigate(`${filesURL(v, parent(first.path))}?details=${encodeURIComponent(first.name)}`) }],
       })
     }
     if (bad) fail(new Error(t.failedItem(bad.name, (res[list.indexOf(bad)] as PromiseRejectedResult).reason.message)))
@@ -107,8 +107,8 @@
     <FileIcon name={it.name} dir={it.dir} />
     <div class="row-main">
       <span class="row-title" title={it.name}>{it.name}</span>
-      <span class="hint" title={`${date(it.deleted)} · ${t.origin} ${vol}:/${parent(it.path)}`}>
-        {t.deletedAt(ago(it.deleted))} · {t.origin} {vol}:/{parent(it.path)}
+      <span class="hint" title={`${date(it.deleted)} · ${t.origin} ${place(vol, parent(it.path))}`}>
+        {t.deletedAt(ago(it.deleted))} · {t.origin} {place(vol, parent(it.path))}
       </span>
     </div>
     <span class="num">{it.dir ? '' : size(it.size)}</span>

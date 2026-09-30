@@ -1,4 +1,5 @@
-export type Toast = { id: number; text: string; kind: 'success' | 'info' | 'error'; action?: { label: string; run: () => unknown; keys?: string } }
+export type Action = { label: string; run: () => unknown; keys?: string }
+export type Toast = { id: number; text: string; kind: 'success' | 'info' | 'error'; actions: Action[] }
 
 export const toasts = $state<Toast[]>([])
 const timers = new Map<number, { left: number; start: number; id: number }>()
@@ -9,19 +10,20 @@ let leaving: (id: number) => void = () => {}
 
 export const onLeave = (fn: typeof leaving) => (leaving = fn)
 
-export function toast(text: string, o: { kind?: Toast['kind']; action?: Toast['action']; ms?: number } = {}) {
+export function toast(text: string, o: { kind?: Toast['kind']; actions?: (Action | undefined)[]; ms?: number } = {}) {
   const id = ++seq
-  toasts.push({ id, text, kind: o.kind ?? 'success', action: o.action })
-  if (toasts.length > 3) dismiss((toasts.find((x) => !x.action) ?? toasts[0]).id)
-  timers.set(id, { left: o.ms ?? (o.action || o.kind === 'error' ? 8000 : 4000), start: 0, id: 0 })
+  const actions = (o.actions ?? []).filter((a) => !!a)
+  toasts.push({ id, text, kind: o.kind ?? 'success', actions })
+  if (toasts.length > 3) dismiss((toasts.find((x) => !x.actions.length) ?? toasts[0]).id)
+  timers.set(id, { left: o.ms ?? (actions.length || o.kind === 'error' ? 8000 : 4000), start: 0, id: 0 })
   if (!paused) arm(id)
   return id
 }
 
 export function runLatest(label: string) {
   for (let i = toasts.length - 1; i >= 0; i--) {
-    const a = toasts[i].action
-    if (a?.label !== label) continue
+    const a = toasts[i].actions.find((x) => x.label === label)
+    if (!a) continue
     dismiss(toasts[i].id)
     a.run()
     return true
