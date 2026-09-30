@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { linger } from '../lib/motion'
   import { Dialog } from 'bits-ui'
   import type { Snippet } from 'svelte'
 
@@ -7,8 +8,8 @@
 
 <Dialog.Root open onOpenChange={(o) => !o && onclose()}>
   <Dialog.Portal>
-    <Dialog.Overlay class="scrim" />
-    <Dialog.Content class="bottom-sheet" preventScroll={false}>
+    <Dialog.Overlay class="scrim" {@attach linger} />
+    <Dialog.Content class="bottom-sheet" preventScroll={false} {@attach linger}>
       {#if lead}
         <header class="sheet-head">
           {@render lead()}

@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { fade } from '../lib/motion'
   import { icon } from '../lib/icon'
   import X from '@lucide/svelte/icons/x'
   import CircleCheck from '@lucide/svelte/icons/circle-check'
@@ -39,7 +40,7 @@
 
 {#snippet item(x: (typeof toasts)[number])}
   {@const Icon = icons[x.kind]}
-  <div class={`toast ${x.kind}`} data-id={x.id}>
+  <div class={`toast ${x.kind}`} data-id={x.id} out:fade|global>
     <Icon size={icon.md} aria-hidden="true" />
     <span class="toast-text" id={`toast-${x.id}`} aria-hidden="true">{x.text}</span>
     {#each x.actions as a (a.label)}

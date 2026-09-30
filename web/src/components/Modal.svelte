@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { linger } from '../lib/motion'
   import { icon } from '../lib/icon'
   import { Dialog } from 'bits-ui'
   import X from '@lucide/svelte/icons/x'
@@ -24,8 +25,8 @@
 
 <Dialog.Root open onOpenChange={(o) => !o && onclose()}>
   <Dialog.Portal>
-    <Dialog.Overlay class="scrim" />
-    <Dialog.Content class="dialog" preventScroll={false} {onOpenAutoFocus}>
+    <Dialog.Overlay class="scrim" {@attach linger} />
+    <Dialog.Content class="dialog" preventScroll={false} {onOpenAutoFocus} {@attach linger}>
       <form
         onsubmit={(e) => {
           e.preventDefault()

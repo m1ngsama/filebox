@@ -1778,7 +1778,7 @@ test.describe('on a phone', () => {
     await tall(page.locator('.nav a, .nav-item'))
   })
 
-  test('surfaces animate in with the motion tokens and stay still under reduced motion', async ({ page, server }) => {
+  test('surfaces animate in and out with the motion tokens and stay still under reduced motion', async ({ page, server }) => {
     writeFileSync(join(server.vol, 'docs', 'x.txt'), 'x')
     await login(page)
     await row(page, 'docs').locator('button.name').tap()
@@ -1788,14 +1788,29 @@ test.describe('on a phone', () => {
     await page.getByRole('dialog').getByRole('button', { name: t.newFolder }).tap()
     expect(await motion(page.locator('.dialog'))).toEqual(['enter', '0.18s'])
     await page.keyboard.press('Escape')
+    const gone = page.locator('.dialog.leaving')
+    expect(await motion(gone)).toEqual(['leave', '0.12s'])
+    await expect(gone).toHaveAttribute('aria-hidden', 'true')
+    await expect(gone).toHaveCount(0)
     await page.getByRole('button', { name: t.more, exact: true }).tap()
     expect(await motion(page.getByRole('menu'))).toEqual(['enter', '0.12s'])
     await page.keyboard.press('Escape')
+    expect(await motion(page.locator('.menu[data-state=closed]'))).toEqual(['leave', '0.12s'])
+    await expect(page.getByRole('menu')).toHaveCount(0)
+    await row(page, 'x.txt').locator('button.more').tap()
+    await page.getByRole('dialog', { name: 'x.txt' }).getByRole('button', { name: t.star }).tap()
+    expect(await motion(page.locator('.bottom-sheet.leaving'))).toEqual(['leave', '0.12s'])
+    const toast = page.locator('.toast', { hasText: t.starred(t.what(['x.txt'])) })
+    await toast.getByRole('button', { name: t.close }).tap()
+    await expect(toast).toHaveJSProperty('inert', true)
+    await expect(toast).toHaveCount(0)
 
     await page.emulateMedia({ reducedMotion: 'reduce' })
     await page.getByRole('button', { name: t.new, exact: true }).tap()
     expect((await motion(page.locator('.bottom-sheet')))[1]).toBe('0s')
     await page.keyboard.press('Escape')
+    expect(await page.locator('.leaving').count()).toBe(0)
+    await expect(page.locator('.bottom-sheet')).toHaveCount(0)
     const cdp = await page.context().newCDPSession(page)
     const b = (await row(page, 'x.txt').boundingBox())!
     await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ x: b.x + b.width / 2, y: b.y + b.height / 2 }] })
