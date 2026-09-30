@@ -42,6 +42,20 @@ func TestRange(t *testing.T) {
 	}
 }
 
+func TestInertScripts(t *testing.T) {
+	rt := root(t, map[string]string{"a.js": "alert(1)", "b.mjs": "export {}", "c.css": "p{}", "d.json": "{}"})
+	for n := range 4 {
+		name := []string{"a.js", "b.mjs", "c.css", "d.json"}[n]
+		w := httptest.NewRecorder()
+		File(w, httptest.NewRequest("GET", "/", nil), rt, name, false)
+		h := w.Header()
+		if h.Get("Content-Type") != "text/plain; charset=utf-8" || !strings.Contains(h.Get("Content-Security-Policy"), "sandbox") ||
+			h.Get("X-Content-Type-Options") != "nosniff" {
+			t.Errorf("%s headers: %v", name, h)
+		}
+	}
+}
+
 func TestDangerousTypes(t *testing.T) {
 	rt := root(t, map[string]string{"x.html": "<script>1</script>", "x.svg": "<svg/>", "x.txt": "<html>"})
 	for _, n := range []string{"x.html", "x.svg"} {

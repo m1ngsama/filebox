@@ -27,6 +27,9 @@ var dangerous = map[string]bool{
 	".xml": true, ".xsl": true, ".mht": true, ".mhtml": true,
 }
 
+// A user file must never be an executable script on this origin: the previews read these as text.
+var inert = map[string]bool{".js": true, ".mjs": true, ".cjs": true, ".json": true, ".css": true, ".wasm": true}
+
 func SafeHeaders(h http.Header, contentType string) {
 	h.Set("X-Content-Type-Options", "nosniff")
 	// Chrome will not render a PDF in a sandboxed document; nosniff already keeps it from being HTML.
@@ -59,8 +62,11 @@ func Named(w http.ResponseWriter, r *http.Request, root *os.Root, rel, name stri
 	}
 	ext := strings.ToLower(path.Ext(name))
 	ct := mime.TypeByExtension(ext)
-	if ct == "" || dangerous[ext] {
+	switch {
+	case ct == "" || dangerous[ext]:
 		ct = "application/octet-stream"
+	case inert[ext]:
+		ct = "text/plain; charset=utf-8"
 	}
 	h := w.Header()
 	h.Set("Content-Type", ct)
