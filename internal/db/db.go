@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/url"
 	"strconv"
+	"strings"
 
 	_ "modernc.org/sqlite"
 )
@@ -520,13 +521,33 @@ func (d *DB) DeletePasskey(userID, id int64) error {
 	return one(d.Exec(`DELETE FROM passkeys WHERE user_id = ? AND id = ?`, userID, id))
 }
 
+// A bare quick_check also runs FTS5 integrity checks, which re-tokenize every stored document.
 func (d *DB) Check() error {
-	var res string
-	if err := d.QueryRow(`PRAGMA quick_check`).Scan(&res); err != nil {
+	rows, err := d.Query(`SELECT name FROM sqlite_schema WHERE type = 'table' AND sql NOT LIKE 'CREATE VIRTUAL TABLE%'`)
+	if err != nil {
 		return err
 	}
-	if res != "ok" {
-		return fmt.Errorf("database integrity check: %s", res)
+	var tables []string
+	for rows.Next() {
+		var n string
+		if err := rows.Scan(&n); err != nil {
+			rows.Close()
+			return err
+		}
+		tables = append(tables, n)
+	}
+	rows.Close()
+	if err := rows.Err(); err != nil {
+		return err
+	}
+	for _, t := range tables {
+		var res string
+		if err := d.QueryRow(`PRAGMA quick_check("` + strings.ReplaceAll(t, `"`, `""`) + `")`).Scan(&res); err != nil {
+			return err
+		}
+		if res != "ok" {
+			return fmt.Errorf("database integrity check: %s", res)
+		}
 	}
 	return nil
 }

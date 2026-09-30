@@ -1,8 +1,10 @@
 package db
 
 import (
+	"bytes"
 	"database/sql"
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -372,5 +374,37 @@ func TestOpenRebuildsSearchAfterOldBinaryWrites(t *testing.T) {
 	}
 	if _, err := d.Exec(`INSERT INTO files_fts (files_fts, rank) VALUES ('integrity-check', 1)`); err != nil {
 		t.Fatal(err)
+	}
+}
+
+func TestCheckFindsCorruption(t *testing.T) {
+	p := filepath.Join(t.TempDir(), "c.db")
+	d, err := Open(p)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for i := range 3000 {
+		d.Exec(`INSERT INTO files (vol, path, dir, size, mtime) VALUES ('v', ?, 0, 1, 1)`, fmt.Sprintf("dir/file-%05d.txt", i))
+	}
+	d.Exec(`INSERT INTO contents_fts (rowid, body) VALUES (1, 'some text')`)
+	if err := d.Check(); err != nil {
+		t.Fatal(err)
+	}
+	d.Exec(`PRAGMA wal_checkpoint(TRUNCATE)`)
+	d.Close()
+	f, err := os.OpenFile(p, os.O_RDWR, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	st, _ := f.Stat()
+	f.WriteAt(bytes.Repeat([]byte{0xff}, 64), st.Size()/2+100)
+	f.Close()
+	d, err = Open(p)
+	if err == nil {
+		defer d.Close()
+		err = d.Check()
+	}
+	if err == nil {
+		t.Fatal("corruption went unnoticed")
 	}
 }
