@@ -22,6 +22,8 @@ export function toast(text: string, o: { kind?: Toast['kind']; actions?: (ToastA
   return id
 }
 
+export const forgetUndo = () => (kept = undefined)
+
 export function act(id: number, a: ToastAction) {
   dismiss(id)
   if (kept?.run === a.run) kept = undefined

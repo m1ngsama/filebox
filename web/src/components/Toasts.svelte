@@ -3,7 +3,7 @@
   import CircleCheck from '@lucide/svelte/icons/circle-check'
   import CircleAlert from '@lucide/svelte/icons/circle-alert'
   import Info from '@lucide/svelte/icons/info'
-  import { toasts, dismiss, hold, onLeave, act } from '../lib/toast.svelte'
+  import { toasts, hold, onLeave, act, retract } from '../lib/toast.svelte'
   import { t } from '../lib/i18n'
 
   const icons = { success: CircleCheck, error: CircleAlert, info: Info }
@@ -51,6 +51,6 @@
         }}>{a.label}</button
       >
     {/each}
-    <button class="icon-btn" aria-label={t.close} onclick={() => dismiss(x.id)}><X size={16} /></button>
+    <button class="icon-btn" aria-label={t.close} onclick={() => retract(x.id)}><X size={16} /></button>
   </div>
 {/snippet}

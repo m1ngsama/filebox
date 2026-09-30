@@ -5,6 +5,7 @@
   type Op = { key: string; name: string; entry: Row | null; settled: number }
   let ops: Op[] = []
   let clock = 0
+  const live = { refresh: () => {} }
 
   type Job = { paths: string[]; ok: Promise<boolean> }
   let jobs: Job[] = []
@@ -54,7 +55,7 @@
   import ArrowUp from '@lucide/svelte/icons/arrow-up'
   import ArrowDown from '@lucide/svelte/icons/arrow-down'
   import { api, errorText, filesURL, fileURL, rawURL, thumbURL, zipURL, saveURL, selectURL, type Entry, type Move, type RecentFile, type ContentHit, type Progress } from '../lib/api'
-  import { toast, fail, runLatest, retract, retext, type ToastAction } from '../lib/toast.svelte'
+  import { toast, fail, runLatest, retract, retext, forgetUndo, type ToastAction } from '../lib/toast.svelte'
   import { navigate, link, route } from '../lib/router.svelte'
   import { enqueue, type Replaced } from '../lib/uploads.svelte'
   import { loadStars, starred, star } from '../lib/favorites.svelte'
@@ -343,6 +344,7 @@
 
   async function upload(list: FileList | null | undefined, asFolder = false) {
     if (!list?.length) return
+    forgetUndo()
     const v = vol
     const dir = path
     let items = [...list].map((file) => ({ file, rel: asFolder ? file.webkitRelativePath : '' }))
@@ -437,9 +439,18 @@
 
   $effect(() => void loadStars())
 
+  $effect(() => {
+    const mine = refresh
+    live.refresh = mine
+    return () => {
+      if (live.refresh === mine) live.refresh = () => {}
+    }
+  })
+
   const allStarred = $derived(selected.size > 0 && [...selected].every((n) => starred(vol, join(n))))
 
   function toggleStar(names: string[], on: boolean) {
+    forgetUndo()
     star(vol, names.map(join), on).then(() => selected.clear(), fail)
   }
 
@@ -455,7 +466,7 @@
           else if (bad.length === 1) fail(new Error(t.failedItem(t.undoFailed(t.what([bad[0].name])), bad[0].error.message)))
           else fail(new Error(t.undoFailed(t.list(bad.map((b) => t.what([b.name]))))))
         }, fail)
-        .finally(refresh),
+        .finally(() => live.refresh()),
   })
 
   async function reverse(moves: Move[]) {
@@ -491,6 +502,7 @@
 
   function mkdir(n: string) {
     vacant(n)
+    forgetUndo()
     const mine = begin([[n, { name: n, dir: true, size: 0, mtime: Date.now() }]])
     pick(n)
     const p = join(n)
@@ -559,6 +571,7 @@
   }
 
   function moved(done: Move[], copy: boolean) {
+    if (copy) forgetUndo()
     if (!copy) loadStars(true)
     selected.clear()
     closeDetails()
@@ -572,6 +585,7 @@
   }
 
   async function dropInto(to: { vol: string; path: string }, c: Carried, copy: boolean) {
+    if (copy) forgetUndo()
     const r = await api.transfer(c.vol, c.dir, c.names, to, copy)
     moved(r.done, copy)
     if (r.error) fail(r.error)
