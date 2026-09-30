@@ -57,6 +57,9 @@ func Handler(vols *vol.Set, a *auth.Auth, ix *index.Index, vs *version.Store) ht
 		}
 		// Browsers with cached Basic credentials would otherwise render uploaded HTML on this origin.
 		serve.SafeHeaders(w.Header(), "")
+		if r.Method == "LOCK" {
+			clampTimeout(r.Header)
+		}
 		if r.Method == "PUT" {
 			pb := &putBody{ReadCloser: r.Body, want: r.ContentLength}
 			r.Body = pb

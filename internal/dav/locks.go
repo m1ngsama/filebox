@@ -1,7 +1,9 @@
 package dav
 
 import (
+	"net/http"
 	"path"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -23,29 +25,43 @@ type locks struct {
 
 func newLocks() *locks { return &locks{LockSystem: webdav.NewMemLS(), m: map[string]held{}} }
 
-func expiry(now time.Time, d time.Duration) time.Time {
-	if d < 0 {
-		return time.Time{}
+const maxLock = time.Hour
+
+func clamp(d time.Duration) time.Duration {
+	if d < 0 || d > maxLock {
+		return maxLock
 	}
-	return now.Add(d)
+	return d
+}
+
+func clampTimeout(h http.Header) {
+	d := time.Duration(-1)
+	if v, ok := strings.CutPrefix(strings.TrimSpace(strings.Split(h.Get("Timeout"), ",")[0]), "Second-"); ok {
+		if n, err := strconv.ParseUint(v, 10, 32); err == nil {
+			d = time.Duration(n) * time.Second
+		}
+	}
+	h.Set("Timeout", "Second-"+strconv.Itoa(int(clamp(d)/time.Second)))
 }
 
 func (l *locks) Create(now time.Time, d webdav.LockDetails) (string, error) {
+	d.Duration = clamp(d.Duration)
 	tok, err := l.LockSystem.Create(now, d)
 	if err == nil {
 		l.mu.Lock()
-		l.m[tok] = held{path.Clean("/" + d.Root), d.ZeroDepth, expiry(now, d.Duration)}
+		l.m[tok] = held{path.Clean("/" + d.Root), d.ZeroDepth, now.Add(d.Duration)}
 		l.mu.Unlock()
 	}
 	return tok, err
 }
 
 func (l *locks) Refresh(now time.Time, tok string, d time.Duration) (webdav.LockDetails, error) {
+	d = clamp(d)
 	ld, err := l.LockSystem.Refresh(now, tok, d)
 	if err == nil {
 		l.mu.Lock()
 		if h, ok := l.m[tok]; ok {
-			h.expiry = expiry(now, d)
+			h.expiry = now.Add(d)
 			l.m[tok] = h
 		}
 		l.mu.Unlock()
@@ -70,7 +86,7 @@ func (l *locks) covering(now time.Time, p string) []string {
 	defer l.mu.Unlock()
 	var out []string
 	for tok, h := range l.m {
-		if !h.expiry.IsZero() && !now.Before(h.expiry) {
+		if !now.Before(h.expiry) {
 			delete(l.m, tok)
 			continue
 		}

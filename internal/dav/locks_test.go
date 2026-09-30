@@ -3,7 +3,11 @@ package dav
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
+	"time"
+
+	"golang.org/x/net/webdav"
 )
 
 const lockBody = `<?xml version="1.0" encoding="utf-8"?><D:lockinfo xmlns:D="DAV:"><D:lockscope><D:exclusive/></D:lockscope><D:locktype><D:write/></D:locktype><D:owner>t</D:owner></D:lockinfo>`
@@ -63,5 +67,46 @@ func TestDavDeleteNeedsTheTargetsOwnToken(t *testing.T) {
 	}
 	if res, _ := e.req(t, e.rw, "PUT", "/dav/v/a.txt", "again"); res.StatusCode != 201 {
 		t.Fatalf("PUT after delete %d", res.StatusCode)
+	}
+}
+
+func TestDavLocksLastAtMostAnHour(t *testing.T) {
+	e := setup(t)
+	e.req(t, e.rw, "PUT", "/dav/v/a.txt", "a")
+	for _, tm := range []string{"", "Infinite", "Second-99999", "Infinite, Second-4100000000"} {
+		res, body := e.req(t, e.rw, "LOCK", "/dav/v/a.txt", lockBody, "Timeout", tm)
+		if res.StatusCode != 200 || !strings.Contains(body, "Second-3600") {
+			t.Fatalf("Timeout %q: %d %s", tm, res.StatusCode, body)
+		}
+		e.req(t, e.rw, "UNLOCK", "/dav/v/a.txt", "", "Lock-Token", res.Header.Get("Lock-Token"))
+	}
+	l := newLocks()
+	now := time.Now()
+	tok, _ := l.Create(now, webdav.LockDetails{Root: "/v/d/f", Duration: -1})
+	if got := l.covering(now.Add(59*time.Minute), "/v/d"); len(got) != 1 {
+		t.Fatal("lock gone before an hour")
+	}
+	if got := l.covering(now.Add(61*time.Minute), "/v/d"); len(got) != 0 {
+		t.Fatalf("infinite lock outlived an hour: %v %s", got, tok)
+	}
+}
+
+func TestLockRecordSurvivesAFailedUnlock(t *testing.T) {
+	l := newLocks()
+	now := time.Now()
+	tok, _ := l.Create(now, webdav.LockDetails{Root: "/v/d/f", Duration: time.Minute})
+	release, err := l.Confirm(now, "/v/d/f", "", webdav.Condition{Token: tok})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := l.Unlock(now, tok); err == nil {
+		t.Fatal("unlock of a held lock succeeded")
+	}
+	if len(l.covering(now, "/v/d")) != 1 {
+		t.Fatal("record dropped after a failed unlock")
+	}
+	release()
+	if l.Unlock(now, tok) != nil || len(l.covering(now, "/v/d")) != 0 {
+		t.Fatal("unlock after release")
 	}
 }
