@@ -86,7 +86,7 @@ export default (locale: string) => {
     scopeHere: 'This folder',
     scopeAll: 'Everywhere',
     noResults: 'No matching files',
-    noResultsHint: 'Search matches file names, paths and document text. One Chinese, Japanese or Korean character is enough; other text needs 2 characters, or 3 to search inside documents.',
+    noResultsHint: 'Chinese, Japanese and Korean searches of any length match file names and document text. Other text needs 2 characters to match names and 3 to match inside documents.',
     contentMatches: 'Content matches',
     contentIndexing: (done: number, total: number) => `Indexing document contents ${done}/${total}`,
     indexing: 'The file index is still being built, so results may be incomplete.',

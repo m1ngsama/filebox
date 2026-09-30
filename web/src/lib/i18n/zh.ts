@@ -86,7 +86,7 @@ const zh = {
   scopeHere: '当前文件夹',
   scopeAll: '全部',
   noResults: '没有找到匹配的文件',
-  noResultsHint: '搜索会匹配文件名、路径和文档内容。中文输入 1 个字就能搜，其他文字至少要 2 个字，搜文档内容则要 3 个字。',
+  noResultsHint: '中文、日文和韩文不限字数，都能搜到文件名和文档内容；其他文字至少输入 2 个字才能搜文件名，输入 3 个字才能搜文档内容。',
   contentMatches: '内容匹配',
   contentIndexing: (done: number, total: number) => `正在建立内容索引 ${done}/${total}`,
   indexing: '文件索引还没建完，结果可能不全。',
