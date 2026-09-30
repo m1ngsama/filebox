@@ -110,7 +110,9 @@
       return el
     })
 
+    let bottom: HTMLElement | undefined
     pswp.on('uiRegister', () => {
+      pswp.ui?.registerElement({ name: 'bottom', appendTo: 'wrapper', className: 'fb-bottom pswp__hide-on-close', onInit: (el) => (bottom = el) })
       pswp.ui?.registerElement({
         name: 'name',
         order: 6,
@@ -204,7 +206,18 @@
       onclose()
     })
     pswp.init()
+    const narrow = matchMedia('(max-width: 640px)')
+    const place = () => {
+      const bar = pswp.topBar
+      const close = bar?.querySelector('.pswp__button--close')
+      for (const b of pswp.element?.querySelectorAll('.pswp__button--zoom, .pswp__button--download, .pswp__button--info, .pswp__button--rtl') ?? [])
+        if (narrow.matches) bottom?.append(b)
+        else bar?.insertBefore(b, close ?? null)
+    }
+    place()
+    narrow.addEventListener('change', place)
     return () => {
+      narrow.removeEventListener('change', place)
       if (done) return
       done = true
       pswp.destroy()
@@ -229,6 +242,13 @@
   :global(.pswp) {
     --pswp-bg: var(--viewer-bg);
     --pswp-placeholder-bg: transparent;
+    --pswp-icon-color: var(--viewer-icon);
+  }
+  :global(.pswp .pswp__button) {
+    opacity: 1;
+  }
+  :global(.fb-bottom) {
+    display: none;
   }
   :global(.pswp--one-slide.fb-edges .pswp__button--arrow) {
     display: block;
@@ -274,6 +294,7 @@
   }
   :global(.pswp .fb-icn) {
     position: static;
+    color: inherit;
     width: 22px;
     height: 22px;
     fill: none;
@@ -329,6 +350,19 @@
     user-select: text;
   }
   @media (max-width: 640px) {
+    :global(.fb-bottom) {
+      position: absolute;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      display: flex;
+      justify-content: space-around;
+      padding-bottom: env(safe-area-inset-bottom);
+      background: color-mix(in srgb, var(--viewer-bg) 70%, transparent);
+    }
+    :global(.pswp__counter) {
+      margin: 0;
+    }
     .exif {
       top: auto;
       width: 100%;
