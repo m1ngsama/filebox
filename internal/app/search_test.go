@@ -31,6 +31,7 @@ func TestSearchAPI(t *testing.T) {
 	f := newTestApp(t)
 	f.write(t, "notes/plan.txt", "a")
 	f.write(t, "planets.md", "a")
+	f.write(t, "书单.txt", "a")
 	f.App.Index.Scan(f.App.Vols)
 	f.do("POST", "/api/mkdir", body(`{"vol":"w","path":"plans"}`))
 	if got := f.search(t, "q=plan&vol=v"); !slices.Equal(got, []string{"v:planets.md", "v:notes/plan.txt"}) && !slices.Equal(got, []string{"v:notes/plan.txt", "v:planets.md"}) {
@@ -45,6 +46,9 @@ func TestSearchAPI(t *testing.T) {
 	if got := f.search(t, "q="+url.QueryEscape(`" OR *`)); len(got) != 0 {
 		t.Fatalf("injection %v", got)
 	}
+	if got := f.search(t, "q="+url.QueryEscape("书")); !slices.Equal(got, []string{"v:书单.txt"}) {
+		t.Fatalf("one cjk rune %v", got)
+	}
 	f.do("POST", "/api/mv", body(`{"src":{"vol":"v","path":"notes"},"dst":{"vol":"v","path":"archive"}}`))
 	if got := f.search(t, "q=plan.txt"); !slices.Equal(got, []string{"v:archive/plan.txt"}) {
 		t.Fatalf("after mv %v", got)
@@ -53,7 +57,7 @@ func TestSearchAPI(t *testing.T) {
 	if got := f.search(t, "q=plan.txt"); len(got) != 0 {
 		t.Fatalf("after rm %v", got)
 	}
-	for q, code := range map[string]int{"q=p": 400, "q=+p+": 400, "q=plan&vol=nope": 404, "q=plan&vol=v&under=.trash": 400, "q=plan&vol=v&under=../x": 200, "q=%00%00%00": 400, "q=ab%00cd": 400, "q=plan&under=notes": 400} {
+	for q, code := range map[string]int{"q=p": 400, "q=+p+": 400, "q=%E3%80%82": 400, "q=%F0%9F%98%80": 400, "q=plan&vol=nope": 404, "q=plan&vol=v&under=.trash": 400, "q=plan&vol=v&under=../x": 200, "q=%00%00%00": 400, "q=ab%00cd": 400, "q=plan&under=notes": 400} {
 		if w := f.do("GET", "/api/search?"+q, nil); w.Code != code {
 			t.Errorf("%s: %d, want %d", q, w.Code, code)
 		}

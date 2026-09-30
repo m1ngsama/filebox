@@ -57,6 +57,9 @@ func TestSearchFollowsWrites(t *testing.T) {
 	if got := e.find(t, Query{Text: "报告"}); !slices.Equal(got, []string{"v:年度报告.pdf"}) {
 		t.Fatalf("two-char %v", got)
 	}
+	if got := e.find(t, Query{Text: "报"}); !slices.Equal(got, []string{"v:年度报告.pdf"}) {
+		t.Fatalf("one cjk rune %v", got)
+	}
 	if got := e.find(t, Query{Text: "年度报告"}); !slices.Equal(got, []string{"v:年度报告.pdf"}) {
 		t.Fatalf("cjk trigram %v", got)
 	}

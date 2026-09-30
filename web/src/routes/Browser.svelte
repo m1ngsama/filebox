@@ -145,7 +145,7 @@
 
   $effect(() => {
     const q = filter.trim()
-    if (scope !== 'all' || [...q].length < 2) {
+    if (scope !== 'all' || ([...q].length < 2 && !/^[\p{sc=Han}\p{sc=Hiragana}\p{sc=Katakana}\p{sc=Hangul}]$/u.test(q))) {
       hits = null
       finding = false
       return

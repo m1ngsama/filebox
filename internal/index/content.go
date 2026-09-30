@@ -25,7 +25,7 @@ const (
 	contentBatch  = 256
 	contentLimit  = 20
 	snippetWords  = 64
-	contentSchema = 1
+	contentSchema = 2
 	retryAfter    = 24 * 60 * 60
 	maxTries      = 2
 )
@@ -44,7 +44,8 @@ const schema = `CREATE TABLE contents (
 	at INTEGER NOT NULL,
 	bytes INTEGER NOT NULL
 );
-CREATE VIRTUAL TABLE contents_fts USING fts5(body, tokenize='trigram');`
+CREATE VIRTUAL TABLE contents_fts USING fts5(body, tokenize='trigram');
+CREATE VIRTUAL TABLE contents_cjk USING fts5(body, content='', contentless_delete=1, detail=none);`
 
 type Progress struct {
 	Done  int64 `json:"done"`
@@ -223,7 +224,7 @@ type job struct {
 	vol, path   string
 	size, mtime int64
 	tries       int
-	text        string
+	text, grams string
 	err         error
 }
 
@@ -307,7 +308,10 @@ func (c *content) drop(ids []int64) error {
 			if _, err := tx.Exec(`DELETE FROM contents WHERE id IN (SELECT value FROM json_each(?))`, string(list)); err != nil {
 				return err
 			}
-			_, err := tx.Exec(`DELETE FROM contents_fts WHERE rowid IN (SELECT value FROM json_each(?))`, string(list))
+			if _, err := tx.Exec(`DELETE FROM contents_fts WHERE rowid IN (SELECT value FROM json_each(?))`, string(list)); err != nil {
+				return err
+			}
+			_, err := tx.Exec(`DELETE FROM contents_cjk WHERE rowid IN (SELECT value FROM json_each(?))`, string(list))
 			return err
 		})
 		if err != nil {
@@ -320,6 +324,9 @@ func (c *content) drop(ids []int64) error {
 func (c *content) claim(j *job) error {
 	return c.write(func(tx *sql.Tx) error {
 		if _, err := tx.Exec(`DELETE FROM contents_fts WHERE rowid = ?`, j.id); err != nil {
+			return err
+		}
+		if _, err := tx.Exec(`DELETE FROM contents_cjk WHERE rowid = ?`, j.id); err != nil {
 			return err
 		}
 		_, err := tx.Exec(`INSERT OR REPLACE INTO contents (id, size, mtime, ver, status, tries, at, bytes) VALUES (?, ?, ?, ?, 'running', ?, ?, 0)`,
@@ -349,6 +356,11 @@ func (c *content) store(ctx context.Context, j *job) error {
 		if status == "ok" {
 			if _, err := tx.Exec(`INSERT INTO contents_fts (rowid, body) VALUES (?, ?)`, j.id, j.text); err != nil {
 				return err
+			}
+			if j.grams != "" {
+				if _, err := tx.Exec(`INSERT INTO contents_cjk (rowid, body) VALUES (?, ?)`, j.id, j.grams); err != nil {
+					return err
+				}
 			}
 		}
 		_, err := tx.Exec(`UPDATE contents SET status = ?, bytes = ? WHERE id = ?`, status, len(j.text), j.id)
@@ -387,6 +399,7 @@ func (x *Index) extractAll(ctx context.Context, vols *vol.Set, c *content, ex *e
 							j.err = extract.ErrSkipped
 						} else {
 							j.text, j.err = ex.Extract(ctx, v.Root, j.path)
+							j.grams = grams(j.text)
 						}
 					}
 					out <- j

@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"strings"
+	"unicode"
 	"unicode/utf8"
 )
 
@@ -105,9 +106,46 @@ func (x *Index) hits(ctx context.Context, sql string, args ...any) ([]Hit, error
 	return out, rows.Err()
 }
 
+func cjk(r rune) bool {
+	return unicode.In(r, unicode.Han, unicode.Hiragana, unicode.Katakana, unicode.Hangul)
+}
+
+func CJK(s string) bool {
+	for _, r := range s {
+		if !cjk(r) {
+			return false
+		}
+	}
+	return s != ""
+}
+
+func grams(s string) string {
+	var b strings.Builder
+	prev := rune(-1)
+	for _, r := range s {
+		switch {
+		case cjk(r) && prev >= 0:
+			b.WriteRune(prev)
+			b.WriteRune(r)
+			b.WriteByte(' ')
+		case prev >= 0:
+			b.WriteRune(prev)
+			b.WriteByte(' ')
+		}
+		prev = -1
+		if cjk(r) {
+			prev = r
+		}
+	}
+	if prev >= 0 {
+		b.WriteRune(prev)
+	}
+	return b.String()
+}
+
 func (x *Index) SearchContent(ctx context.Context, q Query) ([]ContentHit, error) {
 	c := x.content.Load()
-	if c == nil || utf8.RuneCountInString(q.Text) < 3 {
+	if n := utf8.RuneCountInString(q.Text); c == nil || n < 3 && !CJK(q.Text) {
 		return []ContentHit{}, nil
 	}
 	out, err := x.searchContent(ctx, c, q)
@@ -120,8 +158,15 @@ func (x *Index) SearchContent(ctx context.Context, q Query) ([]ContentHit, error
 func (x *Index) searchContent(ctx context.Context, c *content, q Query) ([]ContentHit, error) {
 	out := []ContentHit{}
 	phrase := `"` + strings.ReplaceAll(q.Text, `"`, `""`) + `"`
+	table, match, short := "contents_fts", phrase, utf8.RuneCountInString(q.Text) < 3
+	if short {
+		table = "contents_cjk"
+		if utf8.RuneCountInString(q.Text) == 1 {
+			match += "*"
+		}
+	}
 	rows, err := c.db.QueryContext(ctx, `SELECT json_group_array(json_array(id, size, mtime)) FROM contents
-		WHERE status = 'ok' AND id IN (SELECT rowid FROM contents_fts WHERE contents_fts MATCH ? ORDER BY rowid DESC LIMIT ?)`, phrase, candidates)
+		WHERE status = 'ok' AND id IN (SELECT rowid FROM `+table+` WHERE `+table+` MATCH ? ORDER BY rowid DESC LIMIT ?)`, match, candidates)
 	if err != nil {
 		return nil, err
 	}
@@ -158,6 +203,28 @@ func (x *Index) searchContent(ctx context.Context, c *content, q Query) ([]Conte
 		return out, err
 	}
 	list, _ := json.Marshal(ids)
+	if short {
+		rows, err = c.db.QueryContext(ctx, `SELECT rowid, iif(s > 1, '…', '') || substr(body, s, ?2), length(substr(body, s, ?2 + 1)) > ?2
+		FROM (SELECT rowid, body, max(1, instr(body, ?1) - ?3) AS s FROM contents_fts WHERE rowid IN (SELECT value FROM json_each(?4)))`,
+			q.Text, snippetWords, snippetWords/2, string(list))
+		if err != nil {
+			return nil, err
+		}
+		defer rows.Close()
+		for rows.Next() {
+			var id int64
+			var s string
+			var more bool
+			if err := rows.Scan(&id, &s, &more); err != nil {
+				return nil, err
+			}
+			if more {
+				s += "…"
+			}
+			out[byID[id]].Snippet = marked(s, q.Text)
+		}
+		return out, rows.Err()
+	}
 	rows, err = c.db.QueryContext(ctx, `SELECT rowid, snippet(contents_fts, 0, char(2), char(3), '…', ?) FROM contents_fts
 		WHERE contents_fts MATCH ? AND rowid IN (SELECT value FROM json_each(?))`, snippetWords, phrase, string(list))
 	if err != nil {
@@ -187,4 +254,15 @@ func segments(s string) []string {
 		out = append(out, mark)
 		s = after
 	}
+}
+
+func marked(s, q string) []string {
+	out := []string{}
+	for i, p := range strings.Split(s, q) {
+		if i > 0 {
+			out = append(out, q)
+		}
+		out = append(out, p)
+	}
+	return out
 }

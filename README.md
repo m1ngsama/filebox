@@ -32,7 +32,7 @@ Behind a reverse proxy, turn off request and response buffering (nginx: `proxy_r
 
 ## Content search
 
-filebox extracts the text inside documents in the background so search also finds words in them. It reads up to 1 MiB of text from each plain-text, Markdown, code, HTML, SVG, XML and EPUB file, and from PDFs when poppler's [`pdftotext`](https://poppler.freedesktop.org/) is on the `PATH`. Content matches need at least 3 characters. On Linux the extraction threads and `pdftotext` run at nice 19; elsewhere only `pdftotext` does. A file that fails to extract is retried once after 24 hours.
+filebox extracts the text inside documents in the background so search also finds words in them. It reads up to 1 MiB of text from each plain-text, Markdown, code, HTML, SVG, XML and EPUB file, and from PDFs when poppler's [`pdftotext`](https://poppler.freedesktop.org/) is on the `PATH`. Content matches need at least 3 characters, except Chinese, Japanese and Korean text, which a separate bigram index lets match from 1 character. On Linux the extraction threads and `pdftotext` run at nice 19; elsewhere only `pdftotext` does. A file that fails to extract is retried once after 24 hours.
 
 The index lives in `content.db` in the data directory and takes 2.5 to 4 times the extracted text, so a library of 500 books needs 1 to 2 GB. content.db can be deleted at any time and is rebuilt in the background. Pass `-content=false` to stop indexing and ignore the file.
 

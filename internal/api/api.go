@@ -326,7 +326,7 @@ func (a *API) search(w http.ResponseWriter, r *http.Request) {
 	q := r.URL.Query()
 	in := index.Query{Text: strings.TrimSpace(q.Get("q")), Limit: 200}
 	switch {
-	case utf8.RuneCountInString(in.Text) < 2:
+	case utf8.RuneCountInString(in.Text) < 2 && !index.CJK(in.Text):
 		httpx.Fail(w, 400, "query too short")
 		return
 	case strings.ContainsRune(in.Text, 0):

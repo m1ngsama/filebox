@@ -7,9 +7,11 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 	"time"
+	"unicode/utf8"
 
 	"github.com/m1ngsama/filebox/internal/extract"
 )
@@ -420,6 +422,16 @@ func TestSearchContent(t *testing.T) {
 	if got := e.findText(t, Query{Text: "quick", Vol: "v", Under: "notes"}); len(got) != 2 {
 		t.Fatalf("scope %#v", got)
 	}
+	for q, want := range map[string][]string{"报告": {"二〇二四年度", "报告", "正文"}, "度": {"二〇二四年", "度", "报告正文"}, "文": {"二〇二四年度报告正", "文", ""}, "二": {"", "二", "〇", "二", "四年度报告正文"}} {
+		if got := e.findText(t, Query{Text: q}); !slices.Equal(got["v:年报.md"], want) || len(got) != 1 {
+			t.Errorf("short cjk %q: %#v", q, got)
+		}
+	}
+	for _, q := range []string{"年报", "度正", "q", "报告a"} {
+		if got := e.findText(t, Query{Text: q}); len(got) != 0 {
+			t.Errorf("%q must not match %#v", q, got)
+		}
+	}
 	if got := e.findText(t, Query{Text: "qu"}); len(got) != 0 {
 		t.Fatalf("two runes cannot use the trigram index %#v", got)
 	}
@@ -466,5 +478,48 @@ func TestSearchContentCancels(t *testing.T) {
 	}
 	if d := time.Since(start); d > full/2 {
 		t.Fatalf("canceled search took %v of %v", d, full)
+	}
+}
+
+func TestGrams(t *testing.T) {
+	for in, want := range map[string]string{"": "", "abc": "", "本": "本", "本书 AB尝试。好": "本书 书 尝试 试 好", "カナ한글": "カナ ナ한 한글 글"} {
+		if got := grams(in); got != want {
+			t.Errorf("grams(%q) = %q, want %q", in, got, want)
+		}
+	}
+}
+
+func TestSearchContentShortCJK(t *testing.T) {
+	e := setup(t)
+	t0 := time.Unix(1_700_000_000, 0)
+	long := strings.Repeat("前言部分的文字", 20) + "译者序" + strings.Repeat("后面还有很多内容", 20)
+	e.write(t, "a.txt", long, t0)
+	e.write(t, "b.txt", "译者", t0)
+	e.scan(t)
+	e.open(t)
+	e.pass(t)
+	got := e.findText(t, Query{Text: "译者"})
+	if s := got["v:a.txt"]; len(got) != 2 || len(s) != 3 || s[1] != "译者" || !strings.HasPrefix(s[0], "…") || !strings.HasSuffix(s[2], "…") || utf8.RuneCountInString(s[0]+s[1]+s[2]) != snippetWords+2 {
+		t.Fatalf("snippet %#v", got)
+	}
+	if s := got["v:b.txt"]; !slices.Equal(s, []string{"", "译者", ""}) {
+		t.Fatalf("whole body %#v", s)
+	}
+	e.write(t, "a.txt", "换了内容", t0.Add(time.Hour))
+	e.scan(t)
+	e.pass(t)
+	if got := e.findText(t, Query{Text: "序"}); len(got) != 0 {
+		t.Fatalf("stale bigrams %#v", got)
+	}
+	os.Remove(filepath.Join(e.dir, "b.txt"))
+	e.scan(t)
+	e.pass(t)
+	if got := e.findText(t, Query{Text: "译"}); len(got) != 0 {
+		t.Fatalf("orphan bigrams %#v", got)
+	}
+	var n int
+	e.x.content.Load().db.QueryRow(`SELECT count(*) FROM contents_cjk WHERE contents_cjk MATCH '"译"*'`).Scan(&n)
+	if n != 0 {
+		t.Fatalf("%d orphan rows", n)
 	}
 }
