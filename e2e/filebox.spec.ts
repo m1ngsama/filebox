@@ -3308,6 +3308,9 @@ test('the app installs as a PWA whose service worker caches only the shell', asy
   expect(cached).toContain('/')
   expect(cached.some((p) => p.startsWith('/assets/'))).toBe(true)
   expect(cached.filter((p) => p !== '/' && !p.startsWith('/assets/'))).toEqual([])
+  await page.goto('/reader#vol=v&p=missing.epub')
+  const shell = await page.evaluate(async () => (await (await caches.open('shell')).match('/'))?.text())
+  expect(shell).toMatch(/\/assets\/app-/)
 })
 
 async function shareIn(page: Page, files: { name: string; body: string }[]) {

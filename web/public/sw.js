@@ -13,7 +13,7 @@ self.addEventListener('fetch', (e) => {
   if (r.method === 'POST' && u.pathname === '/share-target') return e.respondWith(receive(r))
   if (r.method !== 'GET' || BYPASS.test(u.pathname)) return
   if (u.pathname.startsWith('/assets/')) e.respondWith(asset(r))
-  else if (r.mode === 'navigate') e.respondWith(page(r))
+  else if (r.mode === 'navigate' && r.destination === 'document' && u.pathname !== '/reader') e.respondWith(page(r))
 })
 
 async function asset(r) {
