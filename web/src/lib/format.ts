@@ -175,7 +175,8 @@ const thumbs = new Set('jpg jpeg png gif webp bmp tif tiff heic heif avif pdf cr
 export const thumbable = (n: string) => thumbs.has(ext(n))
 
 const foreign = new Set(['heic', 'heif', 'tif', 'tiff'])
-export const converted = (n: string) => foreign.has(ext(n))
+const safari = /^((?!chrome|chromium|android|crios|fxios|edg).)*safari/i.test(navigator.userAgent)
+export const converted = (n: string) => !safari && foreign.has(ext(n))
 
 type WeekLocale = Intl.Locale & { getWeekInfo?: () => { firstDay: number }; weekInfo?: { firstDay: number } }
 const week = new Intl.Locale(locale) as WeekLocale

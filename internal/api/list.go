@@ -42,7 +42,7 @@ func counted(root *os.Root, rel string, es []Entry) []Entry {
 		}
 		names, _ := f.Readdirnames(maxItems)
 		f.Close()
-		n := len(names)
+		n := len(names) - len(sidecars(names))
 		es[i].Items = &n
 	}
 	return es
@@ -66,6 +66,34 @@ func entries(root *os.Root, rel string, des []fs.DirEntry) []Entry {
 			continue
 		}
 		out = append(out, entry(name, fi))
+	}
+	return out
+}
+
+var videoExt = map[string]bool{".mp4": true, ".m4v": true, ".webm": true, ".mov": true, ".mkv": true, ".ogv": true}
+
+// sidecars are the subtitle files the web list folds under a video of the same stem.
+func sidecars(names []string) []string {
+	videos := map[string]bool{}
+	for _, n := range names {
+		if videoExt[strings.ToLower(path.Ext(n))] {
+			videos[strings.TrimSuffix(n, path.Ext(n))] = true
+		}
+	}
+	var out []string
+	for _, n := range names {
+		if e := strings.ToLower(path.Ext(n)); e != ".srt" && e != ".vtt" {
+			continue
+		}
+		for s := strings.TrimSuffix(n, path.Ext(n)); s != ""; s = strings.TrimSuffix(s, path.Ext(s)) {
+			if videos[s] {
+				out = append(out, n)
+				break
+			}
+			if path.Ext(s) == "" {
+				break
+			}
+		}
 	}
 	return out
 }
