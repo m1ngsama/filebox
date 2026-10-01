@@ -668,7 +668,7 @@
   async function carried(a: Asking, withSubs: boolean) {
     asking = null
     if (a.copy) forgetUndo()
-    const r = await api.transferAll(a.c.vol, a.c.dir, withSubs ? [...a.c.names, ...a.extra] : a.c.names, a.to, a.copy)
+    const r = await api.transferAll(a.c.vol, a.c.dir, withSubs ? [...a.c.names, ...a.extra] : a.c.names, a.to, a.copy, undefined, () => toast(t.undoing, { kind: 'info' }))
     moved(r.done, a.copy)
     if (r.error) fail(r.error)
   }

@@ -241,6 +241,7 @@ const zh = {
   undoing: '正在撤销…',
   undone: '已撤销',
   undoFailed: (what: string) => `${what}没能撤销`,
+  stuckAt: (what: string, where: string) => `${what}没能移回，仍在 ${where}。`,
   failedItem: (name: string, msg: string) => `${name}：${msg}`,
   uploaded: (n: number) => `已完成 ${n} 项`,
   uploadedReplaced: (n: number, m: number) => `已上传 ${n} 个文件，替换的 ${m} 个旧文件已移到回收站`,

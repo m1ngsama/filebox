@@ -1,6 +1,6 @@
 import type { PublicKeyCredentialCreationOptionsJSON, PublicKeyCredentialRequestOptionsJSON } from '@simplewebauthn/browser'
 import { t } from './i18n'
-import { child, parent, base } from './format'
+import { child, parent, base, place } from './format'
 
 export const errorText = (status: number): string | undefined =>
   (t.errors as Record<number, string>)[status] ?? (status >= 500 ? t.serverError : undefined)
@@ -202,11 +202,14 @@ export const api = {
       return { done, error: e as Error }
     }
   },
-  async transferAll(vol: string, dir: string, names: string[], to: Loc, copy: boolean, onstatus?: (i: number, name: string, s?: JobStatus) => void) {
+  async transferAll(vol: string, dir: string, names: string[], to: Loc, copy: boolean, onstatus?: (i: number, name: string, s?: JobStatus) => void, onundo?: () => void) {
     const r = await api.transfer(vol, dir, names, to, copy, onstatus)
     if (!r.error || copy) return r
-    for (const m of [...r.done].reverse()) await api.move(m.to, m.from).catch(() => {})
-    return { done: [], error: new Error(t.failedItem(t.what([names[r.done.length]]), r.error.message)) }
+    if (r.done.some((m) => m.from.vol !== m.to.vol)) onundo?.()
+    const stuck: Move[] = []
+    for (const m of [...r.done].reverse()) await api.move(m.to, m.from).catch(() => stuck.unshift(m))
+    const why = t.failedItem(t.what([names[r.done.length]]), r.error.message)
+    return { done: stuck, error: new Error(stuck.length ? `${why} ${t.stuckAt(t.what(stuck.map((m) => base(m.to.path))), place(to.vol, to.path))}` : why) }
   },
   async waitJob(id: string, onprogress?: (s: JobStatus) => void) {
     for (;;) {

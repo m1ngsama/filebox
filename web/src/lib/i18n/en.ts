@@ -241,6 +241,7 @@ export default (locale: string) => {
     undoing: 'Undoing…',
     undone: 'Undone',
     undoFailed: (what: string) => `Couldn’t undo ${what}`,
+    stuckAt: (what: string, where: string) => `Couldn’t move ${what} back; still in ${where}.`,
     failedItem: (name: string, msg: string) => `${name}: ${msg}`,
     uploaded: (n: number) => `Uploaded ${count(n, 'item')}`,
     uploadedReplaced: (n: number, m: number) => `Uploaded ${count(n, 'file')}. ${count(m, 'replaced file')} moved to the trash.`,
