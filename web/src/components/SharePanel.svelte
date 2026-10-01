@@ -6,6 +6,7 @@
   import { byLapse } from '../lib/format'
   import { t } from '../lib/i18n'
   import { toast } from '../lib/toast.svelte'
+  import { copyLater } from '../lib/clipboard'
 
   let { vol, path, dir }: { vol: string; path: string; dir: boolean } = $props()
 
@@ -46,11 +47,13 @@
 
   function create(e: SubmitEvent) {
     e.preventDefault()
+    const made = api.newShare({ vol, path, mode, password, expires_in: expires })
+    const copied = copyLater(made.then((r) => shareLink(r.token)))
     act(async () => {
-      const { token, existing } = await api.newShare({ vol, path, mode, password, expires_in: expires })
+      const { existing } = await made
       password = ''
-      const copied = await navigator.clipboard.writeText(shareLink(token)).then(() => true, () => false)
-      toast(existing ? (copied ? t.shareExisting : t.shareExistingShown) : copied ? t.shareCreatedCopied : t.shareCreated)
+      const ok = await copied
+      toast(existing ? (ok ? t.shareExisting : t.shareExistingShown) : ok ? t.shareCreatedCopied : t.shareCreated)
     })
   }
 </script>
@@ -67,15 +70,17 @@
 </ul>
 
 <form class="share-form" onsubmit={create}>
-  <fieldset>
-    <legend>{t.permission}</legend>
-    {#each modes as m (m)}
-      <label class="radio">
-        <input type="radio" name="mode" value={m} bind:group={mode} disabled={m !== 'read' && !dir} />
-        {t.modes[m]}
-      </label>
-    {/each}
-  </fieldset>
+  {#if dir}
+    <fieldset>
+      <legend>{t.permission}</legend>
+      {#each modes as m (m)}
+        <label class="radio">
+          <input type="radio" name="mode" value={m} bind:group={mode} />
+          {t.modes[m]}
+        </label>
+      {/each}
+    </fieldset>
+  {/if}
   <label class="field">
     <span>{t.passwordOptional}</span>
     <input type="password" bind:value={password} autocomplete="new-password" />

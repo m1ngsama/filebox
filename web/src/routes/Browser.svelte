@@ -37,7 +37,7 @@
   import Download from '@lucide/svelte/icons/download'
   import Pencil from '@lucide/svelte/icons/pencil'
   import FolderInput from '@lucide/svelte/icons/folder-input'
-  import Share2 from '@lucide/svelte/icons/share-2'
+  import Link from '@lucide/svelte/icons/link'
   import Star from '@lucide/svelte/icons/star'
   import StarOff from '@lucide/svelte/icons/star-off'
   import Info from '@lucide/svelte/icons/info'
@@ -60,7 +60,8 @@
   import ArrowUp from '@lucide/svelte/icons/arrow-up'
   import ArrowDown from '@lucide/svelte/icons/arrow-down'
   import Check from '@lucide/svelte/icons/check'
-  import { api, HttpError, errorText, filesURL, fileURL, rawURL, thumbURL, zipURL, saveURL, selectURL, type Entry, type Loc, type Move, type RecentFile, type ContentHit, type Progress } from '../lib/api'
+  import { api, HttpError, errorText, filesURL, fileURL, rawURL, thumbURL, zipURL, saveURL, selectURL, shareLink, type Entry, type Loc, type Move, type RecentFile, type ContentHit, type Progress } from '../lib/api'
+  import { copyLater } from '../lib/clipboard'
   import { toast, fail, runLatest, retract, retext, forgetUndo, type ToastAction } from '../lib/toast.svelte'
   import { navigate, link, route } from '../lib/router.svelte'
   import { enqueue, type Replaced } from '../lib/uploads.svelte'
@@ -470,7 +471,7 @@
     download: { id: 'download', label: t.download, icon: Download },
     rename: { id: 'rename', label: t.rename, icon: Pencil },
     move: { id: 'move', label: t.moveOrCopy, icon: FolderInput },
-    share: { id: 'share', label: t.share, icon: Share2 },
+    share: { id: 'share', label: t.copyLink, icon: Link },
     star: { id: 'star', label: t.star, icon: Star },
     unstar: { id: 'unstar', label: t.unstar, icon: StarOff },
     details: { id: 'details', label: t.details, icon: Info },
@@ -494,7 +495,17 @@
     else if (id === 'move') dialog = { kind: 'move', names: [e.name] }
     else if (id === 'remove') remove([e.name])
     else if (id === 'star' || id === 'unstar') toggleStar([e.name], id === 'star')
+    else if (id === 'share') quickShare(e)
     else details = e
+  }
+
+  function quickShare(e: Entry) {
+    const made = api.newShare({ vol, path: join(e.name), mode: 'read', password: '', expires_in: 7 * 86400 })
+    const copied = copyLater(made.then((r) => shareLink(r.token)))
+    made.then(
+      async () => toast((await copied) ? t.quickShared : t.quickSharedShown, { actions: [{ label: t.shareOptions, run: () => (details = e) }] }),
+      fail,
+    )
   }
 
   $effect(() => void loadStars())
@@ -995,7 +1006,7 @@
   <div class="sel-tools" role="group" aria-label={t.selected(selected.size)} bind:offsetHeight={barH}>
     <button onclick={() => download([...selected])}><Download size={icon.md} /><span>{t.download}</span></button>
     <button onclick={() => (dialog = { kind: 'move', names: [...selected] })}><FolderInput size={icon.md} /><span>{t.moveOrCopy}</span></button>
-    <button disabled={!one} onclick={() => pass('share')}><Share2 size={icon.md} /><span>{t.share}</span></button>
+    <button disabled={!one} onclick={() => pass('share')}><Link size={icon.md} /><span>{t.copyLink}</span></button>
     <button onclick={() => (sheet = 'more')}><Ellipsis size={icon.md} /><span>{t.more}</span></button>
     <button class="danger" onclick={() => remove([...selected])}><Trash size={icon.md} /><span>{t.remove}</span></button>
   </div>
