@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"fmt"
 	"log/slog"
+	"maps"
 	"os"
 	"path/filepath"
 	"slices"
@@ -322,5 +323,27 @@ func TestRenameKeepsRowsForRootOrSelf(t *testing.T) {
 	favs, _ := e.x.Favorites()
 	if got := e.paths(t); !slices.Equal(got, []string{"a", "a/f", "b"}) || len(favs) != 2 {
 		t.Fatalf("rows %v, favorites %v", got, favs)
+	}
+}
+
+func TestSharesFollowRenamesAndGoWithTheirFiles(t *testing.T) {
+	e := setup(t)
+	uid, _ := e.x.db.SetPassword("u", "h")
+	for i, p := range []string{"a/report.pdf", "b.txt", "a"} {
+		e.x.db.InsertShare(&db.Share{Token: fmt.Sprint("t", i), UserID: uid, Vol: "v", Path: p, Mode: "read", CreatedAt: 1})
+	}
+	os.MkdirAll(filepath.Join(e.dir, "c"), 0o755)
+	os.WriteFile(filepath.Join(e.dir, "c", "report.pdf"), nil, 0o644)
+	v, _ := e.vols.Get("v")
+	e.x.Rename(v, "a", "c")
+	e.x.Touch(v, "b.txt")
+	got := map[string]string{}
+	for i := range 3 {
+		if sh, err := e.x.db.ShareByToken(fmt.Sprint("t", i)); err == nil {
+			got[sh.Token] = sh.Path
+		}
+	}
+	if want := map[string]string{"t0": "c/report.pdf", "t2": "c"}; !maps.Equal(got, want) {
+		t.Fatalf("shares %v, want %v", got, want)
 	}
 }
