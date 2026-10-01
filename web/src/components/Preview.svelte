@@ -20,7 +20,8 @@
     siblings = true,
     inline = false,
     saveTo,
-  }: { entry: Entry; entries: Entry[]; url: Src; onclose: () => void; siblings?: boolean; inline?: boolean; saveTo?: (e: Entry) => string } = $props()
+    startEdit = false,
+  }: { entry: Entry; entries: Entry[]; url: Src; onclose: () => void; siblings?: boolean; inline?: boolean; saveTo?: (e: Entry) => string; startEdit?: boolean } = $props()
   const k = $derived(kind(entry.name))
   const src = $derived(url(entry))
   const images = $derived(k === 'image' ? entries.filter((e) => !e.dir && kind(e.name) === 'image') : [])
@@ -277,7 +278,7 @@
       <iframe class="book" src={reader} title={entry.name} bind:this={frame} onerror={failed}></iframe>
     {:else if k === 'text'}
       {#await import('./TextView.svelte') then { default: TextView }}
-        {#key src}<TextView {entry} {url} saveTo={saveTo?.(entry)} onready={ready} onfail={failed} />{/key}
+        {#key src}<TextView {entry} {url} saveTo={saveTo?.(entry)} {startEdit} onready={ready} onfail={failed} />{/key}
       {/await}
     {:else if k !== 'comic'}
       <div class="viewer-error">

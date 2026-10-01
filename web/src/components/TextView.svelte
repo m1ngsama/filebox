@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { untrack } from 'svelte'
   import Copy from '@lucide/svelte/icons/copy'
   import Check from '@lucide/svelte/icons/check'
   import TextWrap from '@lucide/svelte/icons/text-wrap'
@@ -15,7 +16,7 @@
   import '../lib/render.css'
   import { t } from '../lib/i18n'
 
-  let { entry, url, saveTo, onready, onfail }: { entry: Entry; url: Src; saveTo?: string; onready: () => void; onfail: () => void } = $props()
+  let { entry, url, saveTo, startEdit = false, onready, onfail }: { entry: Entry; url: Src; saveTo?: string; startEdit?: boolean; onready: () => void; onfail: () => void } = $props()
 
   const LIMIT = 1 << 20
   const PAGE = 500
@@ -41,7 +42,7 @@
   let shown = $state(PAGE)
   let order = $state<{ col: number; desc: boolean } | null>(null)
   let more = $state<HTMLElement>()
-  let editing = $state(false)
+  let editing = $state(untrack(() => startEdit))
   let fresh = $state(0)
   const editable = $derived(!!saveTo && entry.size <= 8 << 20)
 

@@ -80,6 +80,7 @@ func (a *API) Register(mux *http.ServeMux) {
 	h("POST /api/favorites", a.star)
 	h("PUT /api/file", a.save)
 	h("POST /api/mkdir", a.mkdir)
+	h("POST /api/touch", a.touch)
 	h("POST /api/mv", a.mv)
 	h("POST /api/cp", a.cp)
 	h("POST /api/rm", a.rm)
@@ -228,6 +229,34 @@ func (a *API) mkdir(w http.ResponseWriter, r *http.Request) {
 	e, err := Stat(v.Root, rel)
 	if err != nil {
 		e = Entry{Name: path.Base(rel), Dir: true, Mtime: time.Now().UnixMilli()}
+	}
+	httpx.JSON(w, 201, e)
+}
+
+// touch creates an empty file, never over an existing one, for a note started in the browser.
+func (a *API) touch(w http.ResponseWriter, r *http.Request) {
+	var in Loc
+	if err := httpx.Read(r, &in); err != nil {
+		httpx.Fail(w, 400, "bad request")
+		return
+	}
+	v, rel, err := a.resolve(in)
+	if err == nil && (rel == "." || !vol.ValidName(path.Base(rel))) {
+		err = vol.ErrBadPath
+	}
+	var f *os.File
+	if err == nil {
+		f, err = v.Root.OpenFile(rel, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o644)
+	}
+	if err != nil {
+		httpx.Error(w, err)
+		return
+	}
+	f.Close()
+	a.Index.Touch(v, rel)
+	e, err := Stat(v.Root, rel)
+	if err != nil {
+		e = Entry{Name: path.Base(rel), Mtime: time.Now().UnixMilli()}
 	}
 	httpx.JSON(w, 201, e)
 }

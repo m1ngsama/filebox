@@ -32,6 +32,7 @@
   import Plus from '@lucide/svelte/icons/plus'
   import Upload from '@lucide/svelte/icons/upload'
   import FolderUp from '@lucide/svelte/icons/folder-up'
+  import FilePlus from '@lucide/svelte/icons/file-plus'
   import FolderPlus from '@lucide/svelte/icons/folder-plus'
   import FolderOpen from '@lucide/svelte/icons/folder-open'
   import Download from '@lucide/svelte/icons/download'
@@ -80,7 +81,7 @@
 
   let { vol, path, vols }: { vol: string; path: string; vols: string[] } = $props()
 
-  type Dialog = { kind: 'mkdir' } | { kind: 'rename'; e: Entry } | { kind: 'renameMany'; names: string[] } | { kind: 'move'; names: string[] }
+  type Dialog = { kind: 'mkdir' } | { kind: 'touch' } | { kind: 'rename'; e: Entry } | { kind: 'renameMany'; names: string[] } | { kind: 'move'; names: string[] }
 
   let collapsed = $state(false)
   let entries = $state.raw<Entry[]>([])
@@ -124,6 +125,7 @@
   let dragging = $state(false)
   let depth = 0
   let preview = $state.raw<Entry | null>(null)
+  let editFirst = $state(false)
   let details = $state.raw<Entry | null>(null)
   let dialog = $state<Dialog | null>(null)
   let searching = $state(false)
@@ -467,6 +469,7 @@
     { label: t.upload, icon: Upload, run: () => files?.click() },
     { label: t.uploadFolder, icon: FolderUp, run: () => folder?.click() },
     { label: t.newFolder, icon: FolderPlus, run: () => (dialog = { kind: 'mkdir' }) },
+    { label: t.newTextFile, icon: FilePlus, run: () => (dialog = { kind: 'touch' }) },
   ]
 
   function sortBy(k: Sort) {
@@ -607,6 +610,16 @@
       },
       (err) => rollback(mine, err),
     )
+  }
+
+  async function note(n: string) {
+    vacant(n)
+    forgetUndo()
+    const e = await api.touch(vol, join(n))
+    await refresh()
+    pick(n)
+    editFirst = true
+    preview = entries.find((x) => x.name === n) ?? e
   }
 
   function rename(e: Entry, n: string, extra: string[] = []) {
@@ -1135,7 +1148,7 @@
 
 {#if preview}
   {#await import('../components/Preview.svelte') then { default: Preview }}
-    <Preview bind:entry={preview} entries={hidden.size ? [...shown, ...entries.filter((e) => hidden.has(e.name))] : shown} url={(e, as) => fileURL(vol, join(e.name), as)} saveTo={(e) => `/api/file?${new URLSearchParams({ vol, path: join(e.name) })}`} onclose={() => (preview = null)} />
+    <Preview bind:entry={preview} entries={hidden.size ? [...shown, ...entries.filter((e) => hidden.has(e.name))] : shown} url={(e, as) => fileURL(vol, join(e.name), as)} saveTo={(e) => `/api/file?${new URLSearchParams({ vol, path: join(e.name) })}`} startEdit={editFirst} onclose={() => ((preview = null), (editFirst = false))} />
   {/await}
 {/if}
 
@@ -1163,6 +1176,8 @@
         onsave={mkdir}
         onclose={() => (dialog = null)}
       />
+    {:else if dialog?.kind === 'touch'}
+      <NameDialog title={t.newTextFile} label={t.fileName} action={t.create} value={t.untitledNote} stem fresh onsave={note} onclose={() => (dialog = null)} />
     {:else if dialog?.kind === 'rename'}
       {@const e = dialog.e}
       {@const extra = subsOf([e.name])}

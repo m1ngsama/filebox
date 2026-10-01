@@ -39,3 +39,23 @@ func TestEditSavesOverTheOpenedCopyOnly(t *testing.T) {
 		t.Fatalf("staging left behind %v", left)
 	}
 }
+
+func TestTouchCreatesOnlyNewFiles(t *testing.T) {
+	f := newTestApp(t)
+	if w := f.do("POST", "/api/touch", body(`{"vol":"v","path":"notes/todo.md"}`)); w.Code != 404 {
+		t.Fatalf("missing folder %d", w.Code)
+	}
+	if w := f.do("POST", "/api/touch", body(`{"vol":"v","path":"todo.md"}`)); w.Code != 201 {
+		t.Fatalf("touch %d %s", w.Code, w.Body)
+	}
+	f.write(t, "kept.md", "keep me")
+	if w := f.do("POST", "/api/touch", body(`{"vol":"v","path":"kept.md"}`)); w.Code != 409 {
+		t.Fatalf("over an existing file %d", w.Code)
+	}
+	if b, _ := os.ReadFile(filepath.Join(f.Dir, "kept.md")); string(b) != "keep me" {
+		t.Fatalf("existing file changed to %q", b)
+	}
+	if w := f.do("POST", "/api/touch", body(`{"vol":"v","path":".trash"}`)); w.Code != 400 {
+		t.Fatalf("reserved %d", w.Code)
+	}
+}

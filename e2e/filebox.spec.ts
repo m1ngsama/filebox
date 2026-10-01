@@ -342,6 +342,23 @@ test('pasting files uploads them into the open folder and names a pasted screens
   expect(readFileSync(join(server.vol, 'docs', 'notes.txt'), 'utf8')).toBe('hi')
 })
 
+test('a new text file opens straight into the editor', async ({ page, server }) => {
+  await login(page)
+  await row(page, 'docs').locator('button.name').click()
+  await page.getByRole('button', { name: t.new }).click()
+  await page.getByRole('menuitem', { name: t.newTextFile }).click()
+  const name = page.getByLabel(t.fileName)
+  await expect(name).toHaveValue(t.untitledNote)
+  await page.keyboard.type('groceries')
+  await page.getByRole('button', { name: t.create }).click()
+  const view = page.getByRole('dialog', { name: 'groceries.md' })
+  await expect(view.locator('.cm-content')).toBeFocused()
+  await page.keyboard.type('- milk')
+  await page.keyboard.press('ControlOrMeta+s')
+  await expect(view).toContainText(t.saved)
+  expect(readFileSync(join(server.vol, 'docs', 'groceries.md'), 'utf8')).toBe('- milk')
+})
+
 test('a text file edits in place, saves with the keyboard and never overwrites a change made elsewhere', async ({ page, server }) => {
   const file = join(server.vol, 'docs', 'todo.md')
   writeFileSync(file, '# Todo\n')
