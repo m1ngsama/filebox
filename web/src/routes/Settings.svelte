@@ -143,14 +143,15 @@
     <section class="card-section" id="connect" aria-labelledby="connect-title">
       {@render head('connect', t.connect, t.connectHint)}
       <div class="code-line"><code>{dav}</code><CopyButton text={dav} label={t.copy} done={t.copied} /></div>
-      <dl class="clients">
-        {#each t.clients as [name, how] (name)}<dt>{name}</dt><dd>{how}</dd>{/each}
-        <dt>rclone</dt>
-        <dd>{t.rcloneHint}</dd>
-        <dd><code>rclone config create --obscure filebox webdav url={dav} vendor=other user=filebox pass={t.appPasswordArg}</code></dd>
-        <dt>{t.iosShortcut}</dt>
-        <dd>{t.iosShortcutHow(`${dav}${vol}/`)}</dd>
-      </dl>
+      <div class="clients">
+        {#each t.clients as [name, how] (name)}<details><summary>{name}</summary><p>{how}</p></details>{/each}
+        <details>
+          <summary>rclone</summary>
+          <p>{t.rcloneHint}</p>
+          <p><code>rclone config create --obscure filebox webdav url={dav} vendor=other user=filebox pass={t.appPasswordArg}</code></p>
+        </details>
+        <details><summary>{t.iosShortcut}</summary><p>{t.iosShortcutHow(`${dav}${vol}/`)}</p></details>
+      </div>
     </section>
 
     <section class="card-section" id="sessions" aria-labelledby="sessions-title">
