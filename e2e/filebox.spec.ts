@@ -1642,7 +1642,7 @@ test('settings always show the WebDAV address, preferring the page origin over a
   await expect(card.locator('.clients dt')).toHaveText([...t.clients.map(([n]) => n), 'rclone', t.iosShortcut])
   await expect(card.locator('.clients dd').last()).toContainText(`${dav}v/`)
   await expect(card.locator('.clients dd').last()).toContainText('Bearer')
-  await expect(card.locator('.clients code')).toHaveText(`rclone config create filebox webdav url=${dav} vendor=other user=filebox pass=${t.appPasswordArg}`)
+  await expect(card.locator('.clients code')).toHaveText(`rclone config create --obscure filebox webdav url=${dav} vendor=other user=filebox pass=${t.appPasswordArg}`)
   await card.getByRole('button', { name: t.copy }).click()
   expect(await page.evaluate(() => navigator.clipboard.readText())).toBe(dav)
   await page.getByRole('navigation', { name: t.settings }).getByRole('link', { name: t.connect }).click()

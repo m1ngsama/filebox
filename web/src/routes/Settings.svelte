@@ -147,7 +147,7 @@
         {#each t.clients as [name, how] (name)}<dt>{name}</dt><dd>{how}</dd>{/each}
         <dt>rclone</dt>
         <dd>{t.rcloneHint}</dd>
-        <dd><code>rclone config create filebox webdav url={dav} vendor=other user=filebox pass={t.appPasswordArg}</code></dd>
+        <dd><code>rclone config create --obscure filebox webdav url={dav} vendor=other user=filebox pass={t.appPasswordArg}</code></dd>
         <dt>{t.iosShortcut}</dt>
         <dd>{t.iosShortcutHow(`${dav}${vol}/`)}</dd>
       </dl>
