@@ -329,12 +329,11 @@ func (a *API) recent(w http.ResponseWriter, r *http.Request) {
 	if err != nil || limit <= 0 {
 		limit = 200
 	}
-	fs, err := a.Index.Recent(recentScan)
+	out, runs, err := recentRuns(a.Index, min(limit, 500))
 	if err != nil {
 		httpx.Error(w, err)
 		return
 	}
-	out, runs := collapse(fs, min(limit, 500))
 	httpx.JSON(w, 200, map[string]any{"entries": out, "runs": runs, "scanning": !a.Index.Ready()})
 }
 

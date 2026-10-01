@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io/fs"
 	"log/slog"
+	"math"
 	"path"
 	"sync"
 	"sync/atomic"
@@ -179,22 +180,33 @@ func (x *Index) Size(vol, rel string) (Size, error) {
 	return s, err
 }
 
+type Cursor struct{ Mtime, ID int64 }
+
+var Newest = Cursor{math.MaxInt64, 0}
+
 func (x *Index) Recent(limit int) ([]File, error) {
-	rows, err := x.db.Query(`SELECT vol, path, size, mtime FROM files WHERE dir = 0 ORDER BY mtime DESC LIMIT ?`, limit)
+	fs, _, err := x.RecentFrom(Newest, limit)
+	return fs, err
+}
+
+func (x *Index) RecentFrom(c Cursor, limit int) ([]File, Cursor, error) {
+	rows, err := x.db.Query(`SELECT id, vol, path, size, mtime FROM files INDEXED BY files_mtime
+		WHERE dir = 0 AND mtime <= ?1 AND NOT (mtime = ?1 AND id <= ?2) ORDER BY mtime DESC, id LIMIT ?3`, c.Mtime, c.ID, limit)
 	if err != nil {
-		return nil, err
+		return nil, c, err
 	}
 	defer rows.Close()
 	out := []File{}
 	for rows.Next() {
 		var f File
-		if err := rows.Scan(&f.Vol, &f.Path, &f.Size, &f.Mtime); err != nil {
-			return nil, err
+		if err := rows.Scan(&c.ID, &f.Vol, &f.Path, &f.Size, &f.Mtime); err != nil {
+			return nil, c, err
 		}
+		c.Mtime = f.Mtime
 		f.Name = path.Base(f.Path)
 		out = append(out, f)
 	}
-	return out, rows.Err()
+	return out, c, rows.Err()
 }
 
 func (x *Index) scan(vols *vol.Set) (int, error) {
