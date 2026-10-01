@@ -42,3 +42,10 @@ func TestListHidesJunk(t *testing.T) {
 		t.Fatalf("%v", names)
 	}
 }
+
+func TestLyricsFoldUnderTheirSong(t *testing.T) {
+	got := sidecars([]string{"晴天.mp3", "晴天.lrc", "orphan.lrc", "clip.mp4", "clip.lrc", "clip.zh.srt"})
+	if want := []string{"晴天.lrc", "clip.zh.srt"}; !slices.Equal(got, want) {
+		t.Fatalf("sidecars %v, want %v", got, want)
+	}
+}

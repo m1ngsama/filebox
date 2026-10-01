@@ -77,26 +77,32 @@ func entries(root *os.Root, rel string, des []fs.DirEntry) []Entry {
 
 var videoExt = map[string]bool{".mp4": true, ".m4v": true, ".webm": true, ".mov": true, ".mkv": true, ".ogv": true}
 
-// sidecars are the subtitle files the web list folds under a video of the same stem.
+var audioExt = map[string]bool{".mp3": true, ".m4a": true, ".aac": true, ".flac": true, ".wav": true, ".ogg": true, ".opus": true}
+
+// sidecars are the subtitles and lyrics the web list folds under a video or song of the same stem.
 func sidecars(names []string) []string {
-	videos := map[string]bool{}
+	videos, songs := map[string]bool{}, map[string]bool{}
 	for _, n := range names {
-		if videoExt[strings.ToLower(path.Ext(n))] {
-			videos[strings.TrimSuffix(n, path.Ext(n))] = true
-		}
+		e := strings.ToLower(path.Ext(n))
+		videos[strings.TrimSuffix(n, path.Ext(n))] = videos[strings.TrimSuffix(n, path.Ext(n))] || videoExt[e]
+		songs[strings.TrimSuffix(n, path.Ext(n))] = songs[strings.TrimSuffix(n, path.Ext(n))] || audioExt[e]
 	}
 	var out []string
 	for _, n := range names {
-		if e := strings.ToLower(path.Ext(n)); e != ".srt" && e != ".vtt" {
-			continue
-		}
-		for s := strings.TrimSuffix(n, path.Ext(n)); s != ""; s = strings.TrimSuffix(s, path.Ext(s)) {
-			if videos[s] {
+		switch e := strings.ToLower(path.Ext(n)); e {
+		case ".lrc":
+			if songs[strings.TrimSuffix(n, path.Ext(n))] {
 				out = append(out, n)
-				break
 			}
-			if path.Ext(s) == "" {
-				break
+		case ".srt", ".vtt":
+			for s := strings.TrimSuffix(n, path.Ext(n)); s != ""; s = strings.TrimSuffix(s, path.Ext(s)) {
+				if videos[s] {
+					out = append(out, n)
+					break
+				}
+				if path.Ext(s) == "" {
+					break
+				}
 			}
 		}
 	}

@@ -1,7 +1,8 @@
 import { load, save } from './storage'
+import { parse, decode, type Line } from './lyrics'
 
-export type Track = { name: string; src: string; cover?: string; meta: string }
-type Tags = { title?: string; artist?: string; album?: string }
+export type Track = { name: string; src: string; cover?: string; meta: string; lyrics?: string }
+type Tags = { title?: string; artist?: string; album?: string; lyrics?: string }
 
 const speeds = [1, 1.25, 1.5, 2, 0.75]
 
@@ -13,6 +14,8 @@ class Player {
   total = $state(0)
   tags = $state.raw<Tags>({})
   rate = $state(Number(load('audio-rate')) || 1)
+  lines = $state.raw<Line[]>([])
+  words = $state('')
   viewing = $state(0)
   expanded = $state(false)
   #el: HTMLAudioElement | null = null
@@ -96,14 +99,25 @@ class Player {
     this.i = i
     this.now = this.total = this.#saved = 0
     this.tags = {}
+    this.lines = []
+    this.words = ''
     a.src = t.src
+    if (t.lyrics)
+      fetch(t.lyrics)
+        .then((r) => (r.ok ? r.arrayBuffer() : Promise.reject()))
+        .then((b) => this.track?.src === t.src && (this.lines = parse(decode(b))), () => {})
     if (autoplay) a.play().catch(() => {})
     this.#session()
     fetch(t.meta)
       .then((r) => (r.ok ? r.json() : {}))
       .then((m: Tags) => {
-        if (this.track !== t) return
+        if (this.track?.src !== t.src) return
         this.tags = m
+        if (m.lyrics && !this.lines.length) {
+          const timed = parse(m.lyrics)
+          if (timed.length) this.lines = timed
+          else this.words = m.lyrics
+        }
         this.#session()
       }, () => {})
   }

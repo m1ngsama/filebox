@@ -67,7 +67,7 @@
   import { enqueue, type Replaced } from '../lib/uploads.svelte'
   import { loadStars, starred, star } from '../lib/favorites.svelte'
   import { folderAction, downloadAction, actOn, saveZip } from '../lib/located'
-  import { thumbable, rawThumb, arrange, parent, base, child, flip, sorts, place, prefersGrid, mostlyMedia, dated, days, sidecars, subtitleRename, stem, type Sort } from '../lib/format'
+  import { kind, thumbable, rawThumb, arrange, parent, base, child, flip, sorts, place, prefersGrid, mostlyMedia, dated, days, sidecars, subtitleRename, stem, type Sort } from '../lib/format'
   import { t } from '../lib/i18n'
   import { load, save, viewOf, keepView, type View } from '../lib/storage'
   import NavToggle from '../components/NavToggle.svelte'
@@ -941,7 +941,7 @@
         {batch}
         {dnd}
         {reveal}
-        tag={(e) => (side.has(e.name) && !subs ? t.subtitles : undefined)}
+        tag={(e) => (side.has(e.name) && !subs ? (kind(e.name) === 'audio' ? t.lyrics : t.subtitles) : undefined)}
         loading={at !== here}
         busy={streaming}
         head={!error}

@@ -8,7 +8,7 @@
   import ChevronLeft from '@lucide/svelte/icons/chevron-left'
   import ChevronRight from '@lucide/svelte/icons/chevron-right'
   import type { Entry, Src } from '../lib/api'
-  import { kind, thumbable, subtitleOf, subtitleLang, sidecars, stem } from '../lib/format'
+  import { kind, nfcStem, thumbable, subtitleOf, subtitleLang, sidecars, stem } from '../lib/format'
   import { load, save } from '../lib/storage'
   import { t } from '../lib/i18n'
 
@@ -29,7 +29,10 @@
   const at = $derived(list.indexOf(entry))
   const songs = $derived(k === 'audio' ? list.filter((e) => kind(e.name) === 'audio') : [])
   const song = $derived(songs.indexOf(entry))
-  const tune = (e: Entry): Track => ({ name: e.name, src: url(e), cover: url(e, 'large'), meta: url(e, 'meta') })
+  const tune = (e: Entry): Track => {
+    const words = entries.find((x) => !x.dir && /\.lrc$/i.test(x.name) && nfcStem(x.name) === nfcStem(e.name))
+    return { name: e.name, src: url(e), cover: url(e, 'large'), meta: url(e, 'meta'), lyrics: words && url(words) }
+  }
 
   $effect(() => {
     if (k !== 'audio') return

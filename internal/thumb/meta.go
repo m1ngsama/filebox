@@ -30,6 +30,7 @@ type Meta struct {
 	Title    string  `json:"title,omitempty"`
 	Artist   string  `json:"artist,omitempty"`
 	Album    string  `json:"album,omitempty"`
+	Lyrics   string  `json:"lyrics,omitempty"`
 }
 
 type probed struct {
@@ -119,6 +120,11 @@ func (p probed) meta() Meta {
 		m.Taken = strings.Replace(c[:19], "T", " ", 1)
 	}
 	m.Title, m.Artist, m.Album = tags["title"], cmpOr(tags["artist"], tags["album_artist"]), tags["album"]
+	for k, v := range tags {
+		if k == "lyrics" || strings.HasPrefix(k, "lyrics-") || k == "unsyncedlyrics" {
+			m.Lyrics = v
+		}
+	}
 	if len(p.Frames) == 0 || len(p.Frames[0].Tags) == 0 {
 		return m
 	}

@@ -9,6 +9,8 @@
   import Music from '@lucide/svelte/icons/music'
   import { clock, stem } from '../lib/format'
   import { player } from '../lib/player.svelte'
+  import { load, save } from '../lib/storage'
+  import MicVocal from '@lucide/svelte/icons/mic-vocal'
   import { t } from '../lib/i18n'
 
   let { onfail }: { onfail?: () => void } = $props()
@@ -23,6 +25,38 @@
   const title = $derived(player.tags.title || stem(track?.name ?? ''))
   const byline = $derived([player.tags.artist, player.tags.album].filter(Boolean).join(' — '))
   const now = $derived(dragging ? drag : player.now)
+  const hasWords = $derived(player.lines.length > 0 || !!player.words)
+  let showWords = $state(load('lyrics') !== '0')
+  const singing = $derived(hasWords && showWords)
+  let box = $state<HTMLDivElement>()
+  let hold = 0
+  const cur = $derived.by(() => {
+    const ls = player.lines
+    let lo = 0
+    let hi = ls.length - 1
+    let at = -1
+    while (lo <= hi) {
+      const mid = (lo + hi) >> 1
+      if (ls[mid].at <= player.now + 0.2) {
+        at = mid
+        lo = mid + 1
+      } else hi = mid - 1
+    }
+    return at
+  })
+
+  $effect(() => {
+    const el = box?.children[cur] as HTMLElement | undefined
+    if (!el || !box || performance.now() < hold) return
+    box.scrollTo({ top: el.offsetTop - box.clientHeight * 0.4, behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'instant' : 'smooth' })
+  })
+
+  const held = () => (hold = performance.now() + 3000)
+
+  function flip() {
+    showWords = !showWords
+    save('lyrics', showWords ? '1' : '0')
+  }
   const total = $derived(player.total)
 
   $effect(() => {
@@ -49,7 +83,8 @@
 
 <svelte:window onkeydown={key} />
 
-<div class="audio" class:paused={player.paused} style:--art={art && cover ? `url("${cover}")` : null}>
+<div class="audio" class:paused={player.paused} class:words={singing} style:--art={art && cover ? `url("${cover}")` : null}>
+  <div class="stage">
   <div class="art" class:ok={art}>
     {#if cover}{#key cover}<img src={cover} alt="" onload={() => (art = true)} onerror={() => (art = false)} />{/key}{/if}
     {#if !art}<Music size={64} strokeWidth={1.25} aria-hidden="true" />{/if}
@@ -95,7 +130,22 @@
     {:else}
       <button type="button" class="ctl" onclick={() => player.next()} disabled={!player.hasNext} aria-label={t.nextTrack} title={t.nextTrack}><SkipForward size={26} fill="currentColor" /></button>
     {/if}
+    {#if hasWords}
+      <button type="button" class="ctl small" aria-pressed={showWords} onclick={flip} aria-label={showWords ? t.showCover : t.showLyrics} title={showWords ? t.showCover : t.showLyrics}><MicVocal size={20} /></button>
+    {/if}
   </div>
+  </div>
+  {#if singing}
+    <div class="lyrics" bind:this={box} onwheel={held} ontouchmove={held} role="region" aria-label={t.lyrics}>
+      {#if player.lines.length}
+        {#each player.lines as l, i (i)}
+          <button type="button" class="line" class:on={i === cur} class:past={i < cur} onclick={() => player.seek(l.at)}>{l.text || '♪'}</button>
+        {/each}
+      {:else}
+        <p class="plain">{player.words}</p>
+      {/if}
+    </div>
+  {/if}
 </div>
 
 <style>
@@ -120,6 +170,78 @@
     filter: blur(60px) saturate(1.4);
     opacity: 0.45;
     transition: opacity var(--dur-3) var(--ease-out);
+  }
+  .stage {
+    display: contents;
+  }
+  .lyrics {
+    position: relative;
+    flex: 1 1 0;
+    min-height: 0;
+    width: min(560px, 100%);
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    scrollbar-width: none;
+    padding: 30% 0;
+    mask-image: linear-gradient(transparent, #000 18%, #000 82%, transparent);
+  }
+  .line {
+    display: block;
+    width: 100%;
+    margin: 0;
+    padding: var(--space-2) var(--space-1);
+    border: 0;
+    border-radius: var(--radius-md);
+    background: none;
+    color: var(--viewer-fg);
+    font-size: 22px;
+    font-weight: 700;
+    line-height: 1.3;
+    text-align: start;
+    opacity: 0.3;
+    cursor: pointer;
+    transition: opacity var(--dur-3) var(--ease-out);
+  }
+  .line.on {
+    opacity: 1;
+  }
+  .plain {
+    margin: 0;
+    white-space: pre-line;
+    font-size: 18px;
+    line-height: 1.7;
+    color: var(--viewer-fg);
+    opacity: 0.85;
+  }
+  .words .art {
+    display: none;
+  }
+  .words .lyrics {
+    order: -1;
+  }
+  @media (min-width: 900px) {
+    .audio.words {
+      flex-direction: row;
+      gap: clamp(32px, 6vw, 96px);
+    }
+    .words .stage {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: var(--space-5);
+      width: 340px;
+      flex: none;
+    }
+    .words .art {
+      display: grid;
+    }
+    .words .lyrics {
+      flex: 0 1 560px;
+      height: min(72vh, 620px);
+    }
+    .line {
+      font-size: 28px;
+    }
   }
   .art {
     position: relative;
@@ -222,6 +344,13 @@
     .ctl:not(:disabled, .main):hover {
       background: var(--viewer-hover);
     }
+    .line:hover {
+      opacity: 0.7;
+      background: rgb(255 255 255 / 0.06);
+    }
+    .line.on:hover {
+      opacity: 1;
+    }
   }
   .times {
     display: flex;
@@ -257,6 +386,9 @@
   .ctl:disabled {
     opacity: 0.3;
     cursor: default;
+  }
+  .ctl[aria-pressed='true'] {
+    background: var(--viewer-hover);
   }
   .ctl.small {
     width: 44px;

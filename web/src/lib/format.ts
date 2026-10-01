@@ -128,7 +128,8 @@ export const visual = (n: string) => /^(image|video)$/.test(kind(n))
 export const stem = (n: string) => (n.lastIndexOf('.') > 0 ? n.slice(0, n.lastIndexOf('.')) : n)
 
 const playable = /\.(srt|vtt)$/i
-const nfcStem = (n: string) => stem(n.normalize('NFC'))
+export const nfcStem = (n: string) => stem(n.normalize('NFC'))
+const lyric = /\.lrc$/i
 
 export const subtitleOf = (video: string, name: string) => {
   const v = nfcStem(video)
@@ -142,13 +143,19 @@ export const subtitleRename = (video: string, to: string, name: string) => stem(
 
 export function sidecars(list: Row[]) {
   const videos = new Map<string, string[]>()
-  for (const e of list) if (!e.dir && kind(e.name) === 'video') videos.set(nfcStem(e.name), [...(videos.get(nfcStem(e.name)) ?? []), e.name])
-  const of = new Map<string, string[]>()
-  if (!videos.size) return of
+  const songs = new Map<string, string[]>()
   for (const e of list) {
-    if (e.dir || !playable.test(e.name)) continue
-    for (let s = nfcStem(e.name), prev = ''; s !== prev; prev = s, s = stem(s))
-      for (const v of videos.get(s) ?? []) of.set(v, [...(of.get(v) ?? []), e.name])
+    const m = e.dir ? null : kind(e.name) === 'video' ? videos : kind(e.name) === 'audio' ? songs : null
+    m?.set(nfcStem(e.name), [...(m.get(nfcStem(e.name)) ?? []), e.name])
+  }
+  const of = new Map<string, string[]>()
+  const add = (owner: string, name: string) => of.set(owner, [...(of.get(owner) ?? []), name])
+  if (!videos.size && !songs.size) return of
+  for (const e of list) {
+    if (e.dir) continue
+    if (lyric.test(e.name)) for (const a of songs.get(nfcStem(e.name)) ?? []) add(a, e.name)
+    if (!playable.test(e.name)) continue
+    for (let s = nfcStem(e.name), prev = ''; s !== prev; prev = s, s = stem(s)) for (const v of videos.get(s) ?? []) add(v, e.name)
   }
   return of
 }

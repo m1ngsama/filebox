@@ -642,6 +642,26 @@ test('audio plays as now playing, pauses on space and moves on to the next track
   await expect(mini).toHaveCount(0)
 })
 
+test('a song shows its lyrics in time, folds the lyrics file away and reads GBK files', async ({ page, server }) => {
+  try {
+    execFileSync('ffmpeg', ['-v', 'error', '-f', 'lavfi', '-i', 'sine=d=4', join(server.vol, 'docs', 'song.wav')])
+  } catch {
+    test.skip(true, 'needs ffmpeg')
+  }
+  writeFileSync(join(server.vol, 'docs', 'song.lrc'), Buffer.from('5b30303a30302e30305db5dad2bbbee40a5b30303a30312e30305db5dab6febee40a5b30303a30332e35305db5dac8fdbee40a', 'hex'))
+  await login(page)
+  await row(page, 'docs').locator('button.name').click()
+  await expect(row(page, 'song.wav')).toContainText(t.lyrics)
+  await expect(row(page, 'song.lrc')).toHaveCount(0)
+  await row(page, 'song.wav').locator('button.name').click()
+  const view = page.getByRole('dialog', { name: 'song.wav' })
+  const lyrics = view.getByRole('region', { name: t.lyrics })
+  await expect(lyrics).toContainText('第一句')
+  await expect(lyrics.locator('.line.on')).toHaveText('第二句', { timeout: 5000 })
+  await lyrics.getByRole('button', { name: '第三句' }).click()
+  await expect(lyrics.locator('.line.on')).toHaveText('第三句')
+})
+
 test('videos pick up sibling subtitles and an unplayable one offers a download', async ({ page, server }) => {
   const clip = join(server.vol, 'docs/clip.webm')
   try {
