@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"os"
 	"path"
+	"regexp"
 	"strings"
 
 	"github.com/m1ngsama/filebox/internal/httpx"
@@ -27,8 +28,15 @@ var dangerous = map[string]bool{
 	".xml": true, ".xsl": true, ".mht": true, ".mhtml": true,
 }
 
-// A user file must never be an executable script on this origin: the previews read these as text.
-var inert = map[string]bool{".js": true, ".mjs": true, ".cjs": true, ".json": true, ".css": true, ".wasm": true}
+var active = regexp.MustCompile(`javascript|ecmascript|jscript|livescript|css|json|wasm`)
+
+// Inert turns any script, style or module type into text/plain, so a user file never runs on this origin.
+func Inert(ct string) string {
+	if mt, _, err := mime.ParseMediaType(ct); err == nil && active.MatchString(strings.ToLower(mt)) {
+		return "text/plain; charset=utf-8"
+	}
+	return ct
+}
 
 func SafeHeaders(h http.Header, contentType string) {
 	h.Set("X-Content-Type-Options", "nosniff")
@@ -62,12 +70,10 @@ func Named(w http.ResponseWriter, r *http.Request, root *os.Root, rel, name stri
 	}
 	ext := strings.ToLower(path.Ext(name))
 	ct := mime.TypeByExtension(ext)
-	switch {
-	case ct == "" || dangerous[ext]:
+	if ct == "" || dangerous[ext] {
 		ct = "application/octet-stream"
-	case inert[ext]:
-		ct = "text/plain; charset=utf-8"
 	}
+	ct = Inert(ct)
 	h := w.Header()
 	h.Set("Content-Type", ct)
 	SafeHeaders(h, ct)

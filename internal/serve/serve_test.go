@@ -1,6 +1,7 @@
 package serve
 
 import (
+	"mime"
 	"net/http/httptest"
 	"os"
 	"path/filepath"
@@ -43,9 +44,16 @@ func TestRange(t *testing.T) {
 }
 
 func TestInertScripts(t *testing.T) {
-	rt := root(t, map[string]string{"a.js": "alert(1)", "b.mjs": "export {}", "c.css": "p{}", "d.json": "{}"})
-	for n := range 4 {
-		name := []string{"a.js", "b.mjs", "c.css", "d.json"}[n]
+	mime.AddExtensionType(".es", "application/ecmascript")
+	mime.AddExtensionType(".ecma", "application/ecmascript")
+	mime.AddExtensionType(".jsx1", "text/x-javascript; charset=utf-8")
+	names := []string{"a.js", "b.mjs", "c.css", "d.json", "e.es", "f.ecma", "g.jsx1", "h.wasm"}
+	files := map[string]string{}
+	for _, n := range names {
+		files[n] = "alert(1)"
+	}
+	rt := root(t, files)
+	for _, name := range names {
 		w := httptest.NewRecorder()
 		File(w, httptest.NewRequest("GET", "/", nil), rt, name, false)
 		h := w.Header()

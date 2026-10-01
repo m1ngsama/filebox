@@ -128,8 +128,18 @@ type status struct {
 }
 
 func (s *status) WriteHeader(code int) {
+	if ct := s.Header().Get("Content-Type"); ct != "" {
+		s.Header().Set("Content-Type", serve.Inert(ct))
+	}
 	s.code = code
 	s.ResponseWriter.WriteHeader(code)
+}
+
+func (s *status) Write(p []byte) (int, error) {
+	if s.code == 0 {
+		s.WriteHeader(http.StatusOK)
+	}
+	return s.ResponseWriter.Write(p)
 }
 
 func (f *FS) copyProps(r *http.Request) {

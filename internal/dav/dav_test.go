@@ -2,6 +2,7 @@ package dav
 
 import (
 	"io"
+	"mime"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -113,6 +114,28 @@ func TestDavUnicode(t *testing.T) {
 	}
 	if !strings.Contains(res.Header.Get("Content-Security-Policy"), "sandbox") {
 		t.Fatalf("GET without sandbox CSP")
+	}
+}
+
+func TestDavServesScriptsAsText(t *testing.T) {
+	mime.AddExtensionType(".es", "application/ecmascript")
+	mime.AddExtensionType(".ecma", "application/ecmascript")
+	e := setup(t)
+	for _, n := range []string{"a.js", "b.es", "c.ecma", "d.css", "e.mjs"} {
+		if res, _ := e.req(t, e.rw, "PUT", "/dav/v/"+n, "alert(1)"); res.StatusCode != 201 {
+			t.Fatalf("PUT %s %d", n, res.StatusCode)
+		}
+		for _, m := range []string{"GET", "HEAD"} {
+			res, _ := e.req(t, e.rw, m, "/dav/v/"+n, "")
+			if res.StatusCode != 200 || res.Header.Get("Content-Type") != "text/plain; charset=utf-8" ||
+				res.Header.Get("X-Content-Type-Options") != "nosniff" {
+				t.Errorf("%s %s: %d %q", m, n, res.StatusCode, res.Header.Get("Content-Type"))
+			}
+		}
+	}
+	if res, _ := e.req(t, e.rw, "PROPFIND", "/dav/v/", ""); !strings.HasPrefix(res.Header.Get("Content-Type"), "text/xml") &&
+		!strings.HasPrefix(res.Header.Get("Content-Type"), "application/xml") {
+		t.Fatalf("PROPFIND type %q", res.Header.Get("Content-Type"))
 	}
 }
 
