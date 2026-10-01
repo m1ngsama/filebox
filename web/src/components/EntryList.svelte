@@ -525,7 +525,7 @@
                     onpointercancel={release}
                   >
                     {@render check(e, 'card-check')}
-                    <button class="card-open" tabindex="-1" data-look={e.dir ? 'dir' : look(e.name)} onclick={() => tap(i)} title={e.name} aria-label={named(e)} aria-expanded={expanded?.(e)}>
+                    <button class="card-open" tabindex="-1" data-name={e.name} data-look={e.dir ? 'dir' : look(e.name)} onclick={() => tap(i)} title={e.name} aria-label={named(e)} aria-expanded={expanded?.(e)}>
                       {#if s}
                         <FileIcon name={e.name} dir={e.dir} size={tiles ? 40 : 56} />
                         <img src={s} alt="" draggable="false" loading="lazy" decoding="async" onload={shown} onerror={() => miss(e)} {@attach cancel} />
@@ -584,7 +584,7 @@
                 onpointercancel={release}
               >
                 <span class="cell check-cell" role="gridcell">{@render check(e, '')}</span>
-                <span class="thumb" role="gridcell">
+                <span class="thumb" role="gridcell" data-name={e.name}>
                   <FileIcon name={e.name} dir={e.dir} />{#if s}<img src={s} alt="" draggable="false" loading="lazy" decoding="async" onload={shown} onerror={() => miss(e)} {@attach cancel} />{/if}
                 </span>
                 <span class="cell name-cell" role="gridcell">

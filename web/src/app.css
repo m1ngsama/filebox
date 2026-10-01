@@ -134,6 +134,8 @@ p.error::before { content: ''; flex: none; width: 1em; height: 1lh; background: 
   max-height: 85dvh; overflow: auto; padding: var(--space-2) var(--space-2) calc(var(--space-2) + env(safe-area-inset-bottom));
   background: var(--panel); border-radius: var(--radius-xl) var(--radius-xl) 0 0; box-shadow: var(--shadow); outline: none; animation: rise var(--dur-2) var(--ease-out);
 }
+.bottom-sheet { transition: translate var(--dur-2) var(--ease-out); }
+.grabber { display: block; width: 36px; height: 5px; margin: var(--space-1-5) auto var(--space-1); border-radius: var(--radius-full); background: var(--line); }
 .sheet-head { display: flex; align-items: center; gap: var(--space-3); padding: var(--space-2) var(--space-3) var(--space-3); margin-bottom: var(--space-1); border-bottom: 1px solid var(--line); }
 .sheet-head > div { min-width: 0; }
 .sheet-head .hint { margin: 0; font-size: var(--text-sm); }
@@ -623,3 +625,4 @@ button.busy::before { content: ''; width: 14px; height: 14px; border: 2px solid 
   .sk { animation: none; }
   .row.pressing, .card.pressing { animation: none; background: var(--sel); }
 }
+

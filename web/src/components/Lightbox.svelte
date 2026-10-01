@@ -70,7 +70,12 @@
     const pos = (i: number) => (book?.rtl ? n - 1 - i : i)
     const item = (i: number) => images[pos(i)]
     const at = images.indexOf(entry)
-    const data = images.map((_, i) => item(i)).map((e) => ({ src: url(e, !book && converted(e.name) ? 'large' : undefined), alt: e.name, msrc: !book && thumbable(e.name) ? url(e, 'thumb') : undefined, width: 0, height: 0 }))
+    const tile = (e: Entry) => (book ? null : document.querySelector<HTMLImageElement>(`[data-name="${CSS.escape(e.name)}"] img.ok`))
+    const data = images.map((_, i) => item(i)).map((e) => {
+      const th = tile(e)
+      const k = th?.naturalWidth ? 4096 / Math.max(th.naturalWidth, th.naturalHeight) : 0
+      return { src: url(e, !book && converted(e.name) ? 'large' : undefined), alt: e.name, msrc: !book && thumbable(e.name) ? url(e, 'thumb') : undefined, width: Math.round((th?.naturalWidth ?? 0) * k), height: Math.round((th?.naturalHeight ?? 0) * k) }
+    })
     let done = false
     const pswp = new PhotoSwipe({
       dataSource: data,
@@ -79,7 +84,7 @@
       wheelToZoom: true,
       loop: n > 1 && !onedge && !book,
       counter: !book,
-      showHideAnimationType: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'none' : 'fade',
+      showHideAnimationType: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'none' : 'zoom',
       preloaderDelay: 150,
       indexIndicatorSep: ' / ',
       closeTitle: t.close,
@@ -90,6 +95,7 @@
       paddingFn: () => ({ top: 0, bottom: 0, left: 0, right: side() ? 340 : 0 }),
     })
     box = pswp
+    pswp.addFilter('thumbEl', (el, _, i) => (tile(item(i)) ?? el) as HTMLElement)
 
     pswp.on('contentLoad', (e) => {
       const c = e.content
