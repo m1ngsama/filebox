@@ -7,7 +7,7 @@
   import ChevronRight from '@lucide/svelte/icons/chevron-right'
   import ExternalLink from '@lucide/svelte/icons/external-link'
   import type { Entry, Src } from '../lib/api'
-  import { kind, look, thumbable, subtitleOf, subtitleLang, stem } from '../lib/format'
+  import { kind, look, thumbable, subtitleOf, subtitleLang, sidecars, stem } from '../lib/format'
   import { load, save } from '../lib/storage'
   import '../lib/render.css'
   import { t } from '../lib/i18n'
@@ -23,7 +23,8 @@
   const k = $derived(kind(entry.name))
   const src = $derived(url(entry))
   const images = $derived(k === 'image' ? entries.filter((e) => !e.dir && kind(e.name) === 'image') : [])
-  const list = $derived(inline ? [] : entries.filter((e) => !e.dir && kind(e.name)))
+  const subs = $derived(new Set([...sidecars(entries).values()].flat()))
+  const list = $derived(inline ? [] : entries.filter((e) => !e.dir && kind(e.name) && (!subs.has(e.name) || e === entry)))
   const at = $derived(list.indexOf(entry))
   const step = (d: number) => at >= 0 && list[at + d] && (entry = list[at + d])
   const ios = /iP(hone|ad|od)/.test(navigator.userAgent) || (/Macintosh/.test(navigator.userAgent) && navigator.maxTouchPoints > 1)
