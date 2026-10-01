@@ -1810,14 +1810,15 @@ test('the nav shows volume usage and details add up a folder from the index', as
 
 test('volumes on one filesystem share a single usage bar', async ({ page }) => {
   const u = (name: string, fs: string, used: number) => ({ name, fs, used, free: 100 - used, total: 100 })
-  await page.route('/api/me', (r) => r.fulfill({ json: { name: 'admin', vols: ['v', 'w', 'x'] } }))
-  await page.route('/api/vols', (r) => r.fulfill({ json: { vols: [u('v', 'aa', 40), u('w', 'aa', 40), u('x', 'bb', 10)] } }))
+  await page.route('/api/me', (r) => r.fulfill({ json: { name: 'admin', vols: ['v', 'x', 'w'] } }))
+  await page.route('/api/vols', (r) => r.fulfill({ json: { vols: [u('v', 'aa', 40), u('x', 'bb', 10), u('w', 'aa', 40)] } }))
   await login(page)
   const volItem = (n: string) => page.locator('.nav li').filter({ has: page.getByRole('link', { name: n, exact: true }) })
   await expect(page.locator('.nav .usage')).toHaveCount(2)
-  await expect(volItem('w').locator('.usage.shared')).toHaveAttribute('title', t.list(['v', 'w']))
+  await expect(page.locator('.nav .usage.shared .hint')).toHaveText(`${t.list(['v', 'w'])} · ${t.usage('40 B', '100 B')}`)
   await expect(volItem('x').locator('.usage:not(.shared)')).toHaveCount(1)
   await expect(volItem('v').locator('.usage')).toHaveCount(0)
+  await expect(volItem('w').locator('.usage')).toHaveCount(0)
 })
 
 test('details list a photo\'s camera data with the same date format as the rest of the app', async ({ page, server }) => {

@@ -22,11 +22,12 @@
       () => {},
     ).finally(() => (measured = true))
   $effect(() => void measure())
-  const bars = $derived.by(() => {
-    const groups = new Map<string, string[]>()
-    for (const v of vols) if (usage[v]?.total) groups.set(usage[v].fs || v, [...(groups.get(usage[v].fs || v) ?? []), v])
-    return new Map([...groups.values()].map((g) => [g.at(-1)!, g]))
+  const groups = $derived.by(() => {
+    const m = new Map<string, string[]>()
+    for (const v of vols) if (usage[v]?.total) m.set(usage[v].fs || v, [...(m.get(usage[v].fs || v) ?? []), v])
+    return [...m.values()]
   })
+  const solo = $derived(new Set(groups.filter((g) => g.length === 1).map((g) => g[0])))
   const cur = $derived(parts[0] === 'files' || parts[0] === 'trash' ? parts[1] : undefined)
 
   function go(e: MouseEvent) {
@@ -34,6 +35,13 @@
     link(e)
   }
 </script>
+
+{#snippet bar(u: Usage, cls = '', label = '')}
+  <div class={`usage ${cls}`}>
+    <div class="usage-bar" style:--p={`${Math.min(100, (100 * u.used) / (u.used + u.free))}%`}></div>
+    <span class="hint">{label}{t.usage(size(u.used), size(u.total))}</span>
+  </div>
+{/snippet}
 
 <svelte:window onkeydown={(e) => e.key === 'Escape' && (shell.nav = false)} onfocus={measure} />
 
@@ -54,16 +62,15 @@
         <a href={`/files/${encodeURIComponent(v)}/`} onclick={go} aria-current={parts[0] === 'files' && cur === v ? 'page' : undefined}>
           <HardDrive size={icon.md} /><span>{v}</span>
         </a>
-        {#if bars.has(v)}
-          {@const u = usage[v]}
-          <div class="usage" class:shared={bars.get(v)!.length > 1} title={bars.size > 1 ? t.list(bars.get(v)!) : undefined}>
-            <div class="usage-bar" style:--p={`${Math.min(100, (100 * u.used) / (u.used + u.free))}%`}></div>
-            <span class="hint">{t.usage(size(u.used), size(u.total))}</span>
-          </div>
+        {#if solo.has(v)}
+          {@render bar(usage[v])}
         {:else if !measured && v === vols.at(-1)}
           <div class="usage" aria-hidden="true"><div class="usage-bar" style:--p="0%"></div><span class="hint">&nbsp;</span></div>
         {/if}
       </li>
+    {/each}
+    {#each groups.filter((g) => g.length > 1) as g (g[0])}
+      <li>{@render bar(usage[g[0]], 'shared', groups.length > 1 ? `${t.list(g)} · ` : '')}</li>
     {/each}
   </ul>
   {#if vols.length}
