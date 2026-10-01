@@ -590,8 +590,12 @@
         try {
           await api.mv(m.from, m.to, s)
         } catch (err) {
-          await reverse(done)
-          throw ms.length > 1 ? new Error(t.failedItem(t.what([base(m.from.path)]), (err as Error).message)) : err
+          const now = await api.ls(vol, path).then((es) => new Set(es.map((x) => x.name)), () => null)
+          const landed = now ? ms.filter((x) => now.has(base(x.to.path)) && !now.has(base(x.from.path))) : done
+          const stuck: string[] = []
+          for (const x of [...landed].reverse()) await api.move(x.to, x.from).catch(() => stuck.unshift(base(x.to.path)))
+          const why = ms.length > 1 ? t.failedItem(t.what([base(m.from.path)]), (err as Error).message) : (err as Error).message
+          throw new Error(stuck.length ? `${why} ${t.stuckAt(t.what(stuck), place(vol, path))}` : why)
         }
         done.push(m)
       }

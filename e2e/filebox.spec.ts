@@ -1223,6 +1223,39 @@ test('subtitle files hide behind their video and travel with it on rename, move 
   expect(readdirSync(dir).filter((n) => n.startsWith('Film'))).toEqual([])
 })
 
+test('a group rename that half-fails puts back what really moved and names what it could not', async ({ page, server }) => {
+  const dir = join(server.vol, 'clips')
+  mkdirSync(dir)
+  for (const n of ['A.mp4', 'A.srt', 'A.zh.srt']) writeFileSync(join(dir, n), n)
+  await login(page)
+  await page.evaluate(() => localStorage.setItem('views', JSON.stringify({ 'v/clips': 'list' })))
+  await page.goto('/files/v/clips/')
+  const rename = async () => {
+    await row(page, 'A.mp4').locator('button.more').click()
+    await page.getByRole('menuitem', { name: t.rename, exact: true }).click()
+    await expect(page.getByRole('checkbox', { name: t.withSubtitles(2) })).toBeChecked()
+    await page.getByLabel(t.newName).fill('B.mp4')
+    await page.locator('.dialog').getByRole('button', { name: t.rename, exact: true }).click()
+  }
+  let calls = 0
+  await page.route('**/api/mv', async (r) => {
+    if (++calls !== 2) return r.continue()
+    await r.fetch()
+    await r.abort()
+  })
+  await rename()
+  await expect.poll(() => readdirSync(dir).sort()).toEqual(['A.mp4', 'A.srt', 'A.zh.srt'])
+  await expect(row(page, 'A.mp4')).toHaveCount(1)
+  await page.unroute('**/api/mv')
+
+  calls = 0
+  await page.route('**/api/mv', (r) => (++calls >= 2 && calls <= 3 ? r.fulfill({ status: 403, json: { error: 'no' } }) : r.continue()))
+  await rename()
+  await expect(page.locator('.toast', { hasText: t.stuckAt(t.what(['B.mp4']), place('v', 'clips')) })).toBeVisible()
+  expect(readdirSync(dir).sort()).toEqual(['A.srt', 'A.zh.srt', 'B.mp4'])
+  await expect(row(page, 'B.mp4')).toHaveCount(1)
+})
+
 test('trash restores and permanently deletes a selection', async ({ page, server }) => {
   for (const n of ['t1.txt', 't2.txt', 't3.txt']) writeFileSync(join(server.vol, n), n)
   await login(page)
