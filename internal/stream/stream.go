@@ -313,8 +313,9 @@ func (s *Service) restart(k string, f *os.File, in info, q, n int) (*session, er
 	args := []string{"-nostdin", "-v", "error"}
 	video := []string{"-vf", fmt.Sprintf("scale=-2:%d,format=yuv420p", h), "-c:v", "libx264", "-preset", "veryfast", "-profile:v", "high"}
 	if s.Device != "" {
-		args = append(args, "-init_hw_device", "vaapi=va:"+s.Device, "-filter_hw_device", "va")
-		video = []string{"-vf", fmt.Sprintf("format=nv12,hwupload,scale_vaapi=w=-2:h=%d", h), "-c:v", "h264_vaapi"}
+		// Frames arrive in GPU memory when the hardware decodes the source and in system memory when it cannot; this chain takes both.
+		args = append(args, "-init_hw_device", "vaapi=va:"+s.Device, "-filter_hw_device", "va", "-hwaccel", "vaapi", "-hwaccel_device", "va", "-hwaccel_output_format", "vaapi")
+		video = []string{"-vf", fmt.Sprintf("format=nv12|vaapi,hwupload,scale_vaapi=w=-2:h=%d:format=nv12", h), "-c:v", "h264_vaapi"}
 	}
 	args = append(args, "-ss", strconv.FormatFloat(start, 'f', 3, 64), "-protocol_whitelist", "file", "-i", "/dev/fd/3",
 		"-map", "0:V:0", "-map", "0:a:0?")
