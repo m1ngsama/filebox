@@ -43,6 +43,7 @@ var kinds = map[string]string{
 	".mp4": "video", ".m4v": "video", ".mkv": "video", ".mov": "video", ".avi": "video",
 	".webm": "video", ".ts": "video", ".flv": "video", ".wmv": "video", ".mpg": "video", ".mpeg": "video",
 	".epub": "epub", ".cbz": "cbz",
+	".mp3": "audio", ".m4a": "audio", ".aac": "audio", ".flac": "audio", ".ogg": "audio", ".opus": "audio", ".wav": "audio",
 }
 
 func Kind(name string) string { return kinds[strings.ToLower(path.Ext(name))] }
@@ -243,7 +244,7 @@ func (s *Service) ServeFrom(w http.ResponseWriter, r *http.Request, root *os.Roo
 		return
 	}
 	side, name := 320, rel
-	if kind == "image" && r.URL.Query().Has("large") {
+	if (kind == "image" || kind == "audio") && r.URL.Query().Has("large") {
 		side, name = 2048, rel+"\x00large"
 	}
 	key, out := s.place(volName, name, fi)
@@ -310,7 +311,7 @@ func (s *Service) render(ctx context.Context, key string, src *os.File, kind, ou
 	rctx, cancel := context.WithTimeout(context.Background(), time.Minute)
 	defer cancel()
 
-	if kind != "image" && kind != "video" {
+	if kind != "image" && kind != "video" && kind != "audio" {
 		pre := out + ".src"
 		defer os.Remove(pre)
 		if err := s.prepare(rctx, kind, src, pre); err != nil {
@@ -388,7 +389,7 @@ func (s *Service) scan(dir *os.File) string {
 		switch k := Kind(n); {
 		case k == "image" && (image == "" || extract.Natural(n, image) < 0):
 			image = n
-		case (k == "epub" || k == "cbz" || k == "pdf") && s.can(k) && (book == "" || extract.Natural(n, book) < 0):
+		case (k == "epub" || k == "cbz" || k == "pdf" || k == "audio") && s.can(k) && (book == "" || extract.Natural(n, book) < 0):
 			book = n
 		}
 	}

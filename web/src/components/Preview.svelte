@@ -24,6 +24,8 @@
   const subs = $derived(new Set([...sidecars(entries).values()].flat()))
   const list = $derived(inline ? [] : entries.filter((e) => !e.dir && kind(e.name) && (!subs.has(e.name) || e === entry)))
   const at = $derived(list.indexOf(entry))
+  const songs = $derived(k === 'audio' ? list.filter((e) => kind(e.name) === 'audio') : [])
+  const song = $derived(songs.indexOf(entry))
   const step = (d: number) => at >= 0 && list[at + d] && (entry = list[at + d])
   let pages = $state<Entry[] | null>(null)
   let rtl = $state(false)
@@ -56,7 +58,6 @@
       : [],
   )
   const spot = $derived('pos:' + src)
-  let last = 0
   let audioOnly = $state(false)
   let status = $state<'loading' | 'ready' | 'error'>('loading')
   let root = $state<HTMLDivElement>()
@@ -125,7 +126,7 @@
   let zoomed = $state(false)
 
   function touchstart(e: TouchEvent) {
-    const media = e.target instanceof HTMLMediaElement
+    const media = e.target instanceof HTMLMediaElement || (e.target as Element).closest?.('input') !== null
     const one = e.touches.length === 1 && k !== 'text' && k !== 'pdf' && k !== 'book' && !media && !zoomed && !inline
     start = one ? { x: e.touches[0].clientX, y: e.touches[0].clientY } : null
     off = { x: 0, y: 0 }
@@ -157,22 +158,6 @@
   const ready = () => (status = 'ready')
   const failed = () => (status = 'error')
 
-  async function resume(e: Event) {
-    const m = e.currentTarget as HTMLVideoElement
-    if (k === 'video' && !m.videoWidth) {
-      const meta: { width?: number } = await fetch(url(entry, 'meta')).then((r) => (r.ok ? r.json() : {}), () => ({}))
-      if (meta.width) return failed()
-      audioOnly = true
-    }
-    const at = Number(load(spot))
-    if (at > 5 && at < m.duration - 5) m.currentTime = at
-    ready()
-  }
-
-  function track(e: Event) {
-    const now = (e.currentTarget as HTMLMediaElement).currentTime
-    if (e.type !== 'timeupdate' || Math.abs(now - last) > 5) save(spot, String(Math.floor((last = now))))
-  }
 </script>
 
 <svelte:window onkeydown={key} onmessage={fromReader} />
@@ -253,7 +238,21 @@
         {/key}
       {/await}
     {:else if k === 'audio'}
-      <audio {src} controls autoplay={!inline} preload="metadata" onloadedmetadata={resume} ontimeupdate={track} onpause={track} onended={() => save(spot, '')} onerror={failed}></audio>
+      {#await import('./AudioPlayer.svelte') then { default: AudioPlayer }}
+        {#key src}
+          <AudioPlayer
+            {src}
+            name={entry.name}
+            cover={url(entry, 'large')}
+            meta={() => fetch(url(entry, 'meta')).then((r) => (r.ok ? r.json() : {}), () => ({}))}
+            autoplay={!inline}
+            {spot}
+            onprev={songs[song - 1] ? () => (entry = songs[song - 1]) : undefined}
+            onnext={songs[song + 1] ? () => (entry = songs[song + 1]) : undefined}
+            onfail={failed}
+          />
+        {/key}
+      {/await}
     {:else if k === 'pdf'}
       {#await import('./PdfView.svelte') then { default: PdfView }}
         {#key src}<PdfView {src} onready={ready} onfail={failed} />{/key}

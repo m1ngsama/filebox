@@ -49,7 +49,7 @@ func ffmpegWithWebP(t *testing.T) string {
 }
 
 func TestKind(t *testing.T) {
-	cases := map[string]string{"a.JPG": "image", "b.webp": "image", "c.mkv": "video", "d.mp4": "video", "e.txt": "", "f": ""}
+	cases := map[string]string{"a.JPG": "image", "b.webp": "image", "c.mkv": "video", "d.mp4": "video", "g.FLAC": "audio", "e.txt": "", "f": ""}
 	for n, want := range cases {
 		if got := Kind(n); got != want {
 			t.Errorf("Kind(%q) = %q", n, got)

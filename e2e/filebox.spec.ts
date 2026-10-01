@@ -539,6 +539,29 @@ test('PDFs open in the built-in viewer with selectable text, search and page jum
   await expect(view.getByLabel(t.goToPage)).toHaveAttribute('placeholder', '2')
 })
 
+test('audio plays as now playing, pauses on space and moves on to the next track', async ({ page, server }) => {
+  try {
+    for (const n of ['a.wav', 'b.wav']) execFileSync('ffmpeg', ['-v', 'error', '-f', 'lavfi', '-i', 'sine=d=1', join(server.vol, 'docs', n)])
+  } catch {
+    test.skip(true, 'needs ffmpeg')
+  }
+  await login(page)
+  await row(page, 'docs').locator('button.name').click()
+  await row(page, 'a.wav').locator('button.name').click()
+  const view = page.getByRole('dialog', { name: 'a.wav' })
+  await expect(view.getByRole('heading', { name: 'a' })).toBeVisible()
+  await expect(view.getByRole('button', { name: t.prevTrack })).toBeDisabled()
+  const pause = view.getByRole('button', { name: t.pause })
+  await expect(pause).toBeFocused()
+  await page.keyboard.press('Space')
+  await expect(view.getByRole('button', { name: t.play })).toBeVisible()
+  await view.getByRole('button', { name: t.play }).click()
+  const next = page.getByRole('dialog', { name: 'b.wav' })
+  await expect(next.getByRole('heading', { name: 'b' })).toBeVisible({ timeout: 5000 })
+  await expect(next.getByRole('button', { name: t.pause })).toBeVisible()
+  await expect(next.getByRole('button', { name: t.nextTrack })).toBeDisabled()
+})
+
 test('videos pick up sibling subtitles and an unplayable one offers a download', async ({ page, server }) => {
   const clip = join(server.vol, 'docs/clip.webm')
   try {

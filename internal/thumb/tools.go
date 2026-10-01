@@ -24,7 +24,7 @@ var errNoTool = errors.New("thumb: no tool for this kind")
 
 func (s *Service) can(kind string) bool {
 	switch kind {
-	case "image", "video", "raw", "epub", "cbz":
+	case "image", "video", "audio", "raw", "epub", "cbz":
 		return true
 	case "pdf":
 		return s.pdf != ""

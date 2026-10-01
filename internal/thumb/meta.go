@@ -26,6 +26,9 @@ type Meta struct {
 	Taken    string  `json:"taken,omitempty"`
 	GPS      string  `json:"gps,omitempty"`
 	Duration float64 `json:"duration,omitempty"`
+	Title    string  `json:"title,omitempty"`
+	Artist   string  `json:"artist,omitempty"`
+	Album    string  `json:"album,omitempty"`
 }
 
 type probed struct {
@@ -72,7 +75,7 @@ func (s *Service) ServeMeta(w http.ResponseWriter, r *http.Request, root *os.Roo
 			httpx.Fail(w, 503, "busy")
 			return
 		}
-		m = s.probe(ctx, f, kind != "video")
+		m = s.probe(ctx, f, kind != "video" && kind != "audio")
 		<-s.probes
 	}
 	httpx.JSON(w, 200, m)
@@ -85,7 +88,7 @@ func (s *Service) probe(ctx context.Context, f *os.File, image bool) Meta {
 		entries += ":frame=width,height:frame_tags"
 		args = append(args, "-read_intervals", "%+#1")
 	} else {
-		entries += ":format=duration:format_tags=creation_time"
+		entries += ":format=duration:format_tags"
 	}
 	cmd := s.command(ctx, s.FFprobe, append(args, "-show_entries", entries, "-of", "json", "/dev/fd/3")...)
 	cmd.ExtraFiles = []*os.File{f}
@@ -107,9 +110,14 @@ func (p probed) meta() Meta {
 	if d, err := strconv.ParseFloat(p.Format.Duration, 64); err == nil && d > 0 {
 		m.Duration = d
 	}
-	if c := p.Format.Tags["creation_time"]; len(c) >= 19 {
+	tags := map[string]string{}
+	for k, v := range p.Format.Tags {
+		tags[strings.ToLower(k)] = strings.TrimSpace(v)
+	}
+	if c := tags["creation_time"]; len(c) >= 19 {
 		m.Taken = strings.Replace(c[:19], "T", " ", 1)
 	}
+	m.Title, m.Artist, m.Album = tags["title"], cmpOr(tags["artist"], tags["album_artist"]), tags["album"]
 	if len(p.Frames) == 0 || len(p.Frames[0].Tags) == 0 {
 		return m
 	}

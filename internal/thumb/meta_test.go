@@ -57,3 +57,44 @@ func TestMetaIgnoresCoverArt(t *testing.T) {
 		t.Fatalf("%d %s", w.Code, w.Body)
 	}
 }
+
+func TestMetaFromAudioTags(t *testing.T) {
+	var p probed
+	json.Unmarshal([]byte(`{"format":{"duration":"201.5","tags":{"TITLE":"晴天","ARTIST":"周杰伦","ALBUM":"叶惠美"}}}`), &p)
+	if got := p.meta(); got != (Meta{Duration: 201.5, Title: "晴天", Artist: "周杰伦", Album: "叶惠美"}) {
+		t.Fatalf("%+v", got)
+	}
+}
+
+func TestAudioCoverThumbnail(t *testing.T) {
+	ff, err := exec.LookPath("ffmpeg")
+	if err != nil {
+		t.Skip("ffmpeg not installed")
+	}
+	s, v, dir := setup(t, ff)
+	s.format = jpeg
+	cover := filepath.Join(dir, "c.png")
+	for _, args := range [][]string{
+		{"-f", "lavfi", "-i", "color=red:s=300x300", "-frames:v", "1", cover},
+		{"-f", "lavfi", "-i", "sine=d=1", "-i", cover, "-map", "0", "-map", "1", "-c:a", "libmp3lame", "-c:v", "png", "-disposition:v", "attached_pic", "-metadata", "title=Song", filepath.Join(dir, "song.mp3")},
+		{"-f", "lavfi", "-i", "sine=d=1", "-c:a", "libmp3lame", filepath.Join(dir, "bare.mp3")},
+	} {
+		if out, err := exec.Command(ff, append([]string{"-v", "error", "-y"}, args...)...).CombinedOutput(); err != nil {
+			t.Skipf("fixture: %v %s", err, out)
+		}
+	}
+	if w := get(s, v, "song.mp3"); w.Code != 200 || w.Header().Get("Content-Type") != "image/jpeg" {
+		t.Fatalf("cover: %d %q", w.Code, w.Header().Get("Content-Type"))
+	}
+	if w := get(s, v, "bare.mp3"); w.Code != 404 {
+		t.Fatalf("no cover: %d", w.Code)
+	}
+	if s.FFprobe == "" {
+		return
+	}
+	w := httptest.NewRecorder()
+	s.ServeMeta(w, httptest.NewRequest("GET", "/", nil), v.Root, "song.mp3")
+	if !strings.Contains(w.Body.String(), `"title":"Song"`) || strings.Contains(w.Body.String(), "width") {
+		t.Fatalf("%d %s", w.Code, w.Body)
+	}
+}
