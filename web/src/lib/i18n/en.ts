@@ -462,6 +462,7 @@ export default (locale: string) => {
     sharedTooLarge: 'Too many or too large files were shared, so nothing was received. Share them in batches, or upload them in filebox directly.',
     sharedFiles: (names: string[]) => (names.length === 1 ? `“${names[0]}” shared from another app` : `${names.length} files shared from another app`),
     dropTitle: 'Drag files here, or choose files with the button',
+    dropTitleTouch: 'Choose files to upload',
     dropHint: 'You can only upload here. Existing files in this folder aren’t visible. Files with the same name are renamed, never overwritten.',
     errors: {
       400: 'Invalid name or path',

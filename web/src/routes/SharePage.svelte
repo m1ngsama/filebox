@@ -63,6 +63,7 @@
   const fileKind = $derived(file ? kind(file.name) : '')
   const imageSrc = $derived(file && fallback([shareRawURL(token, ''), thumbable(file.name) && shareThumbURL(token, '')], tries))
   const folder = $derived(crumbs.at(-1) ?? shared?.name ?? '')
+  const coarse = matchMedia('(pointer: coarse)').matches
   const left = $derived(shared?.expires ? shared.expires - Date.now() / 1000 : 0)
 
   let frozen = $state<boolean>()
@@ -256,7 +257,8 @@
   </header>
 
   {#if shared && (shared.note || shared.expires || (canUpload && shared.max_upload) || listed)}
-    <div class="public-info">
+    <div class="public-info" class:hero={listed && !p}>
+      {#if listed && !p}<div class="public-title" aria-hidden="true">{shared.name}</div>{/if}
       {#if shared.note}<p class="public-note">{shared.note}</p>{/if}
       <p class="hint">
         {#if listed}<span class="public-count">{at === p && !error ? t.folderSummary(shown.filter((e) => e.dir).length, shown.filter((e) => !e.dir).length, size(shown.reduce((n, e) => n + e.size, 0))) : '\u00a0'}</span>{/if}
@@ -316,11 +318,11 @@
         <a class="button primary" href={shareRawURL(token, '', true)} download><Download size={icon.md} />{t.download}</a>
       </div>
     {/if}
-    {#if fileKind && (fileKind !== 'image' || imageSrc)}<p class="public-meta hint">{file.name} · {size(file.size)}</p>{/if}
+    {#if fileKind && (fileKind !== 'image' || imageSrc)}<p class="public-meta hint">{size(file.size)}</p>{/if}
   {:else if info && info.mode === 'drop'}
     <div class="dropbox">
       <Upload size={40} class="ficon" />
-      <p>{t.dropTitle}</p>
+      <p>{coarse ? t.dropTitleTouch : t.dropTitle}</p>
       <button class="primary" onclick={() => picker?.click()}><Upload size={icon.md} />{t.chooseFiles}</button>
       <p class="hint">{t.dropHint}</p>
     </div>
