@@ -72,6 +72,7 @@ const zh = {
   new: '新建',
   upload: '上传文件',
   uploadFolder: '上传文件夹',
+  pastedImage: (at: string) => `粘贴的图片 ${at}`,
   newFolder: '新建文件夹',
   folderName: '文件夹名称',
   create: '创建',

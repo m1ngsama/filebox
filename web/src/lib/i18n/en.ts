@@ -72,6 +72,7 @@ export default (locale: string) => {
     new: 'New',
     upload: 'Upload files',
     uploadFolder: 'Upload folder',
+    pastedImage: (at: string) => `Pasted image ${at}`,
     newFolder: 'New folder',
     folderName: 'Folder name',
     create: 'Create',

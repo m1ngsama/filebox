@@ -408,7 +408,7 @@
 
   const ask = (name: string, rest: number) => new Promise<[Choice, boolean] | null>((resolve) => (conflict = { name, rest, resolve }))
 
-  async function upload(list: FileList | null | undefined, asFolder = false) {
+  async function upload(list: FileList | File[] | null | undefined, asFolder = false) {
     if (!list?.length || error) return
     forgetUndo()
     const v = vol
@@ -722,6 +722,18 @@
     return !!el.closest('.files') || (el.matches('body, main') && (!at || !!at.parentElement?.closest('.files')))
   }
 
+  function paste(e: ClipboardEvent) {
+    if (document.querySelector(":is([role=dialog], [role=menu]):not([data-state='closed'])")) return
+    if ((e.target as Element).matches?.('input, select, textarea, [contenteditable]')) return
+    const files = [...(e.clipboardData?.files ?? [])]
+    if (!files.length) return
+    e.preventDefault()
+    const d = new Date()
+    const two = (n: number) => String(n).padStart(2, '0')
+    const stamp = `${d.getFullYear()}-${two(d.getMonth() + 1)}-${two(d.getDate())} ${two(d.getHours())}.${two(d.getMinutes())}.${two(d.getSeconds())}`
+    upload(files.map((f, i) => (/^image\.(png|jpe?g|gif|webp)$/i.test(f.name) ? new File([f], `${t.pastedImage(stamp)}${files.length > 1 ? ` ${i + 1}` : ''}.${f.name.split('.').pop()}`, { type: f.type, lastModified: f.lastModified }) : f)))
+  }
+
   function keydown(e: KeyboardEvent) {
     if (document.querySelector(":is([role=dialog], [role=menu]):not([data-state='closed'])")) return
     const typing = (e.target as Element).matches?.('input:not([type=checkbox], [type=radio]), select, textarea, [contenteditable]')
@@ -755,7 +767,7 @@
   const hasFiles = (e: DragEvent) => !!e.dataTransfer?.types.includes('Files')
 </script>
 
-<svelte:window onkeydowncapture={keydown} onfocus={() => loadStars(true)} ondragover={(e) => e.preventDefault()} ondrop={(e) => e.preventDefault()} />
+<svelte:window onkeydowncapture={keydown} onpaste={paste} onfocus={() => loadStars(true)} ondragover={(e) => e.preventDefault()} ondrop={(e) => e.preventDefault()} />
 
 {#snippet batch()}
   <button class="ghost" onclick={() => download([...selected])}>

@@ -328,6 +328,20 @@ test('a photo folder sorted by date groups its grid by day', async ({ page, serv
   await expect(page.locator('.cards').nth(0).locator('.card')).toHaveCount(2)
 })
 
+test('pasting files uploads them into the open folder and names a pasted screenshot', async ({ page, server }) => {
+  await login(page)
+  await row(page, 'docs').locator('button.name').click()
+  await page.evaluate(() => {
+    const dt = new DataTransfer()
+    dt.items.add(new File(['png'], 'image.png', { type: 'image/png' }))
+    dt.items.add(new File(['hi'], 'notes.txt', { type: 'text/plain' }))
+    document.body.dispatchEvent(new ClipboardEvent('paste', { clipboardData: dt, bubbles: true }))
+  })
+  await expect(row(page, 'notes.txt')).toBeVisible()
+  await expect.poll(() => readdirSync(join(server.vol, 'docs')).filter((n) => n.endsWith('.png') && n.startsWith(t.pastedImage(''))).length).toBe(1)
+  expect(readFileSync(join(server.vol, 'docs', 'notes.txt'), 'utf8')).toBe('hi')
+})
+
 test('images open in a lightbox that zooms, steps, shows info and closes back to the row', async ({ page, server }) => {
   await page.emulateMedia({ reducedMotion: 'reduce' })
   for (const n of ['big1.png', 'big2.png']) writeFileSync(join(server.vol, 'docs', n), png(2400, 1600))
