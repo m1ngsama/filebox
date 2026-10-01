@@ -16,7 +16,7 @@
   import FileIcon from './FileIcon.svelte'
   import { selectURL, type Entry, type Loc } from '../lib/api'
   import { link } from '../lib/router.svelte'
-  import { amount, date, ago, look, fallback, flip, sorts, mostlyMedia, ends, SEP, type Sort } from '../lib/format'
+  import { amount, date, ago, look, fallback, flip, sorts, mostlyMedia, mostlyBooks, stem, ends, SEP, type Sort } from '../lib/format'
   import { t } from '../lib/i18n'
   import { narrow } from '../lib/shell.svelte'
   import { carry, drop, target, type Carried, type Target } from '../lib/dnd'
@@ -102,12 +102,14 @@
   let seeking = $state(false)
   let seekTimer = 0
 
+  const shown = (ev: Event) => (ev.currentTarget as HTMLElement).classList.add('ok')
   const media = $derived(grid && mostlyMedia(entries))
+  const shelf = $derived(grid && !media && mostlyBooks(entries))
   const tiles = $derived(media && narrow.current)
   const gap = $derived(tiles ? 2 : 12)
-  const cols = $derived(!grid ? 1 : Math.max(1, media ? Math.floor((width - gap) / ((tiles ? 110 : 128) + gap)) : Math.floor((width - 16) / 172)))
+  const cols = $derived(!grid ? 1 : Math.max(1, media || shelf ? Math.floor((width - gap) / ((tiles ? 110 : shelf && narrow.current ? 100 : 128) + gap)) : Math.floor((width - 16) / 172)))
   const tile = $derived((width - (cols + 1) * gap) / cols)
-  const rowH = $derived(!media ? 212 : tiles ? tile + gap : tile + 52)
+  const rowH = $derived(shelf ? tile * 1.5 + 56 : !media ? 212 : tiles ? tile + gap : tile + 52)
   const rowPx = $derived(grid ? rowH : narrow.current ? 56 : 48)
   const layout = $derived.by(() => {
     if (!group || grid) return null
@@ -206,7 +208,7 @@
       pressing = -1
       swallow = true
       navigator.vibrate?.(10)
-      if (tiles && !selected.size) {
+      if ((tiles || shelf) && narrow.current && !selected.size) {
         sheet = entries[i]
         return
       }
@@ -478,7 +480,7 @@
         <div class="spacer" role="grid" aria-label={t.fileList} aria-multiselectable={selected ? true : undefined} aria-busy={busy || undefined} aria-rowcount={rows} aria-colcount={grid ? cols : undefined} style:height={`${$v.getTotalSize()}px`}>
           {#each $v.getVirtualItems().filter((r) => r.index < rows) as r (r.key)}
             {#if grid}
-              <div class="cards" class:media class:tiles role="row" aria-rowindex={r.index + 1} style:transform={`translateY(${r.start}px)`} style:height={`${rowH}px`} style:grid-template-columns={`repeat(${cols}, minmax(0, 1fr))`}>
+              <div class="cards" class:media class:shelf class:tiles role="row" aria-rowindex={r.index + 1} style:transform={`translateY(${r.start}px)`} style:height={`${rowH}px`} style:grid-template-columns={`repeat(${cols}, minmax(0, 1fr))`}>
                 {#each entries.slice(r.index * cols, r.index * cols + cols) as e, j (id(e))}
                   {@const s = src(e)}
                   {@const i = r.index * cols + j}
@@ -508,7 +510,8 @@
                     {@render check(e, 'card-check')}
                     <button class="card-open" tabindex="-1" data-look={e.dir ? 'dir' : look(e.name)} onclick={() => tap(i)} title={e.name} aria-label={named(e)} aria-expanded={expanded?.(e)}>
                       {#if s}
-                        <img src={s} alt="" draggable="false" loading="lazy" decoding="async" onerror={() => miss(e)} {@attach cancel} />
+                        <FileIcon name={e.name} dir={e.dir} size={tiles ? 40 : 56} />
+                        <img src={s} alt="" draggable="false" loading="lazy" decoding="async" onload={shown} onerror={() => miss(e)} {@attach cancel} />
                         {@const g = tag?.(e)}
                         {#if look(e.name) === 'video' || g}<span class="card-badge">{#if look(e.name) === 'video'}<Play size={icon.sm} />{/if}{g}</span>{/if}
                         {#if e.dir}<span class="card-badge"><FileIcon name={e.name} dir size={icon.sm} /></span>{/if}
@@ -519,9 +522,9 @@
                     </button>
                     {#if !tiles}
                       <div class="card-foot">
-                        <span class="card-name" title={e.name}>{@render label(e.name)}</span>
+                        {#if shelf}<span class="card-name title" title={e.name}>{e.dir ? e.name : stem(e.name)}</span>{:else}<span class="card-name" title={e.name}>{@render label(e.name)}</span>{/if}
                         {#if !s && tag?.(e)}<span class="tag">{tag(e)}</span>{/if}
-                        {@render more(e)}
+                        {#if !(shelf && narrow.current)}{@render more(e)}{/if}
                       </div>
                     {/if}
                   </div>
@@ -564,7 +567,7 @@
               >
                 <span class="cell check-cell" role="gridcell">{@render check(e, '')}</span>
                 <span class="thumb" role="gridcell">
-                  {#if s}<img src={s} alt="" draggable="false" loading="lazy" decoding="async" onerror={() => miss(e)} {@attach cancel} />{:else}<FileIcon name={e.name} dir={e.dir} />{/if}
+                  <FileIcon name={e.name} dir={e.dir} />{#if s}<img src={s} alt="" draggable="false" loading="lazy" decoding="async" onload={shown} onerror={() => miss(e)} {@attach cancel} />{/if}
                 </span>
                 <span class="cell name-cell" role="gridcell">
                   <button class="name" tabindex="-1" onclick={() => tap(n)} title={e.name} aria-label={named(e)} aria-expanded={expanded?.(e)}>{@render label(e.name)}{#if tag?.(e)}<span class="tag">{tag(e)}</span>{/if}</button>

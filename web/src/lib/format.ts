@@ -146,7 +146,11 @@ export function sidecars(list: Row[]) {
   return of
 }
 
-export const mostlyMedia = (es: Row[]) => es.length > 0 && es.filter((e) => !e.dir && (visual(e.name) || ext(e.name) === 'cbz')).length >= 0.6 * es.length
+const mostly = (es: Row[], f: (n: string) => boolean) => es.length > 0 && es.filter((e) => !e.dir && f(e.name)).length >= 0.6 * es.length
+const bound = (n: string) => /^(pdf|epub|cbz)$/.test(ext(n))
+export const mostlyMedia = (es: Row[]) => mostly(es, visual)
+export const mostlyBooks = (es: Row[]) => mostly(es, bound)
+export const prefersGrid = (es: Row[]) => mostly(es, (n) => visual(n) || bound(n))
 
 const graphemes = new Intl.Segmenter(locale, { granularity: 'grapheme' })
 const split = (s: string) => Array.from(graphemes.segment(s), (x) => x.segment)

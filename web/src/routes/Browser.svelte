@@ -66,7 +66,7 @@
   import { enqueue, type Replaced } from '../lib/uploads.svelte'
   import { loadStars, starred, star } from '../lib/favorites.svelte'
   import { folderAction, downloadAction, actOn, saveZip } from '../lib/located'
-  import { thumbable, rawThumb, arrange, parent, base, child, flip, sorts, place, mostlyMedia, sidecars, subtitleRename, stem, type Sort } from '../lib/format'
+  import { thumbable, rawThumb, arrange, parent, base, child, flip, sorts, place, prefersGrid, sidecars, subtitleRename, stem, type Sort } from '../lib/format'
   import { t } from '../lib/i18n'
   import { load, save, viewOf, keepView, type View } from '../lib/storage'
   import NavToggle from '../components/NavToggle.svelte'
@@ -134,7 +134,7 @@
   const visible = $derived(hidden.size ? entries.filter((e) => !hidden.has(e.name)) : entries)
   const shown = $derived(at !== here ? [] : streaming ? visible : arrange(visible, query, sort, desc))
   let frozen = $state<boolean>()
-  const auto = $derived(frozen ?? (at === here && (!streaming || entries.length >= 200) ? mostlyMedia(visible) : undefined))
+  const auto = $derived(frozen ?? (at === here && (!streaming || entries.length >= 200) ? prefersGrid(visible) : undefined))
   const grid = $derived(chosen ? chosen === 'grid' : !!auto)
   $effect(() => {
     if (frozen === undefined && auto !== undefined) frozen = auto

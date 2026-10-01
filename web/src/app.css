@@ -12,6 +12,7 @@
   --danger: light-dark(#c42b2b, #ff7474);
   --on-danger: light-dark(#fff, #1f0a0a);
   --scrim: rgb(8 12 18 / 0.45);
+  --shadow-sm: 0 1px 3px light-dark(rgb(15 25 40 / 0.18), rgb(0 0 0 / 0.5));
   --shadow: 0 10px 30px light-dark(rgb(15 25 40 / 0.16), rgb(0 0 0 / 0.5)), 0 1px 3px light-dark(rgb(15 25 40 / 0.1), rgb(0 0 0 / 0.4));
   --viewer-bg: rgb(6 8 12);
   --viewer-fg: #eee;
@@ -202,8 +203,10 @@ p.error::before { content: ''; flex: none; width: 1em; height: 1lh; background: 
 .row.nested > .name-cell { padding-left: var(--space-4); }
 .row.dim > :not(:nth-child(4)) { opacity: 0.55; }
 .row:focus-visible, .card:focus-visible { outline-offset: -2px; }
-.thumb { display: grid; place-items: center; width: 32px; height: 32px; }
-.thumb img { width: 32px; height: 32px; object-fit: cover; border-radius: var(--radius-sm); }
+.thumb { position: relative; display: grid; place-items: center; width: 32px; height: 32px; }
+.thumb img { position: absolute; inset: 0; width: 32px; height: 32px; object-fit: cover; border-radius: var(--radius-sm); }
+.thumb img, .card-open img { opacity: 0; transition: opacity var(--dur-2) var(--ease-out); }
+.thumb img.ok, .card-open img.ok { opacity: 1; background: var(--panel); }
 .ficon { color: var(--k, var(--muted)); }
 .ficon.dir { color: var(--accent); fill: color-mix(in srgb, var(--accent) 22%, transparent); }
 .ficon.image, [data-look='image'] { --k: light-dark(#0d8a6a, #4cc9a6); }
@@ -234,6 +237,10 @@ p.error::before { content: ''; flex: none; width: 1em; height: 1lh; background: 
 .card-name { flex: 1; min-width: 0; }
 .card-badge { position: absolute; right: var(--space-1); bottom: var(--space-1); display: flex; align-items: center; gap: var(--space-0); font-size: var(--text-xs); padding: var(--space-0) var(--space-1); border-radius: var(--radius-sm); background: color-mix(in srgb, var(--viewer-bg) 55%, transparent); color: var(--viewer-fg); }
 .cards.media .card-open { flex: none; aspect-ratio: 1; }
+.cards.shelf .card-open { flex: none; aspect-ratio: 2 / 3; border-radius: var(--radius-sm); box-shadow: var(--shadow-sm); }
+.cards.shelf .card-foot { align-items: flex-start; padding: var(--space-1-5) 0 0; }
+.cards.shelf .card-name.title { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; overflow-wrap: anywhere; font-size: var(--text-sm); line-height: 1.3; }
+.cards.shelf .card { padding: var(--space-1); }
 .cards.tiles { gap: var(--space-0); padding: 0 var(--space-0); align-items: start; }
 .tiles .card { padding: 0; border-radius: 0; }
 .tiles .card-open { border-radius: 0; }

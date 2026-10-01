@@ -21,7 +21,7 @@
   import { api, HttpError, shareFileURL, shareRawURL, shareThumbURL, shareURL, shareZipURL, saveURL, validShareToken, type Entry, type ShareInfo } from '../lib/api'
   import { route, link, navigate } from '../lib/router.svelte'
   import { enqueue } from '../lib/uploads.svelte'
-  import { arrange, size, kind, thumbable, rawThumb, fallback, child, mostlyMedia, sidecars, type Sort } from '../lib/format'
+  import { arrange, size, kind, thumbable, rawThumb, fallback, child, prefersGrid, sidecars, type Sort } from '../lib/format'
   import { viewOf, keepView, type View } from '../lib/storage'
   import { saveZip, packing } from '../lib/located'
   import { t } from '../lib/i18n'
@@ -65,7 +65,7 @@
   const left = $derived(shared?.expires ? shared.expires - Date.now() / 1000 : 0)
 
   let frozen = $state<boolean>()
-  const auto = $derived(frozen ?? (at === p ? mostlyMedia(shown) : undefined))
+  const auto = $derived(frozen ?? (at === p ? prefersGrid(shown) : undefined))
   const grid = $derived(chosen ? chosen === 'grid' : !!auto)
   $effect(() => {
     chosen = viewOf(`s:${token}/${p}`)
