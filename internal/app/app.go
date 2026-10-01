@@ -9,6 +9,7 @@ import (
 	"mime"
 	"net/http"
 	"net/url"
+	"os"
 	"path"
 	"regexp"
 	"strconv"
@@ -24,6 +25,7 @@ import (
 	"github.com/m1ngsama/filebox/internal/render"
 	"github.com/m1ngsama/filebox/internal/serve"
 	"github.com/m1ngsama/filebox/internal/share"
+	"github.com/m1ngsama/filebox/internal/stream"
 	"github.com/m1ngsama/filebox/internal/thumb"
 	"github.com/m1ngsama/filebox/internal/upload"
 	"github.com/m1ngsama/filebox/internal/version"
@@ -44,6 +46,7 @@ type App struct {
 	Web      fs.FS
 	Uploads  *upload.Server
 	Thumbs   *thumb.Service
+	Stream   *stream.Service
 	Passkeys *passkey.Service
 	Index    *index.Index
 	Versions *version.Store
@@ -56,13 +59,15 @@ func (a *App) Handler() http.Handler {
 	mux.Handle("GET /thumb/{vol}/{path...}", a.Auth.RequireAny(http.HandlerFunc(a.thumb)))
 	mux.Handle("GET /api/render", a.Auth.RequireAny(http.HandlerFunc(a.render)))
 	mux.Handle("GET /api/meta", a.Auth.RequireAny(http.HandlerFunc(a.meta)))
+	mux.Handle("GET /api/stream/index.m3u8", a.Auth.RequireAny(a.located(a.Stream.Playlist)))
+	mux.Handle("GET /api/stream/seg", a.Auth.RequireAny(a.located(a.Stream.Segment)))
 	(&api.API{Vols: a.Vols, DB: a.DB, Auth: a.Auth, Jobs: api.NewJobs(a.Index), Index: a.Index, Versions: a.Versions, Origins: a.Origins}).Register(mux)
 	a.Passkeys.Register(mux)
 	d := dav.Handler(a.Vols, a.Auth, a.Index, a.Versions)
 	mux.Handle("/dav", d)
 	mux.Handle("/dav/", d)
 	mux.Handle("/upload/", a.Uploads.Handler("/upload/", a.userUploads()))
-	(&share.Service{DB: a.DB, Vols: a.Vols, Auth: a.Auth, Uploads: a.Uploads, Thumbs: a.Thumbs}).Register(mux)
+	(&share.Service{DB: a.DB, Vols: a.Vols, Auth: a.Auth, Uploads: a.Uploads, Thumbs: a.Thumbs, Stream: a.Stream}).Register(mux)
 	mux.HandleFunc("POST /share-target", func(w http.ResponseWriter, r *http.Request) {
 		http.Redirect(w, r, "/?share-target", http.StatusSeeOther)
 	})
@@ -124,6 +129,18 @@ func (a *App) render(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	render.Serve(w, r, v.Root, rel, "/raw/"+url.PathEscape(v.Name)+"/")
+}
+
+func (a *App) located(fn func(http.ResponseWriter, *http.Request, *os.Root, string)) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		q := r.URL.Query()
+		v, rel, err := a.Vols.Resolve(q.Get("vol"), q.Get("p"))
+		if err != nil {
+			httpx.Error(w, err)
+			return
+		}
+		fn(w, r, v.Root, rel)
+	}
 }
 
 func (a *App) meta(w http.ResponseWriter, r *http.Request) {

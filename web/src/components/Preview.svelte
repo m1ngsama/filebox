@@ -270,25 +270,22 @@
         <a class="button primary" href={url(entry, 'dl')} download><Download size={18} />{t.download}</a>
       </div>
     {:else if k === 'video'}
-      <!-- svelte-ignore a11y_media_has_caption -->
-      <video
-        {src}
-        poster={thumbable(entry.name) ? url(entry, 'thumb') : undefined}
-        controls
-        autoplay={!inline}
-        playsinline
-        preload="metadata"
-        class:audio-only={audioOnly}
-        onloadedmetadata={resume}
-        ontimeupdate={track}
-        onpause={track}
-        onended={() => save(spot, '')}
-        onerror={failed}
-      >
-        {#each tracks as s, i (s.src)}
-          <track kind="subtitles" src={s.src} label={s.lang || t.subtitles} srclang={/^[a-z]{2,3}(-[a-z0-9]+)*$/i.test(s.lang) ? s.lang : undefined} default={i === 0} />
-        {/each}
-      </video>
+      {#await import('./VideoPlayer.svelte') then { default: VideoPlayer }}
+        {#key src}
+          <VideoPlayer
+            {src}
+            hls={(q) => `${url(entry, 'stream')}&q=${q}`}
+            poster={thumbable(entry.name) ? url(entry, 'thumb') : undefined}
+            {tracks}
+            autoplay={!inline}
+            {spot}
+            bind:audio={audioOnly}
+            meta={() => fetch(url(entry, 'meta')).then((r) => (r.ok ? r.json() : {}), () => ({}))}
+            onready={ready}
+            onfail={failed}
+          />
+        {/key}
+      {/await}
     {:else if k === 'audio'}
       <audio {src} controls autoplay={!inline} preload="metadata" onloadedmetadata={resume} ontimeupdate={track} onpause={track} onended={() => save(spot, '')} onerror={failed}></audio>
     {:else if k === 'pdf'}

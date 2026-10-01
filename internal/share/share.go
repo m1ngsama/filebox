@@ -18,6 +18,7 @@ import (
 	"github.com/m1ngsama/filebox/internal/httpx"
 	"github.com/m1ngsama/filebox/internal/render"
 	"github.com/m1ngsama/filebox/internal/serve"
+	"github.com/m1ngsama/filebox/internal/stream"
 	"github.com/m1ngsama/filebox/internal/thumb"
 	"github.com/m1ngsama/filebox/internal/upload"
 	"github.com/m1ngsama/filebox/internal/vol"
@@ -29,6 +30,7 @@ type Service struct {
 	Auth    *auth.Auth
 	Uploads *upload.Server
 	Thumbs  *thumb.Service
+	Stream  *stream.Service
 }
 
 func (s *Service) Register(mux *http.ServeMux) {
@@ -44,6 +46,8 @@ func (s *Service) Register(mux *http.ServeMux) {
 	mux.HandleFunc("GET /s/{token}/zip", s.zip)
 	mux.HandleFunc("GET /s/{token}/render", s.scoped(s.render))
 	mux.HandleFunc("GET /s/{token}/meta", s.scoped(func(opened) handler { return s.Thumbs.ServeMeta }))
+	mux.HandleFunc("GET /s/{token}/stream/index.m3u8", s.scoped(func(opened) handler { return s.Stream.Playlist }))
+	mux.HandleFunc("GET /s/{token}/stream/seg", s.scoped(func(opened) handler { return s.Stream.Segment }))
 	mux.HandleFunc("GET /s/{token}/zip-entries", s.scoped(func(opened) handler { return api.ZipEntries }))
 	mux.HandleFunc("GET /s/{token}/zip-entry", s.scoped(func(opened) handler { return api.ZipEntry }))
 	mux.HandleFunc("/s/{token}/upload/{rest...}", s.upload)
