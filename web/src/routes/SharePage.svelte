@@ -21,7 +21,7 @@
   import { api, HttpError, shareFileURL, shareRawURL, shareThumbURL, shareURL, shareZipURL, saveURL, validShareToken, type Entry, type ShareInfo } from '../lib/api'
   import { route, link, navigate } from '../lib/router.svelte'
   import { enqueue } from '../lib/uploads.svelte'
-  import { arrange, size, kind, thumbable, rawThumb, fallback, child, mostlyMedia, type Sort } from '../lib/format'
+  import { arrange, size, kind, thumbable, rawThumb, fallback, child, mostlyMedia, sidecars, type Sort } from '../lib/format'
   import { viewOf, keepView, type View } from '../lib/storage'
   import { saveZip, packing } from '../lib/located'
   import { t } from '../lib/i18n'
@@ -51,7 +51,9 @@
   const crumbs = $derived(p ? p.split('/') : [])
   const join = (n: string) => child(p, n)
   const here = (sub: string) => (sub ? `${base}?${new URLSearchParams({ p: sub })}` : base)
-  const shown = $derived(arrange(at === p ? entries : [], '', sort, desc))
+  const side = $derived(sidecars(at === p ? entries : []))
+  const hidden = $derived(new Set([...side.values()].flat()))
+  const shown = $derived(arrange(at === p ? entries.filter((e) => !hidden.has(e.name)) : [], '', sort, desc))
   const shared = $derived(info?.locked === false ? info : null)
   const canUpload = $derived(shared?.mode === 'upload' || shared?.mode === 'drop')
   const listed = $derived(!!shared?.dir && shared.mode !== 'drop')
@@ -332,6 +334,7 @@
           {actions}
           {onaction}
           onopen={open}
+          tag={(e) => (side.has(e.name) ? t.subtitles : undefined)}
           {batch}
           loading={at !== p}
         >
@@ -372,7 +375,7 @@
   {#await import('../components/Preview.svelte') then { default: Preview }}
     <Preview
       bind:entry={preview}
-      entries={file ? [file] : shown}
+      entries={file ? [file] : [...shown, ...entries.filter((e) => hidden.has(e.name))]}
       url={(e, as) => shareFileURL(token, file ? '' : join(e.name), as)}
       onclose={() => (preview = null)}
     />
