@@ -295,3 +295,23 @@ func TestProbeTimeout(t *testing.T) {
 		t.Fatalf("hung probe: %v, ffmpeg %q", time.Since(start), s.FFmpeg)
 	}
 }
+
+func TestWarmRendersAhead(t *testing.T) {
+	ff := ffmpegWithWebP(t)
+	s, v, dir := setup(t, ff)
+	if out, err := exec.Command(ff, "-v", "error", "-y", "-f", "lavfi", "-i", "color=blue:s=640x480", "-frames:v", "1", filepath.Join(dir, "new.png")).CombinedOutput(); err != nil {
+		t.Fatalf("fixture: %v %s", err, out)
+	}
+	s.Warm(v, "new.png")
+	s.Warm(v, "notes.txt")
+	deadline := time.Now().Add(20 * time.Second)
+	for {
+		if cached, _ := filepath.Glob(filepath.Join(s.Dir, "*", "*.webp")); len(cached) == 1 {
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatal("no thumbnail rendered ahead")
+		}
+		time.Sleep(50 * time.Millisecond)
+	}
+}

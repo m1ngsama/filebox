@@ -67,6 +67,7 @@ type Service struct {
 	heic     bool
 
 	sem      chan struct{}
+	warm     chan struct{}
 	probes   chan struct{}
 	mu       sync.Mutex
 	inflight map[string]chan struct{}
@@ -80,7 +81,7 @@ func New(ffmpeg, dir string) *Service {
 			ffmpeg = p
 		}
 	}
-	s := &Service{FFmpeg: ffmpeg, Dir: dir, format: webp, sem: make(chan struct{}, runtime.NumCPU()), probes: make(chan struct{}, runtime.NumCPU()),
+	s := &Service{FFmpeg: ffmpeg, Dir: dir, format: webp, sem: make(chan struct{}, runtime.NumCPU()), warm: make(chan struct{}, 1), probes: make(chan struct{}, runtime.NumCPU()),
 		inflight: map[string]chan struct{}{}, failed: map[string]struct{}{}, covers: map[string]string{}}
 	s.nice, _ = exec.LookPath("nice")
 	if ffmpeg != "" {
@@ -168,6 +169,38 @@ func (s *Service) markFailed(key string) {
 	s.mu.Unlock()
 }
 
+func (s *Service) place(volName, name string, fi fs.FileInfo) (key, out string) {
+	key = cacheKey(volName, name, fi.Size(), fi.ModTime().UnixNano())
+	return key, filepath.Join(s.Dir, key[:2], key+"."+s.format.ext)
+}
+
+// Warm renders the thumbnail of a file that just arrived, one at a time, so the first visit finds it ready.
+func (s *Service) Warm(v *vol.Volume, rel string) {
+	if s.FFmpeg == "" || !s.can(Kind(rel)) {
+		return
+	}
+	go func() {
+		s.warm <- struct{}{}
+		defer func() { <-s.warm }()
+		f, err := v.Root.Open(rel)
+		if err != nil {
+			return
+		}
+		defer f.Close()
+		fi, err := f.Stat()
+		if err != nil || !fi.Mode().IsRegular() {
+			return
+		}
+		key, out := s.place(v.Name, rel, fi)
+		if fileExists(out) || s.isFailed(key) {
+			return
+		}
+		if err := s.render(context.Background(), key, f, Kind(rel), out, 320); err != nil && !errors.Is(err, errCanceled) && !errors.Is(err, os.ErrNotExist) {
+			s.markFailed(key)
+		}
+	}()
+}
+
 func (s *Service) Serve(w http.ResponseWriter, r *http.Request, v *vol.Volume, rel string) {
 	s.ServeFrom(w, r, v.Root, rel, v.Name, rel)
 }
@@ -213,8 +246,7 @@ func (s *Service) ServeFrom(w http.ResponseWriter, r *http.Request, root *os.Roo
 	if kind == "image" && r.URL.Query().Has("large") {
 		side, name = 2048, rel+"\x00large"
 	}
-	key := cacheKey(volName, name, fi.Size(), fi.ModTime().UnixNano())
-	out := filepath.Join(s.Dir, key[:2], key+"."+s.format.ext)
+	key, out := s.place(volName, name, fi)
 	if !fileExists(out) {
 		if s.isFailed(key) {
 			httpx.Fail(w, 404, "no thumbnail")

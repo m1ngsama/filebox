@@ -72,6 +72,7 @@ type Index struct {
 	workers sync.WaitGroup
 	wake    chan struct{}
 	Moved   func(v *vol.Volume, to string)
+	Wrote   func(v *vol.Volume, rel string)
 }
 
 func New(d *db.DB) *Index { return &Index{db: d, wake: make(chan struct{}, 1)} }
@@ -91,6 +92,9 @@ func (x *Index) Touch(v *vol.Volume, rel string) {
 		slog.Warn("index update", "vol", v.Name, "path", rel, "err", err)
 	}
 	x.poke()
+	if x.Wrote != nil {
+		x.Wrote(v, rel)
+	}
 }
 
 func (x *Index) Rename(v *vol.Volume, from, to string) {

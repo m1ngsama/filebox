@@ -149,6 +149,7 @@ func serveCmd(args []string) error {
 	}()
 	thumbs := thumb.New(*ffmpeg, filepath.Join(*data, "thumbs"))
 	thumbs.Probe(context.Background())
+	ix.Wrote = thumbs.Warm
 	a := &app.App{Vols: set, DB: d, Auth: au, Web: webFS, Uploads: up, Thumbs: thumbs, Passkeys: pk, Index: ix, Versions: vs}
 	for _, o := range origins {
 		a.Origins = append(a.Origins, strings.TrimSuffix(o, "/"))
