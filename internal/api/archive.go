@@ -16,6 +16,7 @@ import (
 	"github.com/m1ngsama/filebox/internal/extract"
 	"github.com/m1ngsama/filebox/internal/httpx"
 	"github.com/m1ngsama/filebox/internal/serve"
+	"github.com/m1ngsama/filebox/internal/vol"
 )
 
 const maxZipEntry = 64 << 20
@@ -47,7 +48,7 @@ func openZip(w http.ResponseWriter, r *http.Request, root *os.Root, rel string) 
 		return nil, nil, nil, nil, false
 	}
 	release := sync.OnceFunc(func() { <-readers })
-	f, err := root.Open(rel)
+	f, err := vol.Open(root, rel)
 	if err != nil {
 		release()
 		httpx.Error(w, err)

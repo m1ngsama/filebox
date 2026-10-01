@@ -209,3 +209,14 @@ func TestZipUnreadable(t *testing.T) {
 		t.Fatal("a zip missing a file ended cleanly")
 	}
 }
+
+func TestZipBackslashNamesStayInside(t *testing.T) {
+	rt := root(t, map[string]string{`d/..\..\evil.bat`: "x"})
+	w := httptest.NewRecorder()
+	Zip(w, httptest.NewRequest("GET", "/", nil), rt, []string{"d"}, "", "d.zip")
+	for _, n := range unzip(t, w.Body.Bytes()) {
+		if strings.Contains(n, `\`) {
+			t.Fatalf("entry %q keeps a backslash", n)
+		}
+	}
+}

@@ -70,6 +70,8 @@ func Status(err error) (int, string) {
 		return 409, "already exists"
 	case errors.Is(err, vol.ErrBadPath):
 		return 400, "bad path"
+	case errors.Is(err, vol.ErrNotFile):
+		return 400, "not a file"
 	case errors.Is(err, fs.ErrPermission):
 		return 403, "forbidden"
 	case NoSpace(err):

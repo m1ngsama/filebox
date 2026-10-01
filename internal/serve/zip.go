@@ -149,7 +149,7 @@ func (z *zipper) add(rel, arc string, top bool) error {
 
 func (z *zipper) dir(rel, arc string, fi fs.FileInfo) error {
 	if arc != "" {
-		hdr := &zip.FileHeader{Name: arc + "/", Modified: fi.ModTime()}
+		hdr := &zip.FileHeader{Name: entry(arc) + "/", Modified: fi.ModTime()}
 		hdr.SetMode(fi.Mode())
 		if _, err := z.zw.CreateHeader(hdr); err != nil {
 			return err
@@ -182,12 +182,12 @@ func (z *zipper) dir(rel, arc string, fi fs.FileInfo) error {
 }
 
 func (z *zipper) file(rel, arc string, fi fs.FileInfo) error {
-	f, err := z.root.Open(rel)
+	f, err := vol.Open(z.root, rel)
 	if err != nil {
 		return err
 	}
 	defer f.Close()
-	hdr := &zip.FileHeader{Name: arc, Modified: fi.ModTime(), Method: zip.Deflate}
+	hdr := &zip.FileHeader{Name: entry(arc), Modified: fi.ModTime(), Method: zip.Deflate}
 	if compressed[strings.ToLower(path.Ext(arc))] {
 		hdr.Method = zip.Store
 	}
@@ -199,3 +199,6 @@ func (z *zipper) file(rel, arc string, fi fs.FileInfo) error {
 	_, err = io.Copy(out, f)
 	return err
 }
+
+// entry keeps a backslash in a Linux file name from becoming a path separator, and a way out, when the zip is unpacked on Windows.
+func entry(arc string) string { return strings.ReplaceAll(arc, `\`, "_") }

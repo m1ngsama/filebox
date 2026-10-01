@@ -10,6 +10,7 @@ import (
 	"io"
 	"io/fs"
 	"log/slog"
+	"math"
 	"net/http"
 	"os"
 	"path"
@@ -144,6 +145,46 @@ type volume struct {
 	h      *handler.Handler
 	store  store
 	locker locker
+	free   func() (uint64, error)
+
+	mu   sync.Mutex
+	held map[string]claim
+}
+
+type claim struct {
+	size int64
+	at   time.Time
+}
+
+// reserve keeps this much of every volume free, so uploads can never fill the disk the database and logs share.
+const reserve = 1 << 30
+
+// pending is called with u.mu held and counts the bytes that unfinished uploads have declared but not yet written.
+func (u *volume) pending() int64 {
+	var n int64
+	for id, c := range u.held {
+		st, err := u.v.Root.Stat(path.Join(vol.UploadsDir, id))
+		switch {
+		case err == nil:
+			n += max(0, c.size-st.Size())
+		case time.Since(c.at) < time.Minute:
+			n += c.size
+		default:
+			delete(u.held, id)
+		}
+	}
+	return n
+}
+
+func (u *volume) claim(hook handler.HookEvent, id string) error {
+	u.mu.Lock()
+	defer u.mu.Unlock()
+	free, err := u.free()
+	if err != nil || hook.Upload.Size+u.pending()+reserve > int64(min(free, math.MaxInt64)) {
+		return errNoSpace
+	}
+	u.held[id] = claim{hook.Upload.Size, time.Now()}
+	return nil
 }
 
 type creation struct {
@@ -164,7 +205,8 @@ func New(vols *vol.Set) (*Server, error) {
 		if _, dup := s.byKey[key]; dup {
 			return nil, fmt.Errorf("volume %q: upload key collides with another volume, rename it", v.Name)
 		}
-		u := &volume{v: v, store: store{filestore.New(filepath.Join(v.Path, vol.UploadsDir))}, locker: locker{memorylocker.New()}}
+		u := &volume{v: v, store: store{filestore.New(filepath.Join(v.Path, vol.UploadsDir))}, locker: locker{memorylocker.New()}, free: v.Free, held: map[string]claim{}}
+		u.recall()
 		c := handler.NewStoreComposer()
 		c.UseCore(u.store)
 		c.UseTerminater(u.store)
@@ -176,7 +218,7 @@ func New(vols *vol.Set) (*Server, error) {
 			Cors:            &handler.CorsConfig{Disable: true},
 			Logger:          logger,
 			PreUploadCreateCallback: func(hook handler.HookEvent) (handler.HTTPResponse, handler.FileInfoChanges, error) {
-				return create(key, hook)
+				return create(u, key, hook)
 			},
 			PreFinishResponseCallback: func(hook handler.HookEvent) (handler.HTTPResponse, error) {
 				kept, err := s.finish(u, hook.Upload)
@@ -310,7 +352,7 @@ func (w *rewriter) WriteHeader(code int) {
 
 func (w *rewriter) Unwrap() http.ResponseWriter { return w.ResponseWriter }
 
-func create(key string, hook handler.HookEvent) (handler.HTTPResponse, handler.FileInfoChanges, error) {
+func create(u *volume, key string, hook handler.HookEvent) (handler.HTTPResponse, handler.FileInfoChanges, error) {
 	var none handler.FileInfoChanges
 	c, ok := hook.Context.Value(creationKey{}).(creation)
 	if !ok {
@@ -319,9 +361,6 @@ func create(key string, hook handler.HookEvent) (handler.HTTPResponse, handler.F
 	if c.t.MaxSize > 0 && (hook.Upload.SizeIsDeferred || hook.Upload.Size > c.t.MaxSize) {
 		return handler.HTTPResponse{}, none, errTooLarge
 	}
-	if free, err := c.t.Vol.Free(); err != nil || uint64(hook.Upload.Size) > free {
-		return handler.HTTPResponse{}, none, errNoSpace
-	}
 	md := handler.MetaData{keyOwner: c.owner, keyDir: c.t.Dir, keyName: c.t.Name}
 	if c.t.Replace {
 		md[keyReplace] = "1"
@@ -329,7 +368,11 @@ func create(key string, hook handler.HookEvent) (handler.HTTPResponse, handler.F
 	if c.t.Base != "" {
 		md[keyBase] = c.t.Base
 	}
-	return handler.HTTPResponse{}, handler.FileInfoChanges{ID: key + "-" + rand.Text(), MetaData: md}, nil
+	id := key + "-" + rand.Text()
+	if err := u.claim(hook, id); err != nil {
+		return handler.HTTPResponse{}, none, err
+	}
+	return handler.HTTPResponse{}, handler.FileInfoChanges{ID: id, MetaData: md}, nil
 }
 
 func complete(ctx context.Context, u *volume, id string) (handler.FileInfo, bool) {
@@ -365,6 +408,7 @@ func (s *Server) settle(ctx context.Context, u *volume, id string) (int64, strin
 func (s *Server) finish(u *volume, info handler.FileInfo) (string, error) {
 	s.finalize.Lock()
 	defer s.finalize.Unlock()
+	defer u.release(info.ID)
 	if s.Allow != nil {
 		if err := s.Allow(info.MetaData[keyOwner], info.Size); err != nil {
 			u.v.Root.Remove(path.Join(vol.UploadsDir, info.ID))
@@ -533,3 +577,22 @@ func (l locker) NewLock(id string) (handler.Lock, error) {
 func (l lock) Lock(ctx context.Context, _ func()) error { return l.l.Lock(ctx, func() {}) }
 
 func (l lock) Unlock() error { return l.l.Unlock() }
+
+func (u *volume) release(id string) {
+	u.mu.Lock()
+	delete(u.held, id)
+	u.mu.Unlock()
+}
+
+// recall re-claims uploads that were in progress before a restart.
+func (u *volume) recall() {
+	infos, _ := filepath.Glob(filepath.Join(u.v.Path, vol.UploadsDir, "*.info"))
+	for _, f := range infos {
+		id := strings.TrimSuffix(filepath.Base(f), ".info")
+		if up, err := u.store.FileStore.GetUpload(context.Background(), id); err == nil {
+			if info, err := up.GetInfo(context.Background()); err == nil && !info.SizeIsDeferred {
+				u.held[id] = claim{info.Size, time.Now()}
+			}
+		}
+	}
+}

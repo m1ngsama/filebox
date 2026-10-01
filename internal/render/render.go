@@ -39,6 +39,7 @@ import (
 	"github.com/yuin/goldmark/util"
 
 	"github.com/m1ngsama/filebox/internal/httpx"
+	"github.com/m1ngsama/filebox/internal/vol"
 )
 
 const Limit = 1 << 20
@@ -97,7 +98,7 @@ const maxCache = 256 << 20
 var maxOutput = 16 << 20
 
 func Serve(w http.ResponseWriter, r *http.Request, root *os.Root, rel, rawPrefix string) {
-	f, err := root.Open(rel)
+	f, err := vol.Open(root, rel)
 	if err != nil {
 		httpx.Error(w, err)
 		return

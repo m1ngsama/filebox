@@ -18,6 +18,7 @@ import (
 	xunicode "golang.org/x/text/encoding/unicode"
 
 	"github.com/m1ngsama/filebox/internal/httpx"
+	"github.com/m1ngsama/filebox/internal/vol"
 )
 
 const maxSubtitle = 8 << 20
@@ -82,7 +83,7 @@ func VTT(w http.ResponseWriter, r *http.Request, root *os.Root, rel string) {
 		httpx.Fail(w, 400, "not a subtitle")
 		return
 	}
-	f, err := root.Open(rel)
+	f, err := vol.Open(root, rel)
 	if err != nil {
 		httpx.Error(w, err)
 		return

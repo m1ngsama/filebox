@@ -10,6 +10,7 @@ import (
 	"strings"
 
 	"github.com/m1ngsama/filebox/internal/httpx"
+	"github.com/m1ngsama/filebox/internal/vol"
 )
 
 // Distros ship different mime.types files; previews depend on these being stable.
@@ -53,7 +54,7 @@ func File(w http.ResponseWriter, r *http.Request, root *os.Root, rel string, dow
 }
 
 func Named(w http.ResponseWriter, r *http.Request, root *os.Root, rel, name string, download bool) {
-	f, err := root.Open(rel)
+	f, err := vol.Open(root, rel)
 	if err != nil {
 		httpx.Error(w, err)
 		return

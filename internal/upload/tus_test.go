@@ -569,3 +569,15 @@ func TestTusReplace(t *testing.T) {
 		t.Error("symlink replaced")
 	}
 }
+
+func TestTusReservesPendingUploads(t *testing.T) {
+	e := setup(t)
+	e.srv.vols[0].free = func() (uint64, error) { return reserve + 100, nil }
+	first := e.create(t, 60, "a.bin")
+	if w := e.do("POST", "/up/", "", "Upload-Length", "60", "Upload-Metadata", meta("filename", "b.bin")); w.StatusCode != 507 {
+		t.Fatalf("second upload over the remaining space: %d", w.StatusCode)
+	}
+	e.patch(first, 0, strings.Repeat("x", 60))
+	e.srv.vols[0].free = func() (uint64, error) { return reserve + 40, nil }
+	e.create(t, 40, "c.bin")
+}

@@ -24,6 +24,21 @@ const (
 
 var ErrBadPath = errors.New("bad path")
 
+var ErrNotFile = errors.New("not a regular file")
+
+// Open opens a file or directory for reading; O_NONBLOCK keeps a named pipe from hanging the open.
+func Open(root *os.Root, rel string) (*os.File, error) {
+	f, err := root.OpenFile(rel, os.O_RDONLY|syscall.O_NONBLOCK, 0)
+	if err != nil {
+		return nil, err
+	}
+	if st, err := f.Stat(); err != nil || !(st.Mode().IsRegular() || st.IsDir()) {
+		f.Close()
+		return nil, ErrNotFile
+	}
+	return f, nil
+}
+
 type Volume struct {
 	Name string
 	Path string

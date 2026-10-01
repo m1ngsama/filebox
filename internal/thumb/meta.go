@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/m1ngsama/filebox/internal/httpx"
+	"github.com/m1ngsama/filebox/internal/vol"
 )
 
 type Meta struct {
@@ -47,7 +48,7 @@ type dims struct {
 }
 
 func (s *Service) ServeMeta(w http.ResponseWriter, r *http.Request, root *os.Root, rel string) {
-	f, err := root.Open(rel)
+	f, err := vol.Open(root, rel)
 	if err != nil {
 		httpx.Error(w, err)
 		return

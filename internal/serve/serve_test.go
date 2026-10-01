@@ -6,7 +6,9 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"syscall"
 	"testing"
+	"time"
 )
 
 func root(t *testing.T, files map[string]string) *os.Root {
@@ -115,5 +117,26 @@ func TestDirAndMissing(t *testing.T) {
 	File(w, httptest.NewRequest("GET", "/", nil), rt, "nope", false)
 	if w.Code != 404 {
 		t.Errorf("missing = %d", w.Code)
+	}
+}
+
+func TestNamedPipeIsRefusedWithoutHanging(t *testing.T) {
+	rt := root(t, nil)
+	if err := syscall.Mkfifo(filepath.Join(rt.Name(), "pipe"), 0o644); err != nil {
+		t.Skip(err)
+	}
+	done := make(chan int)
+	go func() {
+		w := httptest.NewRecorder()
+		File(w, httptest.NewRequest("GET", "/", nil), rt, "pipe", false)
+		done <- w.Code
+	}()
+	select {
+	case code := <-done:
+		if code != 400 {
+			t.Fatalf("pipe %d", code)
+		}
+	case <-time.After(3 * time.Second):
+		t.Fatal("opening a named pipe hung")
 	}
 }

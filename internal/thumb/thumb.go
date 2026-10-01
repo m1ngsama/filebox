@@ -183,7 +183,7 @@ func (s *Service) Warm(v *vol.Volume, rel string) {
 	go func() {
 		s.warm <- struct{}{}
 		defer func() { <-s.warm }()
-		f, err := v.Root.Open(rel)
+		f, err := vol.Open(v.Root, rel)
 		if err != nil {
 			return
 		}
@@ -211,7 +211,7 @@ func (s *Service) ServeFrom(w http.ResponseWriter, r *http.Request, root *os.Roo
 		httpx.Fail(w, 404, "no thumbnail")
 		return
 	}
-	f, err := root.Open(open)
+	f, err := vol.Open(root, open)
 	if err != nil {
 		httpx.Fail(w, 404, "no thumbnail")
 		return
@@ -224,7 +224,7 @@ func (s *Service) ServeFrom(w http.ResponseWriter, r *http.Request, root *os.Roo
 			httpx.Fail(w, 404, "no thumbnail")
 			return
 		}
-		child, err := root.Open(path.Join(open, name))
+		child, err := vol.Open(root, path.Join(open, name))
 		if err != nil {
 			httpx.Fail(w, 404, "no thumbnail")
 			return
