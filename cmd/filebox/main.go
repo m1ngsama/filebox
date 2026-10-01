@@ -150,8 +150,8 @@ func serveCmd(args []string) error {
 	thumbs := thumb.New(*ffmpeg, filepath.Join(*data, "thumbs"))
 	thumbs.Probe(context.Background())
 	a := &app.App{Vols: set, DB: d, Auth: au, Web: webFS, Uploads: up, Thumbs: thumbs, Passkeys: pk, Index: ix, Versions: vs}
-	if len(origins) > 0 {
-		a.Origin = strings.TrimSuffix(origins[0], "/")
+	for _, o := range origins {
+		a.Origins = append(a.Origins, strings.TrimSuffix(o, "/"))
 	}
 
 	srv := &http.Server{Addr: *listen, Handler: a.Handler(), ReadHeaderTimeout: 10 * time.Second, IdleTimeout: 2 * time.Minute}

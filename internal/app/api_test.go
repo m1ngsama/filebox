@@ -45,12 +45,12 @@ func TestLogin(t *testing.T) {
 	if w.Code != 204 || !strings.Contains(w.Header().Get("Set-Cookie"), "fb_session=") {
 		t.Fatalf("login %d %q", w.Code, w.Header().Get("Set-Cookie"))
 	}
-	if w := f.do("GET", "/api/me", nil); w.Code != 200 || !strings.Contains(w.Body.String(), `"v"`) || !strings.Contains(w.Body.String(), `"origin":""`) {
+	if w := f.do("GET", "/api/me", nil); w.Code != 200 || !strings.Contains(w.Body.String(), `"v"`) || !strings.Contains(w.Body.String(), `"origins":[]`) {
 		t.Fatalf("me %d %s", w.Code, w.Body)
 	}
-	f.App.Origin = "https://files.example.com"
+	f.App.Origins = []string{"http://localhost:5280", "https://files.example.com"}
 	f.H = f.App.Handler()
-	if w := f.do("GET", "/api/me", nil); !strings.Contains(w.Body.String(), `"origin":"https://files.example.com"`) {
+	if w := f.do("GET", "/api/me", nil); !strings.Contains(w.Body.String(), `"origins":["http://localhost:5280","https://files.example.com"]`) {
 		t.Fatalf("me with origin %s", w.Body)
 	}
 	if w := f.do("GET", "/api/nope", nil); w.Code != 404 || !strings.Contains(w.Body.String(), "error") {

@@ -57,7 +57,7 @@ type API struct {
 	Jobs     *Jobs
 	Index    *index.Index
 	Versions *version.Store
-	Origin   string
+	Origins  []string
 }
 
 func (a *API) Register(mux *http.ServeMux) {
@@ -152,7 +152,7 @@ func (a *API) me(w http.ResponseWriter, r *http.Request) {
 		httpx.Error(w, err)
 		return
 	}
-	httpx.JSON(w, 200, map[string]any{"name": u.Name, "vols": a.Vols.Names(), "origin": a.Origin})
+	httpx.JSON(w, 200, map[string]any{"name": u.Name, "vols": a.Vols.Names(), "origins": append([]string{}, a.Origins...)})
 }
 
 func (a *API) ls(w http.ResponseWriter, r *http.Request) {
