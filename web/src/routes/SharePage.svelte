@@ -25,7 +25,7 @@
   import { viewOf, keepView, type View } from '../lib/storage'
   import { saveZip, packing } from '../lib/located'
   import { t } from '../lib/i18n'
-  import { player } from '../lib/player.svelte'
+  import { playing } from '../lib/playing.svelte'
 
   let { token }: { token: string } = $props()
 
@@ -391,5 +391,5 @@
     />
   {/await}
 {/if}
-{#if player.track}{#await import('../components/MiniPlayer.svelte') then { default: MiniPlayer }}<MiniPlayer />{/await}{/if}
+{#if playing.on}{#await import('../components/MiniPlayer.svelte') then { default: MiniPlayer }}<MiniPlayer />{/await}{/if}
 <Toasts />

@@ -4,11 +4,10 @@
   import { route, navigate } from './lib/router.svelte'
   import { t } from './lib/i18n'
   import { save } from './lib/storage'
-  import Login from './routes/Login.svelte'
   import Browser from './routes/Browser.svelte'
   import Lazy from './components/Lazy.svelte'
-  import UploadPanel from './components/UploadPanel.svelte'
-  import { player } from './lib/player.svelte'
+  import { uploads, finished } from './lib/uploads.svelte'
+  import { playing } from './lib/playing.svelte'
   import Nav from './components/Nav.svelte'
   import NavToggle from './components/NavToggle.svelte'
   import Toasts from './components/Toasts.svelte'
@@ -78,7 +77,7 @@
     </EmptyState>
   </main>
 {:else if needLogin}
-  <main><Login onok={load} /></main>
+  <main><Lazy load={() => import('./routes/Login.svelte')} onok={load} /></main>
 {:else if me}
   <div class="shell">
     <a class="skip" href="#main" onclick={skip}>{parts[0] === 'files' ? t.skipToList : t.skipToMain}</a>
@@ -111,8 +110,8 @@
       {/if}
     </main>
   </div>
-  <UploadPanel />
-  {#if player.track}{#await import('./components/MiniPlayer.svelte') then { default: MiniPlayer }}<MiniPlayer />{/await}{/if}
+  {#if uploads.length || finished.last}{#await import('./components/UploadPanel.svelte') then { default: UploadPanel }}<UploadPanel />{/await}{/if}
+  {#if playing.on}{#await import('./components/MiniPlayer.svelte') then { default: MiniPlayer }}<MiniPlayer />{/await}{/if}
   {#if shared !== null}
     <Lazy load={() => import('./components/ShareTarget.svelte')} vols={me.vols} status={shared} onclose={() => (shared = null)} />
   {/if}

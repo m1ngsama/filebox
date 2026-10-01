@@ -1,4 +1,5 @@
 import { load, save } from './storage'
+import { playing } from './playing.svelte'
 import { parse, decode, type Line } from './lyrics'
 
 export type Track = { name: string; src: string; cover?: string; meta: string; lyrics?: string }
@@ -114,6 +115,7 @@ class Player {
     if (!t) return
     const a = this.#audio()
     this.i = i
+    playing.on = true
     this.now = this.total = this.#saved = 0
     this.tags = {}
     this.lines = []
@@ -188,6 +190,7 @@ class Player {
     }
     this.queue = []
     this.i = -1
+    playing.on = false
     this.expanded = false
     if (navigator.mediaSession) navigator.mediaSession.metadata = null
   }

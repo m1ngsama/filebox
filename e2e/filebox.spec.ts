@@ -891,6 +891,9 @@ test('the file list loads one script and settings loads its own chunk', async ({
   })
   await login(page)
   await expect(row(page, 'docs')).toBeVisible()
+  scripts.length = 0
+  await page.reload()
+  await expect(row(page, 'docs')).toBeVisible()
   expect(scripts).toHaveLength(1)
   const js = await page.request.get(scripts[0], { headers: { 'Accept-Encoding': 'br' } })
   expect(js.headers()['content-encoding']).toBe('br')
@@ -2610,6 +2613,10 @@ test.describe('with an English browser', () => {
     await page.goto('/')
     await expect(page.locator('html')).toHaveAttribute('lang', 'en')
     await signIn(page, en)
+    await expect(row(page, 'docs')).toBeVisible()
+    expect(scripts.filter((s) => /\/en-[\w-]+\.js$/.test(s))).toHaveLength(1)
+    scripts.length = 0
+    await page.reload()
     await expect(row(page, 'docs')).toBeVisible()
     expect(scripts.filter((s) => /\/en-[\w-]+\.js$/.test(s))).toHaveLength(1)
     expect(scripts).toHaveLength(2)
