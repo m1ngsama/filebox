@@ -582,6 +582,17 @@ test('audio plays as now playing, pauses on space and moves on to the next track
   await expect(next.getByRole('heading', { name: 'b' })).toBeVisible({ timeout: 5000 })
   await expect(next.getByRole('button', { name: t.pause })).toBeVisible()
   await expect(next.getByRole('button', { name: t.nextTrack })).toBeDisabled()
+  await next.getByRole('button', { name: t.prevTrack }).click()
+  await expect(page.getByRole('dialog', { name: 'a.wav' })).toBeVisible()
+  await page.keyboard.press('Escape')
+  const mini = page.getByRole('region', { name: t.nowPlaying })
+  await expect(mini).toContainText('a')
+  await mini.getByRole('button', { name: `${t.nowPlaying}: a` }).click()
+  const full = page.getByRole('dialog', { name: t.nowPlaying })
+  await expect(full.getByRole('heading', { name: 'a' })).toBeVisible()
+  await full.getByRole('button', { name: t.collapse }).click()
+  await mini.getByRole('button', { name: t.stopPlaying }).click()
+  await expect(mini).toHaveCount(0)
 })
 
 test('videos pick up sibling subtitles and an unplayable one offers a download', async ({ page, server }) => {

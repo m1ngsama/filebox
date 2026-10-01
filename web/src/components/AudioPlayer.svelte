@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { onMount, untrack } from 'svelte'
+  import { onMount } from 'svelte'
   import Play from '@lucide/svelte/icons/play'
   import Pause from '@lucide/svelte/icons/pause'
   import SkipBack from '@lucide/svelte/icons/skip-back'
@@ -8,132 +8,50 @@
   import RotateCw from '@lucide/svelte/icons/rotate-cw'
   import Music from '@lucide/svelte/icons/music'
   import { clock, stem } from '../lib/format'
-  import { load, save } from '../lib/storage'
+  import { player } from '../lib/player.svelte'
   import { t } from '../lib/i18n'
 
-  let {
-    src,
-    name,
-    cover,
-    meta,
-    autoplay,
-    spot,
-    onprev,
-    onnext,
-    onfail,
-  }: {
-    src: string
-    name: string
-    cover?: string
-    meta: () => Promise<{ title?: string; artist?: string; album?: string; duration?: number }>
-    autoplay: boolean
-    spot: string
-    onprev?: () => void
-    onnext?: () => void
-    onfail: () => void
-  } = $props()
+  let { onfail }: { onfail?: () => void } = $props()
 
-  const speeds = [1, 1.25, 1.5, 2, 0.75]
-  let audio = $state<HTMLAudioElement>()
   let main = $state<HTMLButtonElement>()
-  let tags = $state<{ title?: string; artist?: string; album?: string }>({})
   let art = $state(false)
-  let paused = $state(true)
-  let now = $state(0)
-  let total = $state(0)
   let dragging = $state(false)
-  let rate = $state(Number(load('audio-rate')) || 1)
-  let last = 0
+  let drag = $state(0)
 
-  const title = $derived(tags.title || stem(name))
-  const byline = $derived([tags.artist, tags.album].filter(Boolean).join(' — '))
-  const long = $derived(total > 600)
+  const track = $derived(player.track)
+  const cover = $derived(track?.cover)
+  const title = $derived(player.tags.title || stem(track?.name ?? ''))
+  const byline = $derived([player.tags.artist, player.tags.album].filter(Boolean).join(' — '))
+  const now = $derived(dragging ? drag : player.now)
+  const total = $derived(player.total)
 
-  untrack(() => meta()).then((m) => (tags = m))
-
-  function toggle() {
-    if (!audio) return
-    if (audio.paused) audio.play().catch(() => {})
-    else audio.pause()
-  }
-
-  function seek(to: number) {
-    if (!audio || !Number.isFinite(audio.duration)) return
-    audio.currentTime = Math.min(Math.max(0, to), audio.duration)
-    now = audio.currentTime
-  }
-
-  function loaded() {
-    const a = audio!
-    total = a.duration
-    a.playbackRate = long ? rate : 1
-    const at = Number(load(spot))
-    if (at > 5 && at < a.duration - 5) a.currentTime = at
-  }
-
-  function tick() {
-    if (!audio || dragging) return
-    now = audio.currentTime
-    if (Math.abs(now - last) > 5) save(spot, String(Math.floor((last = now))))
-  }
-
-  function ended() {
-    save(spot, '')
-    onnext?.()
-  }
-
-  function faster() {
-    rate = speeds[(speeds.indexOf(rate) + 1) % speeds.length]
-    save('audio-rate', String(rate))
-    if (audio) audio.playbackRate = rate
-  }
+  $effect(() => {
+    cover
+    art = false
+  })
 
   function key(e: KeyboardEvent) {
     if (e.key !== ' ' || e.defaultPrevented || (e.target as Element).closest?.('input, button, a, textarea')) return
     e.preventDefault()
-    toggle()
+    player.toggle()
   }
 
-  $effect(() => {
-    const ms = navigator.mediaSession
-    if (!ms || typeof MediaMetadata === 'undefined') return
-    ms.metadata = new MediaMetadata({ title, artist: tags.artist ?? '', album: tags.album ?? '', artwork: art && cover ? [{ src: new URL(cover, location.href).href }] : [] })
-  })
-
   onMount(() => {
-    const ms = navigator.mediaSession
-    const handlers: [MediaSessionAction, MediaSessionActionHandler | null][] = [
-      ['play', () => audio?.play()],
-      ['pause', () => audio?.pause()],
-      ['previoustrack', onprev ? () => onprev() : null],
-      ['nexttrack', onnext ? () => onnext() : null],
-      ['seekbackward', (d) => seek(now - (d.seekOffset ?? 15))],
-      ['seekforward', (d) => seek(now + (d.seekOffset ?? 15))],
-      ['seekto', (d) => d.seekTime !== undefined && seek(d.seekTime)],
-    ]
-    for (const [a, h] of handlers) {
-      try {
-        ms?.setActionHandler(a, h)
-      } catch {}
-    }
+    player.viewing++
+    player.onerror = onfail
     main?.focus()
-    if (autoplay) audio?.play().catch(() => {})
     return () => {
-      if (audio) save(spot, audio.ended ? '' : String(Math.floor(audio.currentTime)))
-      for (const [a] of handlers) {
-        try {
-          ms?.setActionHandler(a, null)
-        } catch {}
-      }
+      player.viewing--
+      if (player.onerror === onfail) player.onerror = undefined
     }
   })
 </script>
 
 <svelte:window onkeydown={key} />
 
-<div class="audio" class:paused style:--art={art && cover ? `url("${cover}")` : null}>
+<div class="audio" class:paused={player.paused} style:--art={art && cover ? `url("${cover}")` : null}>
   <div class="art" class:ok={art}>
-    {#if cover}<img src={cover} alt="" onload={() => (art = true)} onerror={() => (art = false)} />{/if}
+    {#if cover}{#key cover}<img src={cover} alt="" onload={() => (art = true)} onerror={() => (art = false)} />{/key}{/if}
     {#if !art}<Music size={64} strokeWidth={1.25} aria-hidden="true" />{/if}
   </div>
   <div class="now">
@@ -152,46 +70,32 @@
       style:--done={total ? `${(now / total) * 100}%` : '0%'}
       oninput={(e) => {
         dragging = true
-        now = Number(e.currentTarget.value)
+        drag = Number(e.currentTarget.value)
       }}
       onchange={(e) => {
         dragging = false
-        seek(Number(e.currentTarget.value))
+        player.seek(Number(e.currentTarget.value))
       }}
     />
     <div class="times"><span>{clock(now)}</span><span>-{clock(Math.max(0, total - now))}</span></div>
   </div>
   <div class="controls">
-    {#if long}
-      <button type="button" class="ctl small" onclick={faster} aria-label={t.playbackSpeed} title={t.playbackSpeed}><span class="rate">{rate}×</span></button>
-      <button type="button" class="ctl" onclick={() => seek(now - 15)} aria-label={t.skipBack} title={t.skipBack}><RotateCcw size={30} strokeWidth={1.75} /><span class="sec" aria-hidden="true">15</span></button>
+    {#if player.long}
+      <button type="button" class="ctl small" onclick={() => player.faster()} aria-label={t.playbackSpeed} title={t.playbackSpeed}><span class="rate">{player.rate}×</span></button>
+      <button type="button" class="ctl" onclick={() => player.seek(player.now - 15)} aria-label={t.skipBack} title={t.skipBack}><RotateCcw size={30} strokeWidth={1.75} /><span class="sec" aria-hidden="true">15</span></button>
     {:else}
-      <button type="button" class="ctl" onclick={() => onprev?.()} disabled={!onprev} aria-label={t.prevTrack} title={t.prevTrack}><SkipBack size={26} fill="currentColor" /></button>
+      <button type="button" class="ctl" onclick={() => player.prev()} disabled={!player.hasPrev && player.now <= 3} aria-label={t.prevTrack} title={t.prevTrack}><SkipBack size={26} fill="currentColor" /></button>
     {/if}
-    <button type="button" class="ctl main" bind:this={main} onclick={toggle} aria-label={paused ? t.play : t.pause}>
-      {#if paused}<Play size={30} fill="currentColor" />{:else}<Pause size={30} fill="currentColor" />{/if}
+    <button type="button" class="ctl main" bind:this={main} onclick={() => player.toggle()} aria-label={player.paused ? t.play : t.pause}>
+      {#if player.paused}<Play size={30} fill="currentColor" />{:else}<Pause size={30} fill="currentColor" />{/if}
     </button>
-    {#if long}
-      <button type="button" class="ctl" onclick={() => seek(now + 15)} aria-label={t.skipForward} title={t.skipForward}><RotateCw size={30} strokeWidth={1.75} /><span class="sec" aria-hidden="true">15</span></button>
-      <button type="button" class="ctl small" onclick={() => onnext?.()} disabled={!onnext} aria-label={t.nextTrack} title={t.nextTrack}><SkipForward size={20} fill="currentColor" /></button>
+    {#if player.long}
+      <button type="button" class="ctl" onclick={() => player.seek(player.now + 15)} aria-label={t.skipForward} title={t.skipForward}><RotateCw size={30} strokeWidth={1.75} /><span class="sec" aria-hidden="true">15</span></button>
+      <button type="button" class="ctl small" onclick={() => player.next()} disabled={!player.hasNext} aria-label={t.nextTrack} title={t.nextTrack}><SkipForward size={20} fill="currentColor" /></button>
     {:else}
-      <button type="button" class="ctl" onclick={() => onnext?.()} disabled={!onnext} aria-label={t.nextTrack} title={t.nextTrack}><SkipForward size={26} fill="currentColor" /></button>
+      <button type="button" class="ctl" onclick={() => player.next()} disabled={!player.hasNext} aria-label={t.nextTrack} title={t.nextTrack}><SkipForward size={26} fill="currentColor" /></button>
     {/if}
   </div>
-  <audio
-    bind:this={audio}
-    {src}
-    preload="metadata"
-    onloadedmetadata={loaded}
-    ontimeupdate={tick}
-    onplay={() => (paused = false)}
-    onpause={() => {
-      paused = true
-      save(spot, String(Math.floor(audio!.currentTime)))
-    }}
-    onended={ended}
-    onerror={onfail}
-  ></audio>
 </div>
 
 <style>

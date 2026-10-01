@@ -1,5 +1,6 @@
 <script lang="ts">
-  import { onMount } from 'svelte'
+  import { onMount, untrack } from 'svelte'
+  import { player, type Track } from '../lib/player.svelte'
   import { cubicOut } from 'svelte/easing'
   import X from '@lucide/svelte/icons/x'
   import Download from '@lucide/svelte/icons/download'
@@ -27,6 +28,21 @@
   const at = $derived(list.indexOf(entry))
   const songs = $derived(k === 'audio' ? list.filter((e) => kind(e.name) === 'audio') : [])
   const song = $derived(songs.indexOf(entry))
+  const tune = (e: Entry): Track => ({ name: e.name, src: url(e), cover: url(e, 'large'), meta: url(e, 'meta') })
+
+  $effect(() => {
+    if (k !== 'audio') return
+    const q = songs.length ? songs.map(tune) : [tune(entry)]
+    const i = Math.max(0, song)
+    untrack(() => player.play(q, i, !inline))
+  })
+
+  $effect(() => {
+    const now = player.track
+    if (k !== 'audio' || !now || now.src === src) return
+    const e = songs.find((x) => url(x) === now.src)
+    if (e) untrack(() => (entry = e))
+  })
   const step = (d: number) => at >= 0 && list[at + d] && (entry = list[at + d])
   let pages = $state<Entry[] | null>(null)
   let rtl = $state(false)
@@ -246,21 +262,7 @@
         {/key}
       {/await}
     {:else if k === 'audio'}
-      {#await import('./AudioPlayer.svelte') then { default: AudioPlayer }}
-        {#key src}
-          <AudioPlayer
-            {src}
-            name={entry.name}
-            cover={url(entry, 'large')}
-            meta={() => fetch(url(entry, 'meta')).then((r) => (r.ok ? r.json() : {}), () => ({}))}
-            autoplay={!inline}
-            {spot}
-            onprev={songs[song - 1] ? () => (entry = songs[song - 1]) : undefined}
-            onnext={songs[song + 1] ? () => (entry = songs[song + 1]) : undefined}
-            onfail={failed}
-          />
-        {/key}
-      {/await}
+      {#await import('./AudioPlayer.svelte') then { default: AudioPlayer }}<AudioPlayer onfail={failed} />{/await}
     {:else if k === 'pdf'}
       {#await import('./PdfView.svelte') then { default: PdfView }}
         {#key src}<PdfView {src} onready={ready} onfail={failed} />{/key}

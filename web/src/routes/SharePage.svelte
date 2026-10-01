@@ -25,6 +25,7 @@
   import { viewOf, keepView, type View } from '../lib/storage'
   import { saveZip, packing } from '../lib/located'
   import { t } from '../lib/i18n'
+  import MiniPlayer from '../components/MiniPlayer.svelte'
 
   let { token }: { token: string } = $props()
 
@@ -388,4 +389,5 @@
     />
   {/await}
 {/if}
+<MiniPlayer />
 <Toasts />
