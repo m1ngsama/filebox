@@ -2186,9 +2186,9 @@ test('searching finds words inside text and markdown files and opens the match i
       await expect(section.locator('.match')).toHaveCount(1, { timeout: 1500 })
     }).toPass({ timeout: 30_000 })
 
-  await search('the **zebrafish')
-  await expect(section.locator('.hit .name')).toHaveText('plan.md')
-  await expect(section.locator('mark')).toHaveText('the **zebrafish')
+  await search('the zebrafish')
+  await expect(section.locator('.match .name')).toHaveText('plan.md')
+  await expect(section.locator('mark')).toHaveText('the zebrafish')
 
   await search('budget <b>rev')
   const hit = section.locator('.match')

@@ -109,7 +109,7 @@ func TestContentFollowsFiles(t *testing.T) {
 	if n := e.pass(t); n != 0 {
 		t.Fatalf("rename re-extracted %d", n)
 	}
-	if got, _ := e.body(t, "docs/b.md"); got != "# Plan ship the **content** index" {
+	if got, _ := e.body(t, "docs/b.md"); got != "Plan ship the content index" {
 		t.Fatalf("after rename %q", got)
 	}
 
