@@ -150,7 +150,7 @@ function zip(files: [string, Buffer | string][]) {
   return Buffer.concat([...parts, cd, end])
 }
 
-function epub() {
+function epub(link = false) {
   const chapter = (n: number, extra = '') =>
     `<?xml version="1.0" encoding="utf-8"?><html xmlns="http://www.w3.org/1999/xhtml"><head><title>${n}</title></head><body>${extra}<h1>第${n}章</h1>` +
     `<p>${'天地玄黄，宇宙洪荒。日月盈昃，辰宿列张。'.repeat(12)}</p>`.repeat(30) +
@@ -163,8 +163,8 @@ function epub() {
       '<?xml version="1.0"?><package xmlns="http://www.idpf.org/2007/opf" version="3.0" unique-identifier="id"><metadata xmlns:dc="http://purl.org/dc/elements/1.1/"><dc:identifier id="id">x</dc:identifier><dc:title>书</dc:title><dc:language>zh</dc:language></metadata>' +
         '<manifest><item id="c1" href="c1.xhtml" media-type="application/xhtml+xml"/><item id="c2" href="c2.xhtml" media-type="application/xhtml+xml"/></manifest><spine><itemref idref="c1"/><itemref idref="c2"/></spine></package>',
     ],
-    ['OEBPS/c1.xhtml', chapter(1, '<script>parent.document.title = "pwned"</script>')],
-    ['OEBPS/c2.xhtml', chapter(2)],
+    ['OEBPS/c1.xhtml', chapter(1, link ? '<p><a id="go" href="c2.xhtml#n">跳到注释</a></p>' : '<script>parent.document.title = "pwned"</script>')],
+    ['OEBPS/c2.xhtml', chapter(2, link ? '<h2 id="n">注释</h2>' : '')],
   ])
 }
 
@@ -589,6 +589,19 @@ test('comics open in the lightbox, read right to left and reopen at the last pag
   await page.keyboard.press('Escape')
   await row(page, 'vol 2.cbr').locator('button.name').click()
   await expect(page.getByRole('dialog', { name: 'vol 2.cbr' })).toContainText(t.noPreview)
+})
+
+test('a link inside a book jumps to its target in the same book', async ({ page, server }) => {
+  writeFileSync(join(server.vol, 'docs', 'notes.epub'), epub(true))
+  await login(page)
+  await row(page, 'docs').locator('button.name').click()
+  await row(page, 'notes.epub').locator('button.name').click()
+  const spot = () => page.evaluate(() => localStorage.getItem('pos:/raw/v/docs/notes.epub'))
+  await expect.poll(spot).toBe('[0,0]')
+  const section = () => page.frames().find((f) => f.url().startsWith('blob:') && f.parentFrame()?.url().includes('/reader'))!
+  await expect.poll(() => section()?.locator('#go').count() ?? 0).toBe(1)
+  await section().locator('#go').click()
+  await expect.poll(spot).toMatch(/^\[1,/)
 })
 
 test('EPUB opens in the reader, turns pages and reopens where it stopped', async ({ page, server }) => {
@@ -3745,6 +3758,10 @@ test('the app installs as a PWA whose service worker caches only the shell', asy
   expect(cached).toContain('/')
   expect(cached.some((p) => p.startsWith('/assets/'))).toBe(true)
   expect(cached.filter((p) => p !== '/' && !p.startsWith('/assets/'))).toEqual([])
+  await page.evaluate(async () => (await caches.open('shell')).put('/assets/marker.js', new Response('1')))
+  await page.reload()
+  await expect(row(page, 'readme.txt')).toBeVisible()
+  expect(await page.evaluate(async () => !!(await (await caches.open('shell')).match('/assets/marker.js')))).toBe(true)
   await page.goto('/reader#vol=v&p=missing.epub')
   const shell = await page.evaluate(async () => (await (await caches.open('shell')).match('/'))?.text())
   expect(shell).toMatch(/\/assets\/app-/)
