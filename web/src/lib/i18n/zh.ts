@@ -2,7 +2,7 @@ const wait = (s: number) => (s < 60 ? `${s} 秒` : `${Math.ceil(s / 60)} 分钟`
 
 type Expiry = [seconds: number, label: string]
 type ActivityKind = '' | 'download' | 'upload' | 'login' | 'share' | 'token'
-type EventKind = 'download' | 'upload' | 'login' | 'login_failed' | 'share_create' | 'share_edit' | 'share_delete' | 'token_create' | 'token_revoke'
+type EventKind = 'download' | 'upload' | 'login' | 'login_failed' | 'password' | 'share_create' | 'share_edit' | 'share_delete' | 'token_create' | 'token_revoke'
 type Status = 400 | 401 | 403 | 404 | 409 | 410 | 413 | 429 | 507
 
 const zh = {
@@ -387,12 +387,21 @@ const zh = {
     upload: (n: string) => `收到文件“${n}”`,
     login: () => '登录成功',
     login_failed: () => '登录失败',
+    password: () => '修改了密码',
     share_create: (n: string) => `新建分享 ${n}`,
     share_edit: (n: string) => `修改分享 ${n}`,
     share_delete: (n: string) => `删除分享 ${n}`,
     token_create: (n: string) => `新建应用密码“${n}”`,
     token_revoke: (n: string) => `吊销应用密码“${n}”`,
   } satisfies Record<EventKind, (name: string) => string>,
+  passwordHint: '修改登录密码。修改后，其他设备会退出登录，应用密码不受影响。',
+  currentPassword: '当前密码',
+  confirmPassword: '再输一次新密码',
+  passwordRule: '至少 8 个字符',
+  passwordMismatch: '两次输入的新密码不一致',
+  changePassword: '修改密码',
+  passwordChanged: '密码已修改，其他设备已退出登录',
+  wrongCurrentPassword: '当前密码不对',
   sessions: '登录设备',
   sessionsHint: '正在登录这个账号的浏览器。不认识的设备可以直接退出。',
   thisDevice: '本机',

@@ -12,7 +12,8 @@
   import CopyButton from '../components/CopyButton.svelte'
   import ConfirmDialog from '../components/ConfirmDialog.svelte'
   import NameDialog from '../components/NameDialog.svelte'
-  import { api, session, type Passkey, type Session, type Token } from '../lib/api'
+  import { api, session, HttpError, type Passkey, type Session, type Token } from '../lib/api'
+  import { load as stored } from '../lib/storage'
   import { addPasskey, deviceName, passkeyError, validPasskeyName } from '../lib/passkey'
   import { date, ago, device } from '../lib/format'
   import { t, langPref, setLang, type LangPref } from '../lib/i18n'
@@ -29,6 +30,28 @@
   let error = $state('')
   let busy = $state(false)
   let revoking = $state<Token | null>(null)
+  let pw = $state({ current: '', next: '', again: '' })
+  let pwError = $state('')
+  let pwBusy = $state(false)
+  const user = stored('user') ?? ''
+  const mismatch = $derived(!!pw.again && pw.again !== pw.next)
+
+  async function changePassword(e: SubmitEvent) {
+    e.preventDefault()
+    if (mismatch || [...pw.next].length < 8) return
+    pwBusy = true
+    pwError = ''
+    try {
+      await api.changePassword(pw.current, pw.next)
+      pw = { current: '', next: '', again: '' }
+      toast(t.passwordChanged)
+      loadSessions()
+    } catch (err) {
+      pwError = err instanceof HttpError && err.status === 403 ? t.wrongCurrentPassword : (err as Error).message
+    }
+    pwBusy = false
+  }
+
   let sessions = $state<Session[] | null>(null)
   let sessionsError = $state('')
   let signingOut = $state<Session | 'others' | null>(null)
@@ -46,6 +69,7 @@
   const sections = $derived([
     ['appearance', t.appearance],
     ['connect', t.connect],
+    ['password', t.password],
     ['sessions', t.sessions],
     ...(passkeysOn ? [['passkeys', t.passkeys]] : []),
     ['tokens', t.appPasswords],
@@ -154,6 +178,32 @@
       </div>
     </section>
 
+    <section class="card-section" id="password" aria-labelledby="password-title">
+      {@render head('password', t.password, t.passwordHint)}
+      <form class="pw-form" onsubmit={changePassword}>
+        <input type="text" autocomplete="username" value={user} hidden readonly />
+        <label class="field">
+          <span>{t.currentPassword}</span>
+          <input type="password" autocomplete="current-password" bind:value={pw.current} required oninput={() => (pwError = '')} />
+        </label>
+        <div class="field">
+          <label class="field">
+            <span>{t.newPassword}</span>
+            <input type="password" autocomplete="new-password" minlength="8" maxlength="72" bind:value={pw.next} required aria-describedby="pw-rule" />
+          </label>
+          <small class="hint" id="pw-rule">{t.passwordRule}</small>
+        </div>
+        <div class="field">
+          <label class="field">
+            <span>{t.confirmPassword}</span>
+            <input type="password" autocomplete="new-password" bind:value={pw.again} required aria-invalid={mismatch} aria-describedby={mismatch ? 'pw-mismatch' : undefined} />
+          </label>
+          {#if mismatch}<small class="error" id="pw-mismatch">{t.passwordMismatch}</small>{/if}
+        </div>
+        {#if pwError}<p class="error" role="alert">{pwError}</p>{/if}
+        <div><button class="primary" class:busy={pwBusy} disabled={pwBusy || mismatch || !pw.current || [...pw.next].length < 8 || pw.again !== pw.next}>{t.changePassword}</button></div>
+      </form>
+    </section>
     <section class="card-section" id="sessions" aria-labelledby="sessions-title">
       {@render head('sessions', t.sessions, t.sessionsHint)}
       <RowList items={sessions} error={sessionsError} onretry={loadSessions} key={(s) => s.id} label={t.sessions}>

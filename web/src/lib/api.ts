@@ -234,6 +234,7 @@ export const api = {
   sessions: () => req<{ sessions: Session[] }>('GET', '/api/sessions'),
   delSession: (id: number) => req<void>('DELETE', `/api/sessions/${id}`),
   revokeOtherSessions: () => req<void>('POST', '/api/sessions/revoke-others'),
+  changePassword: (current: string, next: string) => req<void>('POST', '/api/password', { current, next }),
   passkeysEnabled: () => req<{ enabled: boolean }>('GET', '/api/passkeys/enabled'),
   passkeys: () => req<{ passkeys: Passkey[] }>('GET', '/api/passkeys'),
   passkeyRegisterBegin: () => req<Begun<PublicKeyCredentialCreationOptionsJSON>>('POST', '/api/passkeys/register/begin'),

@@ -21,6 +21,7 @@ const (
 	EventUpload      = "upload"
 	EventLogin       = "login"
 	EventLoginFailed = "login_failed"
+	EventPassword    = "password"
 	EventShareCreate = "share_create"
 	EventShareEdit   = "share_edit"
 	EventShareDelete = "share_delete"

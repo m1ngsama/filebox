@@ -98,6 +98,7 @@ func (a *API) Register(mux *http.ServeMux) {
 	h("GET /api/sessions", a.sessions)
 	h("DELETE /api/sessions/{id}", a.sessionDel)
 	h("POST /api/sessions/revoke-others", a.sessionsRevokeOthers)
+	h("POST /api/password", a.password)
 	h("GET /api/activity", a.activity)
 	mux.HandleFunc("/api/", func(w http.ResponseWriter, r *http.Request) { httpx.Fail(w, 404, "not found") })
 }
@@ -593,6 +594,29 @@ func (a *API) sessionDel(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(204)
 }
 
+func (a *API) password(w http.ResponseWriter, r *http.Request) {
+	var in struct{ Current, Next string }
+	if err := httpx.Read(r, &in); err != nil || len(in.Next) > 72 {
+		httpx.Fail(w, 400, "bad request")
+		return
+	}
+	if utf8.RuneCountInString(in.Next) < 8 {
+		httpx.Fail(w, 400, "too short")
+		return
+	}
+	p, _ := auth.From(r.Context())
+	switch err := a.Auth.ChangePassword(p.UserID, p.TokenID, in.Current, in.Next, auth.ClientIP(r)); {
+	case errors.Is(err, auth.ErrRateLimited):
+		auth.Refuse(w, err)
+	case errors.Is(err, auth.ErrWrongPassword):
+		httpx.Fail(w, 403, "wrong password")
+	case err != nil:
+		httpx.Error(w, err)
+	default:
+		w.WriteHeader(204)
+	}
+}
+
 func (a *API) sessionsRevokeOthers(w http.ResponseWriter, r *http.Request) {
 	p, _ := auth.From(r.Context())
 	if _, err := a.DB.DeleteOtherSessions(p.UserID, p.TokenID); err != nil {
@@ -604,7 +628,7 @@ func (a *API) sessionsRevokeOthers(w http.ResponseWriter, r *http.Request) {
 
 var activityKinds = map[string][]string{
 	db.EventDownload: {db.EventDownload}, db.EventUpload: {db.EventUpload},
-	"login": {db.EventLogin, db.EventLoginFailed},
+	"login": {db.EventLogin, db.EventLoginFailed, db.EventPassword},
 	"share": {db.EventShareCreate, db.EventShareEdit, db.EventShareDelete},
 	"token": {db.EventTokenCreate, db.EventTokenRevoke},
 }

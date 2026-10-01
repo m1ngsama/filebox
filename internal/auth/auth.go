@@ -133,6 +133,34 @@ func (a *Auth) LoginWith(ip, ua string, verify func() (userID int64, ok bool)) (
 
 func (a *Auth) Logout(tok string) error { return a.DB.DeleteTokenByHash(Hash(tok)) }
 
+var ErrWrongPassword = errors.New("wrong password")
+
+// ChangePassword checks the current password under the login rate limit, so a borrowed unlocked browser cannot
+// guess it faster than the sign-in page allows, then signs out every other session.
+func (a *Auth) ChangePassword(userID, keep int64, current, next, ip string) error {
+	now := a.Now()
+	if err := a.lim.check(ip, now); err != nil {
+		return err
+	}
+	u, err := a.DB.UserByID(userID)
+	if err != nil || !CheckPassword(u.PasswordHash, current) {
+		a.lim.fail(ip, now)
+		return ErrWrongPassword
+	}
+	h, err := HashPassword(next)
+	if err != nil {
+		return err
+	}
+	if _, err := a.DB.SetPassword(u.Name, h); err != nil {
+		return err
+	}
+	if _, err := a.DB.DeleteOtherSessions(userID, keep); err != nil {
+		return err
+	}
+	a.DB.Log(db.Event{At: now.Unix(), UserID: userID, Kind: db.EventPassword, Visitor: a.DB.Visitor(ip, now.Unix())})
+	return nil
+}
+
 func (a *Auth) NewAppToken(userID int64, label string, readOnly bool) (string, error) {
 	tok := "fb_" + strings.ToLower(base32.StdEncoding.WithPadding(base32.NoPadding).EncodeToString(random(32)))
 	scope := ""
