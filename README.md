@@ -76,3 +76,7 @@ fbput() { # fbput FILE VOLUME [DIR]
 ```
 
 `curl -T -` streams the PATCH body chunked (no `Content-Length`); tusd reads the request body until EOF regardless, so this needs no special handling.
+
+## License
+
+[AGPL-3.0-or-later](LICENSE). The vendored [foliate-js](web/src/vendor/foliate/LICENSE) is MIT.
