@@ -282,8 +282,12 @@
     }
   }
   :global(.pswp__top-bar) {
+    height: calc(72px + env(safe-area-inset-top));
     padding-top: env(safe-area-inset-top);
+    padding-bottom: 12px;
     align-items: center;
+    background: linear-gradient(rgb(0 0 0 / 0.5), rgb(0 0 0 / 0.18) 60%, transparent);
+    text-shadow: 0 1px 2px rgb(0 0 0 / 0.4);
   }
   :global(.fb-name) {
     order: -1;
@@ -349,9 +353,13 @@
     width: min(340px, 100%);
     padding: var(--space-3) var(--space-5) var(--space-5);
     overflow: auto;
-    background: var(--panel);
-    color: var(--fg);
-    box-shadow: var(--shadow);
+    background: rgb(22 24 28);
+    color: var(--viewer-fg);
+    border-left: 1px solid rgb(255 255 255 / 0.08);
+    animation: appear var(--dur-2) var(--ease-out);
+  }
+  .exif :global(.icon-btn) {
+    color: var(--viewer-icon);
   }
   .exif header {
     display: flex;
@@ -370,7 +378,7 @@
     margin: 0;
   }
   .exif dt {
-    color: var(--muted);
+    color: rgb(255 255 255 / 0.55);
   }
   .exif dd {
     margin: 0;
