@@ -50,6 +50,8 @@
     nested,
     dnd,
     meta,
+    title,
+    collapsed = $bindable(false),
   }: {
     entries: Entry[]
     grid: boolean
@@ -77,6 +79,8 @@
     expanded?: (e: Entry) => boolean | undefined
     nested?: (e: Entry) => boolean
     dnd?: { carry: (e: Entry) => Carried; target: (e: Entry) => Target }
+    title?: string
+    collapsed?: boolean
   } = $props()
 
   const draggable = $derived(!!dnd && !narrow.current)
@@ -85,6 +89,9 @@
 
   const broken = new SvelteMap<string, number>()
   let scroller = $state<HTMLDivElement>()
+  let titleH = $state(0)
+  const large = $derived(!!title && narrow.current)
+  const off = $derived(large ? titleH : 0)
   let width = $state(0)
   let ctx = $state.raw<Entry | null>(null)
   let sheet = $state.raw<Entry | null>(null)
@@ -158,8 +165,9 @@
         : items ? (i: number) => (typeof items[i] === 'string' ? `\0${items[i]}` : id(list[items[i] as number]))
         : (i: number) => (list[i] ? id(list[i]) : i),
     }
+    const margin = off
     untrack(() => {
-      $v.setOptions(opts)
+      $v.setOptions({ ...opts, scrollMargin: margin })
       $v.measure()
     })
   })
@@ -485,7 +493,9 @@
       <div {...props} class="scroller" data-seeking={seeking ? '' : undefined} class:selecting={!!selected?.size} bind:this={scroller} bind:clientWidth={width} oncontextmenucapture={() => (ctx = null)} onscroll={() => {
           release()
           top = ($v.range?.startIndex ?? 0) * cols
+          collapsed = off > 0 && scroller!.scrollTop > off - 12
         }} onfocusin={() => (inside = true)} onfocusout={(ev) => (inside = !ev.relatedTarget || !!scroller?.contains(ev.relatedTarget as Node))}>
+        {#if large}<div class="large-title" aria-hidden="true" bind:offsetHeight={titleH}>{title}</div>{/if}
         {#if !entries.length && loading}
           <div class="skeleton" class:grid role="status" aria-label={t.loading}>
             {#each { length: grid ? 12 : 10 }, i (i)}
@@ -496,7 +506,7 @@
         <div class="spacer" role="grid" aria-label={t.fileList} aria-multiselectable={selected ? true : undefined} aria-busy={busy || undefined} aria-rowcount={rows} aria-colcount={grid ? cols : undefined} style:height={`${$v.getTotalSize()}px`}>
           {#each $v.getVirtualItems().filter((r) => r.index < rows) as r (r.key)}
             {#if grid}
-              <div class="cards" class:media class:shelf class:tiles role="row" aria-rowindex={r.index + 1} style:transform={`translateY(${r.start}px)`} style:height={`${rowH}px`} style:grid-template-columns={`repeat(${cols}, minmax(0, 1fr))`}>
+              <div class="cards" class:media class:shelf class:tiles role="row" aria-rowindex={r.index + 1} style:transform={`translateY(${r.start - off}px)`} style:height={`${rowH}px`} style:grid-template-columns={`repeat(${cols}, minmax(0, 1fr))`}>
                 {#each entries.slice(r.index * cols, r.index * cols + cols) as e, j (id(e))}
                   {@const s = src(e)}
                   {@const i = r.index * cols + j}
@@ -548,7 +558,7 @@
                 {/each}
               </div>
             {:else if typeof layout?.items[r.index] === 'string'}
-              <div class="group-head" role="row" aria-rowindex={r.index + 1} style:transform={`translateY(${r.start}px)`}>
+              <div class="group-head" role="row" aria-rowindex={r.index + 1} style:transform={`translateY(${r.start - off}px)`}>
                 <span role="columnheader">{layout?.items[r.index]}</span>
               </div>
             {:else}
@@ -565,7 +575,7 @@
                 ondragend={drop}
                 use:target={dropOn(e)}
                 class:sel={selected?.has(id(e))}
-                style:transform={`translateY(${r.start}px)`}
+                style:transform={`translateY(${r.start - off}px)`}
                 role="row"
                 aria-rowindex={r.index + 1}
                 aria-selected={selected ? selected.has(id(e)) : undefined}

@@ -81,6 +81,7 @@
 
   type Dialog = { kind: 'mkdir' } | { kind: 'rename'; e: Entry } | { kind: 'move'; names: string[] }
 
+  let collapsed = $state(false)
   let entries = $state.raw<Entry[]>([])
   let error = $state<{ status: number; message: string } | null>(null)
   let up = $state<string | null>(null)
@@ -786,7 +787,7 @@
       upload(e.dataTransfer?.files)
     }}
   >
-    <header class="bar" class:searching>
+    <header class="bar" class:searching class:expanded={!collapsed && !ranked && !error}>
       <NavToggle />
       {#if crumbs.length}
         {@const up = crumbs.length > 1 ? crumbs[crumbs.length - 2] : vol}
@@ -928,6 +929,8 @@
         loading={at !== here}
         busy={streaming}
         head={!error}
+        title={error ? undefined : crumbs.length ? crumbs[crumbs.length - 1] : vol}
+        bind:collapsed
       >
         {#snippet empty()}
           {#if query}

@@ -2764,6 +2764,19 @@ test.describe('on a phone', () => {
     await expect(row(page, 'x.txt')).toBeFocused()
   })
 
+  test('a folder opens under a large title that folds into the bar on scroll', async ({ page, server }) => {
+    for (let i = 0; i < 40; i++) writeFileSync(join(server.vol, 'docs', `n${i}.txt`), '')
+    await login(page)
+    await row(page, 'docs').locator('button.name').tap()
+    const big = page.locator('.large-title')
+    const small = page.locator('.bar .title')
+    await expect(big).toHaveText('docs')
+    await expect(small).toHaveCSS('opacity', '0')
+    await page.locator('.scroller').evaluate((s) => s.scrollTo(0, 400))
+    await expect(small).toHaveCSS('opacity', '1')
+    await expect(row(page, 'n20.txt')).toBeInViewport()
+  })
+
   test('a long text preview scrolls by touch', async ({ page, server }) => {
     writeFileSync(join(server.vol, 'docs', 'long.txt'), Array.from({ length: 400 }, (_, i) => `line ${i}`).join('\n'))
     await login(page)

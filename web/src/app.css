@@ -574,6 +574,11 @@ button.busy::before { content: ''; width: 14px; height: 14px; border: 2px solid 
   .up { display: inline-flex; }
   .search-open, .overflow { display: inline-grid; }
   .files .bar .title { position: static; width: auto; height: auto; margin: 0; clip-path: none; font-size: var(--text-lg); }
+  .files .bar { transition: border-color var(--dur-2) var(--ease-out); }
+  .files .bar .title { transition: opacity var(--dur-2) var(--ease-out); }
+  .files .bar.expanded { border-bottom-color: transparent; }
+  .files .bar.expanded .title { opacity: 0; }
+  .large-title { margin: 0; padding: var(--space-1) var(--space-4) var(--space-3); font-size: 30px; font-weight: 700; line-height: 1.15; letter-spacing: -0.02em; overflow-wrap: anywhere; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; }
   .bar.searching > :not(.find, .search-close) { display: none; }
   .bar.searching .find { display: flex; flex: 1; min-width: 0; }
   .bar.searching .filter { flex: 1; height: 40px; width: auto; }
