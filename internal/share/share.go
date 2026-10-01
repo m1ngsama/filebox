@@ -3,6 +3,8 @@ package share
 import (
 	"crypto/rand"
 	"encoding/base64"
+	"fmt"
+	"html"
 	"io/fs"
 	"net/http"
 	"net/url"
@@ -543,4 +545,52 @@ func (s *Service) scoped(fn func(opened) handler) http.HandlerFunc {
 		defer done()
 		fn(o)(w, r, root, rel)
 	}
+}
+
+// Head is the share page's title and preview card, which chat apps read before anyone opens the link.
+// A locked or dead share reveals nothing, and no share page is meant for search engines.
+func (s *Service) Head(r *http.Request, origin string) string {
+	const robots = `<meta name="robots" content="noindex, nofollow">`
+	sh, err := s.DB.ShareByToken(r.PathValue("token"))
+	if err != nil || (sh.ExpiresAt != 0 && sh.ExpiresAt <= time.Now().Unix()) || sh.PasswordHash != "" {
+		return `<title>filebox</title>` + robots
+	}
+	v, ok := s.Vols.Get(sh.Vol)
+	if !ok {
+		return `<title>filebox</title>` + robots
+	}
+	fi, err := v.Root.Stat(sh.Path)
+	if err != nil {
+		return `<title>filebox</title>` + robots
+	}
+	o := opened{sh, v, fi.IsDir()}
+	name := o.name()
+	about := sh.Note
+	if about == "" && !o.dir {
+		about = human(fi.Size())
+	}
+	tags := []string{"<title>" + html.EscapeString(name) + "</title>", robots,
+		`<meta property="og:site_name" content="filebox">`,
+		`<meta property="og:title" content="` + html.EscapeString(name) + `">`}
+	if about != "" {
+		tags = append(tags, `<meta property="og:description" content="`+html.EscapeString(about)+`">`)
+	}
+	if origin != "" && (o.dir || thumb.Kind(name) != "") {
+		tags = append(tags, `<meta property="og:image" content="`+html.EscapeString(origin+"/s/"+url.PathEscape(sh.Token)+"/thumb/")+`">`,
+			`<meta name="twitter:card" content="summary_large_image">`)
+	}
+	return strings.Join(tags, "")
+}
+
+func human(n int64) string {
+	units := []string{"B", "KB", "MB", "GB", "TB"}
+	f, i := float64(n), 0
+	for f >= 1024 && i < len(units)-1 {
+		f /= 1024
+		i++
+	}
+	if i == 0 {
+		return fmt.Sprintf("%d B", n)
+	}
+	return fmt.Sprintf("%.1f %s", f, units[i])
 }

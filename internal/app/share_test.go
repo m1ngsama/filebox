@@ -49,7 +49,7 @@ func TestShareRead(t *testing.T) {
 		t.Fatalf("upload on read share %d", c)
 	}
 	for _, u := range []string{"/s/" + tok, "/s/" + tok + "/"} {
-		if c, b, _ := anon(f, "GET", u, ""); c != 200 || b != "<!doctype html>share" {
+		if c, b, _ := anon(f, "GET", u, ""); c != 200 || !strings.HasSuffix(b, "share") || !strings.Contains(b, `<meta property="og:title" content="pub">`) {
 			t.Fatalf("share page %s %d %q", u, c, b)
 		}
 	}
@@ -605,5 +605,21 @@ func TestShareUploadRecheckedAtFinish(t *testing.T) {
 	f.do("DELETE", "/api/shares/"+id, nil)
 	if allow("share:"+id, 1) == nil {
 		t.Fatal("finish allowed after the share was deleted")
+	}
+}
+
+func TestSharePreviewCard(t *testing.T) {
+	f := newTestApp(t)
+	f.write(t, "a <b>.jpg", "x")
+	open := mkShare(t, f, `{"vol":"v","path":"a <b>.jpg","mode":"read","note":"for \"you\""}`)
+	_, b, _ := anon(f, "GET", "/s/"+open, "")
+	for _, want := range []string{"<title>a &lt;b&gt;.jpg</title>", `content="noindex, nofollow"`, `og:description" content="for &#34;you&#34;"`, `og:image" content="http://example.com/s/` + open + `/thumb/"`} {
+		if !strings.Contains(b, want) {
+			t.Fatalf("missing %s in %s", want, b)
+		}
+	}
+	locked := mkShare(t, f, `{"vol":"v","path":"a <b>.jpg","mode":"read","password":"pw"}`)
+	if _, b, _ := anon(f, "GET", "/s/"+locked, ""); strings.Contains(b, "a &lt;b&gt;") || strings.Contains(b, "og:") || !strings.Contains(b, "noindex") {
+		t.Fatalf("locked share leaks: %s", b)
 	}
 }

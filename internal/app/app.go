@@ -1,6 +1,7 @@
 package app
 
 import (
+	"bytes"
 	"cmp"
 	"crypto/sha256"
 	"encoding/base64"
@@ -67,13 +68,15 @@ func (a *App) Handler() http.Handler {
 	mux.Handle("/dav", d)
 	mux.Handle("/dav/", d)
 	mux.Handle("/upload/", a.Uploads.Handler("/upload/", a.userUploads()))
-	(&share.Service{DB: a.DB, Vols: a.Vols, Auth: a.Auth, Uploads: a.Uploads, Thumbs: a.Thumbs, Stream: a.Stream}).Register(mux)
+	shares := &share.Service{DB: a.DB, Vols: a.Vols, Auth: a.Auth, Uploads: a.Uploads, Thumbs: a.Thumbs, Stream: a.Stream}
+	shares.Register(mux)
 	mux.HandleFunc("POST /share-target", func(w http.ResponseWriter, r *http.Request) {
 		http.Redirect(w, r, "/?share-target", http.StatusSeeOther)
 	})
 	mux.Handle("GET /reader", a.spa("reader.html"))
-	mux.Handle("GET /s/{token}", a.spa("share.html"))
-	mux.Handle("GET /s/{token}/{$}", a.spa("share.html"))
+	page := a.spa("share.html", func(r *http.Request) string { return shares.Head(r, a.origin(r)) })
+	mux.Handle("GET /s/{token}", page)
+	mux.Handle("GET /s/{token}/{$}", page)
 	mux.Handle("/", a.spa("index.html"))
 	return common(http.NewCrossOriginProtection().Handler(mux))
 }
@@ -262,7 +265,22 @@ func readerSources(srcs []string, paths ...string) string {
 	return strings.Join(out, " ")
 }
 
-func (a *App) spa(page string) http.Handler {
+// origin is the scheme and host links in a share's preview card point at.
+func (a *App) origin(r *http.Request) string {
+	if srcs := a.sources(r); len(srcs) > 0 {
+		if strings.Contains(srcs[0], "://") {
+			return srcs[0]
+		}
+		scheme := "http://"
+		if auth.IsHTTPS(r) {
+			scheme = "https://"
+		}
+		return scheme + srcs[0]
+	}
+	return ""
+}
+
+func (a *App) spa(page string, head ...func(*http.Request) string) http.Handler {
 	files := http.FileServerFS(a.Web)
 	index, indexErr := fs.ReadFile(a.Web, page)
 	csp := spaPolicy(page, index)
@@ -309,6 +327,10 @@ func (a *App) spa(page string) http.Handler {
 				"{api}", readerSources(srcs, "/api/zip-entries", "/api/zip-entry", "/s/")).Replace(policy)
 		}
 		w.Header().Set("Content-Security-Policy", policy)
+		if len(head) > 0 {
+			w.Write(bytes.Replace(index, []byte("<title>filebox</title>"), []byte(head[0](r)), 1))
+			return
+		}
 		w.Write(index)
 	})
 }

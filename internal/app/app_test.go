@@ -52,7 +52,7 @@ func newTestApp(t *testing.T) *fixture {
 	bearer, _ := a.NewAppToken(uid, "test", false)
 	web := fstest.MapFS{
 		"index.html":           {Data: []byte("<!doctype html>app")},
-		"share.html":           {Data: []byte("<!doctype html>share")},
+		"share.html":           {Data: []byte("<!doctype html><title>filebox</title>share")},
 		"reader.html":          {Data: []byte("<!doctype html><script>var t=1</script>reader")},
 		"sw.js":                {Data: []byte("self")},
 		"manifest.webmanifest": {Data: []byte("{}")},
