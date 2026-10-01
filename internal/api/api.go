@@ -2,6 +2,7 @@ package api
 
 import (
 	"errors"
+	"fmt"
 	"io/fs"
 	"log/slog"
 	"net/http"
@@ -81,6 +82,7 @@ func (a *API) Register(mux *http.ServeMux) {
 	h("PUT /api/file", a.save)
 	h("POST /api/mkdir", a.mkdir)
 	h("POST /api/touch", a.touch)
+	h("POST /api/unzip", a.unzip)
 	h("POST /api/mv", a.mv)
 	h("POST /api/cp", a.cp)
 	h("POST /api/rm", a.rm)
@@ -259,6 +261,32 @@ func (a *API) touch(w http.ResponseWriter, r *http.Request) {
 		e = Entry{Name: path.Base(rel), Mtime: time.Now().UnixMilli()}
 	}
 	httpx.JSON(w, 201, e)
+}
+
+// unzip unpacks an archive into a new folder beside it, named after the archive.
+func (a *API) unzip(w http.ResponseWriter, r *http.Request) {
+	var in Loc
+	if err := httpx.Read(r, &in); err != nil {
+		httpx.Fail(w, 400, "bad request")
+		return
+	}
+	v, rel, err := a.resolve(in)
+	if err == nil && !strings.EqualFold(path.Ext(rel), ".zip") {
+		err = vol.ErrNotFile
+	}
+	if err != nil {
+		httpx.Error(w, err)
+		return
+	}
+	dir, base := path.Dir(rel), strings.TrimSuffix(path.Base(rel), path.Ext(rel))
+	name := base
+	for i := 2; ; i++ {
+		if _, err := v.Root.Lstat(path.Join(dir, name)); errors.Is(err, fs.ErrNotExist) {
+			break
+		}
+		name = fmt.Sprintf("%s %d", base, i)
+	}
+	httpx.JSON(w, 202, map[string]string{"job": a.Jobs.Unzip(v, rel, path.Join(dir, name)), "name": name})
 }
 
 type transfer struct {

@@ -34,6 +34,7 @@
   import FolderUp from '@lucide/svelte/icons/folder-up'
   import Copy from '@lucide/svelte/icons/copy'
   import ClipboardPaste from '@lucide/svelte/icons/clipboard-paste'
+  import PackageOpen from '@lucide/svelte/icons/package-open'
   import FilePlus from '@lucide/svelte/icons/file-plus'
   import FolderPlus from '@lucide/svelte/icons/folder-plus'
   import FolderOpen from '@lucide/svelte/icons/folder-open'
@@ -509,12 +510,13 @@
     touch: { id: 'touch', label: t.newTextFile, icon: FilePlus },
     paste: { id: 'paste', label: t.paste, icon: ClipboardPaste },
     duplicate: { id: 'duplicate', label: t.duplicate, icon: Copy },
+    unzip: { id: 'unzip', label: t.unzip, icon: PackageOpen },
     upload: { id: 'upload', label: t.upload, icon: Upload },
   } satisfies Record<string, Action>
 
   const actions = (e: Entry | null): Action[] =>
     !e ? (error ? [] : [act.mkdir, act.touch, act.upload, ...(board.items ? [act.paste] : [])])
-    : [...(narrow.current ? [act.select] : []), act.open, act.download, act.rename, act.duplicate, act.move, act.share, starred(vol, join(e.name)) ? act.unstar : act.star, act.details, act.remove]
+    : [...(narrow.current ? [act.select] : []), act.open, act.download, act.rename, act.duplicate, ...(!e.dir && /\.zip$/i.test(e.name) ? [act.unzip] : []), act.move, act.share, starred(vol, join(e.name)) ? act.unstar : act.star, act.details, act.remove]
 
   function onaction(id: string, e: Entry | null) {
     if (id === 'mkdir') dialog = { kind: 'mkdir' }
@@ -528,6 +530,7 @@
     else if (id === 'rename') dialog = { kind: 'rename', e }
     else if (id === 'move') dialog = { kind: 'move', names: [e.name] }
     else if (id === 'remove') remove([e.name])
+    else if (id === 'unzip') unzip(e)
     else if (id === 'duplicate') duplicate(selected.has(e.name) ? [...selected] : [e.name])
     else if (id === 'star' || id === 'unstar') toggleStar([e.name], id === 'star')
     else if (id === 'share') quickShare(e)
@@ -666,6 +669,25 @@
     if (c.vol === vol && c.dir === path) return void (move || duplicate(c.names))
     if (move) board.items = null
     await dropInto({ vol, path }, c, !move)
+  }
+
+  async function unzip(e: Entry) {
+    const v = vol
+    const at = path
+    const busy = toast(t.unzipping(e.name), { kind: 'info', ms: 2 ** 31 - 1 })
+    try {
+      const r = await api.unzip(v, join(e.name))
+      await api.waitJob(r.job)
+      retract(busy)
+      if (v === vol && at === path) {
+        await refresh()
+        pick(r.name)
+      }
+      toast(t.unzipped(r.name), { actions: [{ label: t.open, run: () => navigate(filesURL(v, child(at, r.name))) }] })
+    } catch (err) {
+      retract(busy)
+      fail(err)
+    }
   }
 
   async function note(n: string) {

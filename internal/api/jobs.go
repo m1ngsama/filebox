@@ -68,6 +68,10 @@ func Transfer(ix *index.Index, src, dst *vol.Volume, srel, drel string, move boo
 }
 
 func (j *Jobs) Start(src, dst *vol.Volume, srel, drel string, move bool) string {
+	return j.launch(func(id string, x *job) error { return run(j.ix, src, dst, srel, drel, id, move, x) })
+}
+
+func (j *Jobs) launch(fn func(id string, x *job) error) string {
 	id := newID()
 	x := &job{state: "running"}
 	j.mu.Lock()
@@ -83,7 +87,7 @@ func (j *Jobs) Start(src, dst *vol.Volume, srel, drel string, move bool) string 
 	j.mu.Unlock()
 
 	go func() {
-		err := run(j.ix, src, dst, srel, drel, id, move, x)
+		err := fn(id, x)
 		x.mu.Lock()
 		x.state, x.finished = "done", time.Now()
 		if err != nil {
@@ -103,6 +107,8 @@ func errorCode(err error) string {
 		return "notfound"
 	case httpx.NoSpace(err):
 		return "nospace"
+	case errors.Is(err, ErrUnsafeArchive):
+		return "unsafe"
 	}
 	return "internal"
 }

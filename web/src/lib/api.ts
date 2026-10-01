@@ -179,6 +179,7 @@ export const api = {
   recent: (signal?: AbortSignal) => req<{ entries: (Omit<RecentFile, 'dir'> & { run?: number })[]; runs: Run[]; scanning: boolean }>('GET', `/api/recent?tz=${new Date().getTimezoneOffset()}`, undefined, signal),
   mkdir: (vol: string, path: string, signal?: AbortSignal) => req<Entry>('POST', '/api/mkdir', { vol, path }, signal),
   touch: (vol: string, path: string) => req<Entry>('POST', '/api/touch', { vol, path }),
+  unzip: (vol: string, path: string) => req<{ job: string; name: string }>('POST', '/api/unzip', { vol, path }),
   mv: (src: Loc, dst: Loc, signal?: AbortSignal) => req<{ job: string } | undefined>('POST', '/api/mv', { src, dst }, signal),
   cp: (src: Loc, dst: Loc) => req<{ job: string }>('POST', '/api/cp', { src, dst }),
   rm: (vol: string, paths: string[], signal?: AbortSignal) =>
@@ -216,7 +217,7 @@ export const api = {
     for (;;) {
       const s = await req<JobStatus>('GET', `/api/jobs/${id}`)
       onprogress?.(s)
-      if (s.state === 'error') throw new Error(errorText(jobCodes[s.code ?? ''] ?? 500))
+      if (s.state === 'error') throw new Error(s.code === 'unsafe' ? t.unsafeArchive : errorText(jobCodes[s.code ?? ''] ?? 500))
       if (s.state === 'done') return
       await new Promise((r) => setTimeout(r, 1000))
     }

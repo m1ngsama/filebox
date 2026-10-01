@@ -373,6 +373,21 @@ test('the keyboard duplicates, copies and moves files like Finder', async ({ pag
   expect(existsSync(join(server.vol, 'docs', 'plan.txt'))).toBe(false)
 })
 
+test('a zip extracts into a folder beside it and opens there', async ({ page, server }) => {
+  writeFileSync(join(server.vol, 'docs', 'photos.zip'), zip([['trip/a.txt', 'a'], ['trip/b.txt', 'b'], ['../evil.txt', 'x']]))
+  await login(page)
+  await row(page, 'docs').locator('button.name').click()
+  await row(page, 'photos.zip').locator('button.more').click()
+  await page.getByRole('menuitem', { name: t.unzip }).click()
+  await expect(page.locator('.toast', { hasText: t.unzipped('photos') })).toBeVisible()
+  await expect(page.locator('[data-name="photos"]')).toBeVisible()
+  expect(readFileSync(join(server.vol, 'docs', 'photos', 'trip', 'b.txt'), 'utf8')).toBe('b')
+  expect(existsSync(join(server.vol, 'evil.txt'))).toBe(false)
+  await page.locator('.toast', { hasText: t.unzipped('photos') }).getByRole('button', { name: t.open }).click()
+  await expect(page).toHaveURL(/\/files\/v\/docs\/photos\/$/)
+  await expect(row(page, 'trip')).toBeVisible()
+})
+
 test('a new text file opens straight into the editor', async ({ page, server }) => {
   await login(page)
   await row(page, 'docs').locator('button.name').click()
