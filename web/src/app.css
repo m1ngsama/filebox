@@ -199,6 +199,7 @@ p.error::before { content: ''; flex: none; width: 1em; height: 1lh; background: 
 @keyframes pulse { to { opacity: 0.45; } }
 .row { position: absolute; top: 0; left: 0; right: 0; height: 48px; padding: 0 var(--space-2); border-bottom: 1px solid var(--line); cursor: default; }
 .row.sel, .card.sel { background: var(--sel); }
+.row.nested > .name-cell { padding-left: var(--space-4); }
 .row.dim > :not(:nth-child(4)) { opacity: 0.55; }
 .row:focus-visible, .card:focus-visible { outline-offset: -2px; }
 .thumb { display: grid; place-items: center; width: 32px; height: 32px; }
