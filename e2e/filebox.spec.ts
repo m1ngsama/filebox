@@ -700,6 +700,30 @@ test('a song shows its lyrics in time, folds the lyrics file away and reads GBK 
   await expect(lyrics.locator('.line.on')).toHaveText('第三句')
 })
 
+test('a video pauses the music, takes the lock screen and hands it back when closed', async ({ page, server }) => {
+  try {
+    execFileSync('ffmpeg', ['-v', 'error', '-f', 'lavfi', '-i', 'sine=d=30', join(server.vol, 'docs', 'song.wav')])
+    execFileSync('ffmpeg', ['-v', 'error', '-f', 'lavfi', '-i', 'color=c=blue:s=64x48:d=3', '-c:v', 'libvpx', join(server.vol, 'docs', 'clip.webm')])
+  } catch {
+    test.skip(true, 'needs ffmpeg with libvpx')
+  }
+  await login(page)
+  await row(page, 'docs').locator('button.name').click()
+  await row(page, 'song.wav').locator('button.name').click()
+  await expect(page.getByRole('dialog', { name: 'song.wav' }).getByRole('button', { name: t.pause, exact: true })).toBeVisible()
+  await page.keyboard.press('Escape')
+  const mini = page.getByRole('region', { name: t.nowPlaying })
+  await expect(mini.getByRole('button', { name: t.pause, exact: true })).toBeVisible()
+  const title = () => page.evaluate(() => navigator.mediaSession.metadata?.title)
+  await expect.poll(title).toBe('song')
+  await row(page, 'clip.webm').locator('button.name').click()
+  await expect.poll(title).toBe('clip')
+  await expect(mini.getByRole('button', { name: t.play, exact: true })).toBeAttached()
+  await page.keyboard.press('Escape')
+  await expect(mini.getByRole('button', { name: t.play, exact: true })).toBeVisible()
+  await expect.poll(title).toBe('song')
+})
+
 test('videos pick up sibling subtitles and an unplayable one offers a download', async ({ page, server }) => {
   const clip = join(server.vol, 'docs/clip.webm')
   try {

@@ -3,6 +3,7 @@
   import { load, save } from '../lib/storage'
   import { t } from '../lib/i18n'
   import { toast } from '../lib/toast.svelte'
+  import { player } from '../lib/player.svelte'
   import type HlsType from 'hls.js'
 
   type Mode = 'direct' | '1080' | '720' | '480'
@@ -16,6 +17,8 @@
     spot,
     audio = $bindable(false),
     meta,
+    title,
+    onstep,
     onready,
     onfail,
   }: {
@@ -28,6 +31,8 @@
     spot: string
     audio?: boolean
     meta: () => Promise<{ width?: number; height?: number; duration?: number }>
+    title: string
+    onstep?: (d: number) => void
     onready: () => void
     onfail: () => void
   } = $props()
@@ -136,6 +141,30 @@
     play(pick === 'auto' ? mode : pick)
   }
 
+  // A playing video holds the lock screen and media keys, and gives them back to music when it goes.
+  function claim() {
+    player.pause()
+    const ms = navigator.mediaSession
+    if (!ms || !video) return
+    const v = video
+    const seek = (to: number) => (v.currentTime = Math.min(Math.max(0, to), v.duration || 0))
+    const handlers: [MediaSessionAction, MediaSessionActionHandler | null][] = [
+      ['play', () => v.play()],
+      ['pause', () => v.pause()],
+      ['seekbackward', (d) => seek(v.currentTime - (d.seekOffset ?? 10))],
+      ['seekforward', (d) => seek(v.currentTime + (d.seekOffset ?? 10))],
+      ['seekto', (d) => d.seekTime !== undefined && seek(d.seekTime)],
+      ['previoustrack', onstep ? () => onstep(-1) : null],
+      ['nexttrack', onstep ? () => onstep(1) : null],
+    ]
+    for (const [k, h] of handlers) {
+      try {
+        ms.setActionHandler(k, h)
+      } catch {}
+    }
+    if (typeof MediaMetadata !== 'undefined') ms.metadata = new MediaMetadata({ title, artwork: poster ? [{ src: new URL(poster, location.href).href }] : [] })
+  }
+
   onMount(() => {
     const watch = new PerformanceObserver(measure)
     watch.observe({ type: 'resource' })
@@ -145,6 +174,7 @@
       watch.disconnect()
       clearTimeout(seekWatch)
       engine?.destroy()
+      player.reclaim()
     }
   })
 </script>
@@ -159,6 +189,7 @@
     preload="metadata"
     class:audio-only={audio}
     onloadedmetadata={loaded}
+    onplay={claim}
     onplaying={() => {
       started = true
       clearTimeout(seekWatch)

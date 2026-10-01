@@ -48,7 +48,10 @@ class Player {
       this.now = a.currentTime
       if (Math.abs(a.currentTime - this.#saved) > 5) save(this.#spot(), String((this.#saved = Math.floor(a.currentTime))))
     })
-    a.addEventListener('play', () => (this.paused = false))
+    a.addEventListener('play', () => {
+      this.paused = false
+      this.reclaim()
+    })
     a.addEventListener('pause', () => {
       this.paused = true
       if (!a.ended && this.track) save(this.#spot(), String(Math.floor(a.currentTime)))
@@ -58,7 +61,18 @@ class Player {
       if (this.hasNext) this.go(this.i + 1, true)
     })
     a.addEventListener('error', () => this.onerror?.())
+    this.#el = a
+    this.reclaim()
+    return a
+  }
+
+  onerror?: () => void
+
+  // reclaim hands the lock screen and media keys back to music after something else, such as a video, held them.
+  reclaim() {
+    const a = this.#el
     const ms = navigator.mediaSession
+    if (!a || !ms) return
     const handlers: [MediaSessionAction, MediaSessionActionHandler][] = [
       ['play', () => a.play()],
       ['pause', () => a.pause()],
@@ -70,13 +84,16 @@ class Player {
     ]
     for (const [k, h] of handlers) {
       try {
-        ms?.setActionHandler(k, h)
+        ms.setActionHandler(k, h)
       } catch {}
     }
-    return (this.#el = a)
+    if (this.track) this.#session()
+    else ms.metadata = null
   }
 
-  onerror?: () => void
+  pause() {
+    this.#el?.pause()
+  }
 
   #spot() {
     return 'pos:' + (this.track?.src ?? '')

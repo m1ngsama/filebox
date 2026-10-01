@@ -253,6 +253,8 @@
           <VideoPlayer
             {src}
             size={entry.size}
+            title={stem(entry.name)}
+            onstep={list.length > 1 ? (d) => step(d) : undefined}
             hls={(q) => `${url(entry, 'stream')}&q=${q}`}
             poster={thumbable(entry.name) ? url(entry, 'thumb') : undefined}
             {tracks}
