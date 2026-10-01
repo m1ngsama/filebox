@@ -526,6 +526,8 @@ button.busy::before { content: ''; width: 14px; height: 14px; border: 2px solid 
   .viewer .icon-btn:hover, .toast .icon-btn:hover, .toast-action:hover:not(:disabled) { background: var(--viewer-hover); }
   .viewer .icon-btn:hover { color: var(--viewer-fg); }
   .toast .icon-btn:hover { color: inherit; opacity: 1; }
+  .scroller:not(.selecting) :is(.row > .check-cell > *, .row .more, .card .more), .list-head:not(.batch) > .hit { opacity: 0; transition: opacity var(--dur-1) var(--ease-out); }
+  .scroller:not(.selecting) :is(.row, .card):is(:hover, :focus-within, .sel) :is(.check-cell > *, .more), .list-head:is(:hover, :focus-within) > .hit { opacity: 1; }
 }
 @media (hover: none), (pointer: coarse) {
   button:not(.primary, .danger-fill):active:not(:disabled), a.button:not(.primary):active, .icon-btn:active, .nav a:active, .up:active, .crumbs a:active, .sub a:active, a.chip:active, .settings-nav a:active, .row:active:not(.sel), .card:active:not(.sel), .sheet-item:active { background: var(--hover); }
