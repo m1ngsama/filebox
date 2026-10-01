@@ -347,3 +347,27 @@ func TestSharesFollowRenamesAndGoWithTheirFiles(t *testing.T) {
 		t.Fatalf("shares %v, want %v", got, want)
 	}
 }
+
+func TestReconcileCatchesChangesMadeBehindIt(t *testing.T) {
+	e := setup(t)
+	os.MkdirAll(filepath.Join(e.dir, "in"), 0o755)
+	os.WriteFile(filepath.Join(e.dir, "in", "gone.txt"), []byte("x"), 0o644)
+	os.WriteFile(filepath.Join(e.dir, "in", "grows.txt"), []byte("x"), 0o644)
+	if err := e.x.Scan(e.vols); err != nil {
+		t.Fatal(err)
+	}
+	os.Remove(filepath.Join(e.dir, "in", "gone.txt"))
+	os.WriteFile(filepath.Join(e.dir, "in", "grows.txt"), []byte("xxxx"), 0o644)
+	os.WriteFile(filepath.Join(e.dir, "in", "new.txt"), []byte("n"), 0o644)
+	os.MkdirAll(filepath.Join(e.dir, "in", "sub"), 0o755)
+	os.WriteFile(filepath.Join(e.dir, "in", "sub", "deep.txt"), []byte("d"), 0o644)
+	v, _ := e.vols.Get("v")
+	e.x.reconcile(v, "in")
+	if got := e.paths(t); !slices.Equal(got, []string{"in", "in/grows.txt", "in/new.txt", "in/sub", "in/sub/deep.txt"}) {
+		t.Fatalf("rows %v", got)
+	}
+	var size int64
+	if err := e.x.db.QueryRow(`SELECT size FROM files WHERE vol = 'v' AND path = 'in/grows.txt'`).Scan(&size); err != nil || size != 4 {
+		t.Fatalf("size %d %v", size, err)
+	}
+}

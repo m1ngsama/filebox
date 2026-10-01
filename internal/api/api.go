@@ -166,6 +166,7 @@ func (a *API) ls(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	WriteList(w, r, v.Root, rel)
+	a.Index.Reconcile(v, rel)
 }
 
 func (a *API) stat(w http.ResponseWriter, r *http.Request) {
@@ -345,8 +346,15 @@ func (a *API) recent(w http.ResponseWriter, r *http.Request) {
 
 func (a *API) search(w http.ResponseWriter, r *http.Request) {
 	q := r.URL.Query()
-	in := index.Query{Text: strings.TrimSpace(q.Get("q")), Limit: 200}
+	in := index.Query{Text: strings.TrimSpace(q.Get("q")), Limit: 200, Kind: q.Get("kind")}
+	in.After, _ = strconv.ParseInt(q.Get("after"), 10, 64)
+	in.MinSize, _ = strconv.ParseInt(q.Get("min"), 10, 64)
+	if _, ok := index.Kinds[in.Kind]; in.Kind != "" && !ok {
+		httpx.Fail(w, 400, "bad kind")
+		return
+	}
 	switch {
+	case in.Text == "" && in.Filtered():
 	case utf8.RuneCountInString(in.Text) < 2 && !index.CJK(in.Text):
 		httpx.Fail(w, 400, "query too short")
 		return

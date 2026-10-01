@@ -73,6 +73,7 @@ type Index struct {
 	wake    chan struct{}
 	Moved   func(v *vol.Volume, to string)
 	Wrote   func(v *vol.Volume, rel string)
+	seen    map[string]time.Time
 }
 
 func New(d *db.DB) *Index { return &Index{db: d, wake: make(chan struct{}, 1)} }
@@ -94,6 +95,83 @@ func (x *Index) Touch(v *vol.Volume, rel string) {
 	x.poke()
 	if x.Wrote != nil {
 		x.Wrote(v, rel)
+	}
+}
+
+// Reconcile brings one folder's rows in line with the disk after someone lists it, so files that arrived behind
+// filebox's back, over SMB or rsync, turn up in search without waiting for the hourly scan.
+func (x *Index) Reconcile(v *vol.Volume, rel string) {
+	if x == nil || !x.ready.Load() {
+		return
+	}
+	key := v.Name + "\x00" + rel
+	x.mu.Lock()
+	if x.seen == nil || len(x.seen) > 10000 {
+		x.seen = map[string]time.Time{}
+	}
+	if t, ok := x.seen[key]; ok && time.Since(t) < 30*time.Second {
+		x.mu.Unlock()
+		return
+	}
+	x.seen[key] = time.Now()
+	x.mu.Unlock()
+	go x.reconcile(v, rel)
+}
+
+func (x *Index) reconcile(v *vol.Volume, rel string) {
+	f, err := vol.Open(v.Root, rel)
+	if err != nil {
+		return
+	}
+	des, err := f.ReadDir(-1)
+	f.Close()
+	if err != nil {
+		return
+	}
+	prefix := ""
+	if rel != "." {
+		prefix = rel + "/"
+	}
+	type state struct {
+		dir         bool
+		size, mtime int64
+	}
+	known := map[string]state{}
+	rows, err := x.db.Query(`SELECT substr(path, ?), dir, size, mtime FROM files WHERE vol = ? AND path > ? AND path < ? AND instr(substr(path, ?), '/') = 0`,
+		len(prefix)+1, v.Name, prefix, prefix+"\U0010FFFF", len(prefix)+1)
+	if err != nil {
+		return
+	}
+	for rows.Next() {
+		var n string
+		var st state
+		if rows.Scan(&n, &st.dir, &st.size, &st.mtime) == nil {
+			known[n] = st
+		}
+	}
+	rows.Close()
+	var stale []string
+	for _, de := range des {
+		n := de.Name()
+		if rel == "." && vol.Reserved(n) {
+			continue
+		}
+		k, ok := known[n]
+		delete(known, n)
+		fi, err := de.Info()
+		switch {
+		case err != nil:
+		case !ok || k.dir != fi.IsDir():
+			stale = append(stale, n)
+		case !fi.IsDir() && (k.size != fi.Size() || k.mtime != fi.ModTime().UnixMilli()):
+			stale = append(stale, n)
+		}
+	}
+	for n := range known {
+		stale = append(stale, n)
+	}
+	for _, n := range stale {
+		x.Touch(v, path.Join(prefix, n))
 	}
 }
 
