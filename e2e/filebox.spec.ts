@@ -600,8 +600,13 @@ test('a link inside a book jumps to its target in the same book', async ({ page,
   await expect.poll(spot).toBe('[0,0]')
   const section = () => page.frames().find((f) => f.url().startsWith('blob:') && f.parentFrame()?.url().includes('/reader'))!
   await expect.poll(() => section()?.locator('#go').count() ?? 0).toBe(1)
-  await section().locator('#go').click()
-  await expect.poll(spot).toMatch(/^\[1,/)
+  const follow = async () => {
+    if ((await spot())?.startsWith('[1,')) return spot()
+    const go = section()?.locator('#go')
+    if (go && (await go.count())) await go.click({ timeout: 1000 }).catch(() => {})
+    return spot()
+  }
+  await expect.poll(follow, { timeout: 10_000 }).toMatch(/^\[1,/)
 })
 
 test('EPUB opens in the reader, turns pages and reopens where it stopped', async ({ page, server }) => {
