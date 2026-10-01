@@ -4,7 +4,7 @@
   import 'photoswipe/style.css'
   import X from '@lucide/svelte/icons/x'
   import type { Entry, Src } from '../lib/api'
-  import { size, date, thumbable } from '../lib/format'
+  import { size, date, thumbable, metaRows, type Meta } from '../lib/format'
   import { t } from '../lib/i18n'
 
   type Book = { title: string; rtl: boolean; onpage: (i: number) => void; onrtl: () => void }
@@ -17,7 +17,6 @@
     book,
   }: { entry: Entry; images: Entry[]; url: Src; onclose: () => void; onedge?: (d: 1 | -1) => void; book?: Book } = $props()
 
-  type Meta = Partial<Record<keyof typeof t.meta, string>> & { width?: number; height?: number }
   let info = $state(false)
   let meta = $state<Meta | null>(null)
   let host = $state<HTMLElement>()
@@ -39,9 +38,7 @@
     const r: [string, string][] = [[t.size, size(entry.size)]]
     if (entry.mtime) r.push([t.mtime, date(entry.mtime)])
     if (!m) return r
-    if (m.width && m.height) r.push([t.meta.dimensions, `${m.width} × ${m.height}`])
-    for (const k of ['taken', 'camera', 'lens', 'focal', 'aperture', 'shutter', 'iso', 'gps'] as const) if (m[k]) r.push([t.meta[k], m[k]])
-    return r
+    return [...r, ...metaRows(m)]
   })
 
   $effect(() => {
