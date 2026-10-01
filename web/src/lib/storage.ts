@@ -23,11 +23,23 @@ function views(): Record<string, View> {
   }
 }
 
-export const viewOf = (key: string): View | undefined => views()[key]
+export function viewOf(key: string): View | undefined {
+  const v = views()[key]
+  if (v) keepView(key, v)
+  return v
+}
 
 export function keepView(key: string, v: View) {
   const m = views()
   delete m[key]
   m[key] = v
-  save('views', JSON.stringify(Object.fromEntries(Object.entries(m).slice(-500))))
+  let all = Object.entries(m)
+  let json = JSON.stringify(Object.fromEntries(all))
+  while (json.length > 64 << 10 && all.length > 1) json = JSON.stringify(Object.fromEntries((all = all.slice(Math.ceil(all.length / 8)))))
+  save('views', json)
 }
+
+try {
+  localStorage.removeItem('grid')
+  localStorage.removeItem('shareGrid')
+} catch {}
