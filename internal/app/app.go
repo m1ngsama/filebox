@@ -34,7 +34,7 @@ const spaCSP = "default-src 'self'; img-src 'self' blob: data:; media-src 'self'
 	"frame-src 'self'; object-src 'none'; base-uri 'none'; frame-ancestors 'none'; form-action 'self'"
 
 // A book's sections render in blob: iframes that inherit this document's policy, so script-src must exclude /raw and /s.
-const readerCSP = "default-src 'none'; style-src %s/assets/ 'unsafe-inline' blob:; img-src blob: data:; font-src blob: data:; " +
+const readerCSP = "default-src 'none'; style-src %s 'unsafe-inline' blob:; img-src blob: data:; font-src blob: data:; " +
 	"media-src blob:; connect-src 'self'; frame-src blob:; object-src 'none'; base-uri 'none'; frame-ancestors 'self'; form-action 'none'"
 
 type App struct {
@@ -201,7 +201,7 @@ var inlineScript = regexp.MustCompile(`(?s)<script>(.*?)</script>`)
 func spaPolicy(page string, index []byte) string {
 	csp, self := spaCSP, "'self'"
 	if page == "reader.html" {
-		csp, self = readerCSP, "%s/assets/"
+		csp, self = readerCSP, "%s"
 	}
 	if m := inlineScript.FindAllSubmatch(index, -1); m != nil {
 		csp += "; script-src " + self
@@ -214,6 +214,25 @@ func spaPolicy(page string, index []byte) string {
 }
 
 var badHost = regexp.MustCompile(`[^A-Za-z0-9.:\[\]-]`)
+
+// A proxy may rewrite Host, so a configured origin wins: the one the request names, else all of them plus Host.
+func (a *App) assets(r *http.Request) (string, bool) {
+	var all []string
+	if r.Host != "" && !badHost.MatchString(r.Host) {
+		all = append(all, r.Host+"/assets/")
+	}
+	for _, o := range a.Origins {
+		u, err := url.Parse(o)
+		if err != nil || u.Host == "" {
+			continue
+		}
+		if u.Host == r.Host || u.Host == r.Header.Get("X-Forwarded-Host") {
+			return o + "/assets/", true
+		}
+		all = append(all, o+"/assets/")
+	}
+	return strings.Join(all, " "), len(all) > 0
+}
 
 func (a *App) spa(page string) http.Handler {
 	files := http.FileServerFS(a.Web)
@@ -253,12 +272,12 @@ func (a *App) spa(page string) http.Handler {
 		w.Header().Set("Cache-Control", "no-cache")
 		policy := csp
 		if strings.Contains(policy, "%s") {
-			host := r.Host
-			if host == "" || badHost.MatchString(host) {
+			src, ok := a.assets(r)
+			if !ok {
 				httpx.Fail(w, 400, "bad host")
 				return
 			}
-			policy = strings.ReplaceAll(policy, "%s", host)
+			policy = strings.ReplaceAll(policy, "%s", src)
 		}
 		w.Header().Set("Content-Security-Policy", policy)
 		w.Write(index)

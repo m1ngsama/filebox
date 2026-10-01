@@ -192,6 +192,37 @@ func TestSPAPolicyHashesInlineScripts(t *testing.T) {
 	}
 }
 
+func TestReaderPolicyFollowsConfiguredOrigins(t *testing.T) {
+	f := newTestApp(t)
+	f.App.Origins = []string{"https://files.example.com", "http://localhost:5280"}
+	f.H = f.App.Handler()
+	script := func(hdr ...string) string {
+		w := f.do("GET", "/reader", nil, hdr...)
+		if w.Code != 200 {
+			t.Fatalf("reader %d", w.Code)
+		}
+		csp := w.Header().Get("Content-Security-Policy")
+		return csp
+	}
+	for _, c := range []struct {
+		hdr  []string
+		want string
+	}{
+		{[]string{"X-Host", "files.example.com"}, "https://files.example.com/assets/ 'unsafe-inline'"},
+		{[]string{"X-Host", "127.0.0.1:9000", "X-Forwarded-Host", "files.example.com"}, "https://files.example.com/assets/ 'unsafe-inline'"},
+		{[]string{"X-Host", "127.0.0.1:9000"}, "127.0.0.1:9000/assets/ https://files.example.com/assets/ http://localhost:5280/assets/ 'unsafe-inline'"},
+		{[]string{"X-Host", "evil host"}, "https://files.example.com/assets/ http://localhost:5280/assets/ 'unsafe-inline'"},
+	} {
+		got := script(c.hdr...)
+		if !strings.Contains(got, "style-src "+c.want) || !strings.Contains(got, "script-src "+strings.TrimSuffix(c.want, "'unsafe-inline'")+"'sha256-") {
+			t.Errorf("%v: %s", c.hdr, got)
+		}
+		if strings.Contains(c.want, "127.0.0.1") != strings.Contains(got, "127.0.0.1") || strings.Contains(got, "evil") {
+			t.Errorf("%v: request host leaked into the policy: %s", c.hdr, got)
+		}
+	}
+}
+
 func TestReaderPolicy(t *testing.T) {
 	f := newTestApp(t)
 	w := f.do("GET", "/reader", nil)
