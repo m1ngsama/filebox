@@ -2901,6 +2901,28 @@ test('each folder keeps its own view, and photo folders open as a grid here and 
   await anon.close()
 })
 
+test('a folder keeps the view it opened with while it changes, and the view store stays small', async ({ page, server }) => {
+  mkdirSync(join(server.vol, 'mix'))
+  for (let i = 0; i < 6; i++) writeFileSync(join(server.vol, 'mix', `p${i}.png`), png(4, 4))
+  for (let i = 0; i < 4; i++) writeFileSync(join(server.vol, 'mix', `d${i}.txt`), 'x')
+  await login(page)
+  await page.evaluate(() => {
+    localStorage.setItem('grid', '1')
+    localStorage.setItem('views', JSON.stringify(Object.fromEntries(Array.from({ length: 3000 }, (_, i) => [`v/${'x'.repeat(30)}${i}`, 'list']))))
+  })
+  await page.goto('/files/v/mix/')
+  await expect(page.locator('.card')).toHaveCount(10)
+  await page.locator('.card', { has: page.locator('[aria-label="p0.png"]') }).locator('button.more').click()
+  await page.getByRole('menuitem', { name: t.remove }).click()
+  await expect(page.locator('.card')).toHaveCount(9)
+  await page.getByRole('button', { name: t.listView }).click()
+  await expect(row(page, 'd0.txt')).toBeVisible()
+  const store = await page.evaluate(() => [localStorage.getItem('grid'), localStorage.getItem('views')!])
+  expect(store[0]).toBeNull()
+  expect(store[1].length).toBeLessThanOrEqual(64 << 10)
+  expect(Object.entries(JSON.parse(store[1])).at(-1)).toEqual(['v/mix', 'list'])
+})
+
 test('a single-file share previews inline and dead links explain themselves', async ({ page, browser }) => {
   await login(page)
   const { url } = await apiShare(page, { path: 'docs/readme.txt' })
