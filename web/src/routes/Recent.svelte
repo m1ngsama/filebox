@@ -1,5 +1,4 @@
 <script lang="ts">
-  import { SvelteSet } from 'svelte/reactivity'
   import Eye from '@lucide/svelte/icons/eye'
   import FolderOpen from '@lucide/svelte/icons/folder-open'
   import Clock from '@lucide/svelte/icons/clock'
@@ -17,8 +16,10 @@
   type Item = RecentFile & { run?: number; key?: string; head?: boolean }
   let files = $state.raw<Item[]>([])
   let runs = $state.raw<Run[]>([])
-  const open = new SvelteSet<string>()
-  const keyOf = (r: Run) => `${r.vol}\0${r.dir}\0${r.oldest}`
+  let open = $state.raw<Run[]>([])
+  const same = (a: Run, b: Run) => a.vol === b.vol && a.dir === b.dir && a.oldest <= b.mtime && b.oldest <= a.mtime
+  const isOpen = (r: Run) => open.some((o) => same(o, r))
+  const keyOf = (r: Run, i: number) => `\0${r.vol}\0${r.dir}\0${runs.slice(0, i).filter((x) => x.vol === r.vol && x.dir === r.dir).length}`
   let scanning = $state(false)
   let loaded = $state(false)
   let error = $state('')
@@ -26,12 +27,12 @@
   let desc = $state(true)
   let preview = $state.raw<Entry | null>(null)
 
-  const heads = $derived(runs.map((r, i): Item => ({ name: base(r.dir) || r.vol, dir: true, size: r.size, mtime: r.mtime, vol: r.vol, path: r.dir, run: i, key: keyOf(r), head: true })))
+  const heads = $derived(runs.map((r, i): Item => ({ name: base(r.dir) || r.vol, dir: true, size: r.size, mtime: r.mtime, vol: r.vol, path: r.dir, run: i, key: keyOf(r, i), head: true })))
   const shown = $derived.by(() => {
     const d = desc ? -1 : 1
     const order = (xs: Item[]) => (sort === 'mtime' ? [...xs].sort((a, b) => d * (a.mtime - b.mtime)) : arrange(xs, '', sort, desc))
     const top = order([...files.filter((f) => f.run === undefined), ...heads])
-    return top.flatMap((x) => (x.head && open.has(x.key!) ? [x, ...order(files.filter((f) => f.run === x.run))] : [x]))
+    return top.flatMap((x) => (x.head && isOpen(runs[x.run!]) ? [x, ...order(files.filter((f) => f.run === x.run))] : [x]))
   })
   const day = $derived(files && days())
   const loc = (e: Entry) => e as Item
@@ -77,10 +78,10 @@
   }
 
   function onopen(e: Entry) {
-    const k = loc(e).key!
+    const r = runs[loc(e).run!]
     if (!loc(e).head) preview = e
-    else if (open.has(k)) open.delete(k)
-    else open.add(k)
+    else if (isOpen(r)) open = open.filter((o) => !same(o, r))
+    else open = [...open, r]
   }
 </script>
 
@@ -112,11 +113,11 @@
     {onaction}
     {onopen}
     tag={(e) => (loc(e).head ? t.runCount(runs[loc(e).run!].count, runs[loc(e).run!].more) : undefined)}
-    expanded={(e) => (loc(e).head ? open.has(loc(e).key!) : undefined)}
+    expanded={(e) => (loc(e).head ? isOpen(runs[loc(e).run!]) : undefined)}
     nested={(e) => !loc(e).head && loc(e).run !== undefined}
     loading={!loaded && !error}
     empty={recentEmpty}
-    id={(e) => (loc(e).head ? `\0${loc(e).run}` : `${loc(e).vol}:${loc(e).path}`)}
+    id={(e) => (loc(e).head ? loc(e).key! : `${loc(e).vol}:${loc(e).path}`)}
     loc={loc}
     group={sort === 'mtime' ? (e) => day(e.mtime) : undefined}
   />

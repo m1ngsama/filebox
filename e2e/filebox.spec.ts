@@ -1759,13 +1759,22 @@ test('recent stops polling the index in a background tab and after leaving the p
   await page.route((u) => u.pathname === '/api/recent', async (r) => {
     asked++
     const res = await r.fetch()
-    r.fulfill({ response: res, json: { ...(await res.json()), scanning: true } })
+    const body = await res.json()
+    const at = Date.now()
+    body.runs = [{ vol: 'v', dir: 'docs', count: 6 + asked, size: 6, mtime: at, oldest: at - asked * 60_000 }]
+    body.entries.push({ vol: 'v', path: 'docs/x.log', name: 'x.log', size: 6, mtime: at, run: 0 })
+    r.fulfill({ response: res, json: { ...body, scanning: true } })
   })
   await login(page)
   await page.getByRole('link', { name: t.recent, exact: true }).click()
   await expect.poll(() => asked).toBe(1)
+  const head = page.locator('.row', { has: page.locator('.tag') }).locator('button.name')
+  await head.click()
+  await expect(head).toHaveAttribute('aria-expanded', 'true')
   await page.clock.runFor(3100)
   await expect.poll(() => asked).toBe(2)
+  await expect(head).toHaveAccessibleName(`docs, ${t.runCount(8)}`)
+  await expect(head).toHaveAttribute('aria-expanded', 'true')
   const hide = (hidden: boolean) =>
     page.evaluate((h) => {
       Object.defineProperty(document, 'hidden', { value: h, configurable: true })
