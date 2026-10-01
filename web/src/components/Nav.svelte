@@ -44,6 +44,7 @@
   const root = (v: string) => ({
     accepts: (c: Parameters<typeof inside>[0]) => !!sink.into && !inside(c, { vol: v, path: '' }),
     drop: (c: Parameters<typeof inside>[0], copy: boolean) => sink.into?.({ vol: v, path: '' }, c, copy),
+    label: v,
   })
 
   function go(e: MouseEvent) {

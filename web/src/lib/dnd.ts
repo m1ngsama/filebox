@@ -1,7 +1,8 @@
 import type { Loc } from './api'
+import { t } from './i18n'
 
 export type Carried = { vol: string; dir: string; names: string[] }
-export type Target = { accepts: (c: Carried) => boolean; drop: (c: Carried, copy: boolean) => void; spring?: () => void }
+export type Target = { accepts: (c: Carried) => boolean; drop: (c: Carried, copy: boolean) => void; spring?: () => void; label?: string }
 
 const MIME = 'application/x-filebox-items'
 let carried: Carried | null = null
@@ -31,7 +32,36 @@ export function carry(e: DragEvent, c: Carried) {
   setTimeout(() => ghost.remove())
 }
 
-export const drop = () => (carried = null)
+const mac = /Mac|iPhone|iPad/.test(navigator.platform)
+let hint: HTMLDivElement | null = null
+
+function show(e: DragEvent, label: string | undefined, copy: boolean) {
+  if (!label) return hide()
+  if (!hint) {
+    hint = document.createElement('div')
+    hint.className = 'drop-hint'
+    document.body.append(hint)
+  }
+  const text = copy ? t.dropCopy(label) : t.dropMove(label)
+  if (hint.dataset.text !== text) {
+    hint.dataset.text = text
+    hint.classList.toggle('copy', copy)
+    hint.replaceChildren(Object.assign(document.createElement('b'), { textContent: text }), Object.assign(document.createElement('span'), { textContent: copy ? '' : t.holdToCopy(mac ? '⌥' : 'Alt') }))
+  }
+  const x = e.clientX + 14 + hint.offsetWidth > innerWidth - 8 ? e.clientX - 14 - hint.offsetWidth : e.clientX + 14
+  const y = e.clientY + 18 + hint.offsetHeight > innerHeight - 8 ? e.clientY - 18 - hint.offsetHeight : e.clientY + 18
+  hint.style.translate = `${x}px ${y}px`
+}
+
+function hide() {
+  hint?.remove()
+  hint = null
+}
+
+export const drop = () => {
+  carried = null
+  hide()
+}
 
 export function target(node: HTMLElement, t: Target) {
   let timer = 0
@@ -39,6 +69,7 @@ export function target(node: HTMLElement, t: Target) {
   const off = () => {
     node.classList.remove('drop-over')
     clearTimeout(timer)
+    hide()
   }
   const enter = (e: DragEvent) => {
     if (!ok(e) || node.classList.contains('drop-over')) return
@@ -49,6 +80,7 @@ export function target(node: HTMLElement, t: Target) {
     if (!ok(e)) return
     e.preventDefault()
     e.dataTransfer!.dropEffect = e.altKey ? 'copy' : 'move'
+    show(e, t.label, e.altKey)
   }
   const leave = (e: DragEvent) => !node.contains(e.relatedTarget as Node) && off()
   const land = (e: DragEvent) => {

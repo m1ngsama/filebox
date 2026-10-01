@@ -3299,6 +3299,27 @@ async function unzipped(dl: import('@playwright/test').Download) {
   return got
 }
 
+test('dragging over a folder says whether the drop moves or copies', async ({ page, server }) => {
+  mkdirSync(join(server.vol, 'docs', 'box'))
+  await login(page)
+  await row(page, 'docs').locator('button.name').click()
+  const from = (await row(page, 'readme.txt').locator('.num.size').boundingBox())!
+  const to = (await row(page, 'box').locator('.num.mtime').boundingBox())!
+  await page.mouse.move(from.x + 5, from.y + 5)
+  await page.mouse.down()
+  await page.mouse.move(to.x + 5, to.y + 5, { steps: 6 })
+  const hint = page.locator('.drop-hint')
+  await expect(hint).toContainText(t.dropMove('box'))
+  await page.keyboard.down('Alt')
+  await page.mouse.move(to.x + 8, to.y + 6, { steps: 2 })
+  await expect(hint).toContainText(t.dropCopy('box'))
+  await page.mouse.up()
+  await page.keyboard.up('Alt')
+  await expect(hint).toHaveCount(0)
+  await expect.poll(() => existsSync(join(server.vol, 'docs', 'box', 'readme.txt'))).toBe(true)
+  expect(existsSync(join(server.vol, 'docs', 'readme.txt'))).toBe(true)
+})
+
 test('folders and selections download as one zip', async ({ page, server }) => {
   writeFileSync(join(server.vol, 'docs/more.md'), '# more')
   mkdirSync(join(server.vol, 'docs/deep'))

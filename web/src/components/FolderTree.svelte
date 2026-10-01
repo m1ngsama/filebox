@@ -42,6 +42,7 @@
       tree.open.add(`${vol}/${to}`)
       navigate(filesURL(vol, to))
     },
+    label: to.slice(to.lastIndexOf('/') + 1),
   })
 
   function key(e: KeyboardEvent, p: string, has: boolean) {

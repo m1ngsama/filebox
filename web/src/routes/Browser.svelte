@@ -747,6 +747,7 @@
     accepts: (c) => !inside(c, to),
     drop: (c, copy) => dropInto(to, c, copy),
     spring,
+    label: base(to.path) || to.vol,
   })
 
   onMount(() => {
