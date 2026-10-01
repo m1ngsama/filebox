@@ -1,5 +1,6 @@
 <script lang="ts">
   import { onMount } from 'svelte'
+  import { cubicOut } from 'svelte/easing'
   import X from '@lucide/svelte/icons/x'
   import Download from '@lucide/svelte/icons/download'
   import CircleAlert from '@lucide/svelte/icons/circle-alert'
@@ -155,6 +156,11 @@
     off = { x: 0, y: 0 }
   }
 
+  const still = matchMedia('(prefers-reduced-motion: reduce)')
+  function pop(_: Element, { out = false } = {}) {
+    return { duration: still.matches || inline ? 0 : out ? 160 : 220, easing: cubicOut, css: (k: number) => `opacity: ${k}; scale: ${out ? 1 : 0.98 + 0.02 * k}` }
+  }
+
   const ready = () => (status = 'ready')
   const failed = () => (status = 'error')
 
@@ -183,6 +189,8 @@
   {/await}
 {:else}
 <div
+  in:pop|global
+  out:pop|global={{ out: true }}
   class="viewer"
   class:inline
   role={inline ? 'region' : 'dialog'}
