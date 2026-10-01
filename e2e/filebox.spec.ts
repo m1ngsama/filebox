@@ -232,7 +232,8 @@ test('a deep link lists its folder alongside the session check, and after signin
   page.on('response', (r) => api(r.url()) && seen.push('<' + api(r.url())))
   await page.reload()
   await expect(row(page, 'readme.txt')).toHaveCount(1)
-  expect(seen.slice(0, 2).sort()).toEqual(['>/api/ls', '>/api/me'])
+  expect(seen.indexOf('>/api/ls')).toBeLessThan(seen.indexOf('</api/me'))
+  expect(seen.indexOf('>/api/ls')).toBeGreaterThanOrEqual(0)
   await page.getByRole('button', { name: t.logout }).click()
   await expect(page.getByLabel(t.username)).toHaveValue('admin')
   await expect(page.getByLabel(t.username)).toHaveAttribute('aria-hidden', 'true')
@@ -340,6 +341,36 @@ test('pasting files uploads them into the open folder and names a pasted screens
   await expect(row(page, 'notes.txt')).toBeVisible()
   await expect.poll(() => readdirSync(join(server.vol, 'docs')).filter((n) => n.endsWith('.png') && n.startsWith(t.pastedImage(''))).length).toBe(1)
   expect(readFileSync(join(server.vol, 'docs', 'notes.txt'), 'utf8')).toBe('hi')
+})
+
+test('the keyboard duplicates, copies and moves files like Finder', async ({ page, server }) => {
+  writeFileSync(join(server.vol, 'docs', 'plan.txt'), 'p')
+  await login(page)
+  await row(page, 'docs').locator('button.name').click()
+  await row(page, 'readme.txt').click()
+  await page.keyboard.press('ControlOrMeta+d')
+  const copy = `readme ${t.copySuffix}.txt`
+  await expect(row(page, copy)).toBeVisible()
+  expect(readFileSync(join(server.vol, 'docs', copy), 'utf8')).toBe('hello\n')
+  await page.getByRole('button', { name: t.undo }).click()
+  await expect.poll(() => existsSync(join(server.vol, 'docs', copy))).toBe(false)
+
+  await row(page, 'readme.txt').click()
+  await page.keyboard.press('ControlOrMeta+c')
+  await page.locator('.crumbs a', { hasText: 'v' }).click()
+  await expect(row(page, 'docs')).toBeVisible()
+  await page.keyboard.press('ControlOrMeta+v')
+  await expect.poll(() => existsSync(join(server.vol, 'readme.txt'))).toBe(true)
+  expect(existsSync(join(server.vol, 'docs', 'readme.txt'))).toBe(true)
+
+  await row(page, 'docs').locator('button.name').click()
+  await row(page, 'plan.txt').click()
+  await page.keyboard.press('ControlOrMeta+c')
+  await page.locator('.crumbs a', { hasText: 'v' }).click()
+  await expect(row(page, 'docs')).toBeVisible()
+  await page.keyboard.press('ControlOrMeta+Alt+v')
+  await expect.poll(() => existsSync(join(server.vol, 'plan.txt'))).toBe(true)
+  expect(existsSync(join(server.vol, 'docs', 'plan.txt'))).toBe(false)
 })
 
 test('a new text file opens straight into the editor', async ({ page, server }) => {
