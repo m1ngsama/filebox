@@ -160,10 +160,10 @@ export const api = {
   login: (name: string, password: string) => req<void>('POST', '/api/login', { name, password }),
   logout: () => req<void>('POST', '/api/logout'),
   ls: (vol: string, path: string, signal?: AbortSignal, onchunk?: (entries: Entry[]) => void) => list(lsURL(vol, path), signal, onchunk),
-  search: (q: string, signal: AbortSignal) =>
+  search: (q: string, signal: AbortSignal, filters: Record<string, string> = {}) =>
     req<{ entries: RecentFile[]; content: ContentHit[]; indexing: Progress | null; scanning: boolean }>(
       'GET',
-      `/api/search?${new URLSearchParams({ q })}`,
+      `/api/search?${new URLSearchParams({ q, ...filters })}`,
       undefined,
       signal,
     ),

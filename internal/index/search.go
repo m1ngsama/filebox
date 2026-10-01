@@ -4,6 +4,8 @@ import (
 	"cmp"
 	"context"
 	"encoding/json"
+	"path"
+	"slices"
 	"strings"
 	"unicode"
 	"unicode/utf8"
@@ -17,6 +19,31 @@ type Hit struct {
 type Query struct {
 	Text, Vol, Under string
 	Limit            int
+	Kind             string
+	After, MinSize   int64
+}
+
+// Kinds are the type filters search offers, by file extension; "dir" means folders.
+var Kinds = map[string][]string{
+	"dir":   nil,
+	"image": {"jpg", "jpeg", "png", "gif", "webp", "avif", "heic", "heif", "bmp", "tif", "tiff", "svg", "dng", "cr2", "cr3", "nef", "arw"},
+	"video": {"mp4", "m4v", "mkv", "mov", "avi", "webm", "ts", "flv", "wmv", "mpg", "mpeg"},
+	"audio": {"mp3", "m4a", "aac", "flac", "wav", "ogg", "opus"},
+	"doc":   {"pdf", "epub", "cbz", "txt", "md", "doc", "docx", "xls", "xlsx", "ppt", "pptx", "odt", "ods", "odp", "csv", "rtf", "pages", "numbers", "key"},
+}
+
+func (q Query) Filtered() bool { return q.Kind != "" || q.After > 0 || q.MinSize > 0 }
+
+// Admits applies the filters to a content hit, which comes from a separate index.
+func (q Query) Admits(f File) bool {
+	if f.Mtime < q.After || f.Size < q.MinSize {
+		return false
+	}
+	if q.Kind == "" {
+		return true
+	}
+	ext := strings.ToLower(strings.TrimPrefix(path.Ext(f.Name), "."))
+	return slices.Contains(Kinds[q.Kind], ext)
 }
 
 const visible = ` AND NOT (f.path = '.trash' OR f.path GLOB '.trash/*' OR f.path = '.filebox' OR f.path GLOB '.filebox/*' OR f.name GLOB '._*' OR f.name IN ('.DS_Store', 'Thumbs.db', 'desktop.ini'))`
@@ -37,6 +64,24 @@ func scoped(q Query) (string, []any) {
 			where = append(where, q.Under+"/", q.Under+"0")
 		}
 	}
+	if q.After > 0 {
+		scope += ` AND f.mtime >= ?`
+		where = append(where, q.After)
+	}
+	if q.MinSize > 0 {
+		scope += ` AND f.dir = 0 AND f.size >= ?`
+		where = append(where, q.MinSize)
+	}
+	if exts, ok := Kinds[q.Kind]; ok && q.Kind == "dir" {
+		scope += ` AND f.dir = 1`
+	} else if ok {
+		var or []string
+		for _, e := range exts {
+			or = append(or, `f.name LIKE ?`)
+			where = append(where, "%."+e)
+		}
+		scope += ` AND f.dir = 0 AND (` + strings.Join(or, ` OR `) + `)`
+	}
 	return scope, where
 }
 
@@ -44,6 +89,13 @@ func (x *Index) Search(ctx context.Context, q Query) ([]Hit, error) {
 	scope, where := scoped(q)
 	const cols = `SELECT f.vol, f.path, f.name, f.dir, f.size, f.mtime FROM files f`
 	with := func(first any, rest ...any) []any { return append(append([]any{first}, where...), rest...) }
+	if q.Text == "" {
+		order := `f.mtime DESC`
+		if q.MinSize > 0 {
+			order = `f.size DESC`
+		}
+		return x.hits(ctx, cols+` WHERE 1`+scope+` ORDER BY `+order+` LIMIT ?`, append(where, q.Limit)...)
+	}
 	if utf8.RuneCountInString(q.Text) < 3 {
 		like := "%" + likeEscape(q.Text) + "%"
 		return x.hits(ctx, cols+` WHERE f.path LIKE ? ESCAPE '\' AND f.name LIKE ? ESCAPE '\'`+scope+` ORDER BY f.mtime DESC LIMIT ?`,
@@ -163,11 +215,14 @@ func (x *Index) SearchContent(ctx context.Context, q Query) ([]ContentHit, error
 	if n := utf8.RuneCountInString(q.Text); c == nil || n < 3 && !CJK(q.Text) {
 		return []ContentHit{}, nil
 	}
+	if q.Kind != "" && q.Kind != "doc" {
+		return []ContentHit{}, nil
+	}
 	out, err := x.searchContent(ctx, c, q)
 	if err != nil && ctx.Err() == nil {
 		x.failed(c, err)
 	}
-	return out, err
+	return slices.DeleteFunc(out, func(h ContentHit) bool { return !q.Admits(h.File) }), err
 }
 
 func (x *Index) searchContent(ctx context.Context, c *content, q Query) ([]ContentHit, error) {

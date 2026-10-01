@@ -54,6 +54,7 @@
   import CloudOff from '@lucide/svelte/icons/cloud-off'
   import { narrow } from '../lib/shell.svelte'
   import Search from '@lucide/svelte/icons/search'
+  import ChevronDown from '@lucide/svelte/icons/chevron-down'
   import ChevronLeft from '@lucide/svelte/icons/chevron-left'
   import Ellipsis from '@lucide/svelte/icons/ellipsis'
   import EllipsisVertical from '@lucide/svelte/icons/ellipsis-vertical'
@@ -91,6 +92,18 @@
   let loading: AbortController | undefined
   let filter = $state('')
   let scope = $state<'here' | 'all'>('here')
+  let kindF = $state('')
+  let whenF = $state('')
+  let sizeF = $state('')
+  const filtering = $derived(scope === 'all' && !!(kindF || whenF || sizeF))
+
+  function since(w: string) {
+    const d = new Date()
+    if (w === 'day') d.setHours(0, 0, 0, 0)
+    else if (w === 'year') d.setMonth(0, 1), d.setHours(0, 0, 0, 0)
+    else d.setDate(d.getDate() - (w === 'week' ? 7 : 30))
+    return String(d.getTime())
+  }
   let hits = $state.raw<RecentFile[] | null>(null)
   let content = $state.raw<ContentHit[]>([])
   let indexing = $state.raw<Progress | null>(null)
@@ -298,7 +311,11 @@
 
   $effect(() => {
     const q = filter.trim()
-    if (scope !== 'all' || ([...q].length < 2 && !/^([\u30fc\uff70]|(?=[\p{L}\p{Nl}])[\p{sc=Han}\p{sc=Hiragana}\p{sc=Katakana}\p{sc=Hangul}])$/u.test(q))) {
+    const filters: Record<string, string> = {}
+    if (kindF) filters.kind = kindF
+    if (whenF) filters.after = since(whenF)
+    if (sizeF) filters.min = sizeF
+    if (scope !== 'all' || (!(filtering && !q) && [...q].length < 2 && !/^([\u30fc\uff70]|(?=[\p{L}\p{Nl}])[\p{sc=Han}\p{sc=Hiragana}\p{sc=Katakana}\p{sc=Hangul}])$/u.test(q))) {
       hits = null
       finding = false
       return
@@ -307,7 +324,7 @@
     const stop = new AbortController()
     const id = setTimeout(
       () =>
-        api.search(q, stop.signal).then(
+        api.search(q, stop.signal, filters).then(
           (r) => {
             if (stop.signal.aborted) return
             hits = r.entries
@@ -465,7 +482,8 @@
 
   async function endSearch() {
     searching = false
-    filter = ''
+    filter = kindF = whenF = sizeF = ''
+    scope = 'here'
     await tick()
     if (narrow.current) opener?.focus()
   }
@@ -774,7 +792,7 @@
     const target = one ?? focused()
     if (e.key === 'Escape') {
       if (details) closeDetails()
-      else if (searching || filter) endSearch()
+      else if (searching || filter || filtering) endSearch()
       else selected.clear()
     } else if (typing || e.altKey) return
     else if (mod && !e.shiftKey && !e.repeat && k === 'z' && runLatest(t.undo)) e.preventDefault()
@@ -931,6 +949,21 @@
       </DropdownMenu.Root>
     </header>
 
+    {#if scope === 'all'}
+      <div class="filters" role="group" aria-label={t.searchFilters}>
+        {#each [{ label: t.filterKind, get: () => kindF, set: (v: string) => (kindF = v), options: t.kinds }, { label: t.filterWhen, get: () => whenF, set: (v: string) => (whenF = v), options: t.whens }, { label: t.filterSize, get: () => sizeF, set: (v: string) => (sizeF = v), options: t.sizes }] as f (f.label)}
+          <label class="chip-select" class:on={!!f.get()}>
+            <span>{f.get() ? f.options[f.get()] : f.label}</span>
+            <ChevronDown size={icon.sm} aria-hidden="true" />
+            <select aria-label={f.label} value={f.get()} onchange={(e) => f.set(e.currentTarget.value)}>
+              <option value="">{t.any}</option>
+              {#each Object.entries(f.options) as [k, v] (k)}<option value={k}>{v}</option>{/each}
+            </select>
+          </label>
+        {/each}
+        {#if filtering}<button class="ghost clear-filters" onclick={() => (kindF = whenF = sizeF = '')}>{t.clearFilters}</button>{/if}
+      </div>
+    {/if}
     {#if streaming && at === here}<p class="loading-count" aria-hidden="true">{t.loadingItems(entries.length)}</p>{/if}
     <p class="sr-only" role="status">{announce}</p>
 

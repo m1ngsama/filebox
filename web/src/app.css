@@ -229,6 +229,12 @@ p.error::before { content: ''; flex: none; width: 1em; height: 1lh; background: 
 .mid > :nth-child(2) { flex: none; }
 .row .sub { max-width: 100%; padding: 0 var(--space-1-5); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .sub a { color: inherit; }
+.filters { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); padding: var(--space-2) var(--space-4); border-bottom: 1px solid var(--line); }
+.chip-select { position: relative; display: inline-flex; align-items: center; gap: var(--space-1); height: 32px; padding: 0 var(--space-2) 0 var(--space-3); border: 1px solid var(--line); border-radius: var(--radius-full); font-size: var(--text-sm); color: var(--fg); background: var(--panel); }
+.chip-select.on { border-color: transparent; background: color-mix(in srgb, var(--accent) 14%, transparent); color: var(--accent); font-weight: 600; }
+.chip-select select { position: absolute; inset: 0; opacity: 0; cursor: pointer; }
+.chip-select:has(select:focus-visible) { outline: 2px solid var(--accent); outline-offset: 2px; }
+.clear-filters { height: 32px; font-size: var(--text-sm); }
 .group-head { position: absolute; top: 0; left: 0; right: 0; height: 36px; display: flex; align-items: flex-end; padding: 0 var(--space-4) var(--space-1-5); color: var(--muted); font-size: var(--text-sm); font-weight: 600; border-bottom: 1px solid var(--line); background: var(--nav); }
 .group-head.grid { height: 48px; padding-bottom: var(--space-2); color: var(--fg); font-size: var(--text-md); border-bottom: 0; background: none; }
 .num { color: var(--muted); font-size: var(--text-sm); text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; padding-right: var(--space-1-5); }

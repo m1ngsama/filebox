@@ -2248,10 +2248,10 @@ test('recent groups files by day and sorting by name drops the groups', async ({
   await expect.poll(async () => (await (await page.request.get(`/api/jobs/${job}`)).json()).state).toBe('done')
   await page.getByRole('link', { name: t.recent, exact: true }).click()
   await expect(page.locator('.group-head')).toHaveText([t.today, t.earlier])
-  await expect(page.locator('.row button.name')).toHaveText(['readme.txt', 'old.txt'])
+  await expect(page.locator('.row button.name')).toHaveText(['readme.txt', 'old.txt', 'old.txt'])
   await page.locator('button.sort.name').click()
   await expect(page.locator('.group-head')).toHaveCount(0)
-  await expect(page.locator('.row button.name')).toHaveText(['old.txt', 'readme.txt'])
+  await expect(page.locator('.row button.name')).toHaveText(['old.txt', 'old.txt', 'readme.txt'])
 })
 
 test('starred items show under favorites, follow a rename and open where they live', async ({ page, server }) => {
@@ -2378,6 +2378,31 @@ test('searching everything finds a file in another folder and opens it there, se
   await expect(page.getByRole('radio', { name: t.scopeAll })).toHaveAttribute('tabindex', '-1')
   await page.getByLabel(t.filter).fill('zzz')
   await expect(page.getByText(t.noMatch)).toBeVisible()
+})
+
+test('search filters by kind, date and size, and lists matches without a keyword', async ({ page, server }) => {
+  writeFileSync(join(server.vol, 'docs', 'sunset.mp4'), Buffer.alloc(2 * 1024 * 1024 * 6))
+  writeFileSync(join(server.vol, 'docs', 'shells.jpg'), png(4, 4))
+  writeFileSync(join(server.vol, 'docs', 'harbor.mp4'), 'v')
+  const old = Date.now() / 1000 - 90 * 86400
+  utimesSync(join(server.vol, 'docs', 'harbor.mp4'), old, old)
+  await login(page)
+  await row(page, 'docs').locator('button.name').click()
+  await expect(page.locator('[data-name="harbor.mp4"]')).toBeVisible()
+  await page.getByRole('radio', { name: t.scopeAll }).click()
+  await page.getByRole('combobox', { name: t.filterKind }).selectOption('video')
+  await expect(row(page, 'sunset.mp4')).toBeVisible()
+  await expect(row(page, 'harbor.mp4')).toBeVisible()
+  await expect(row(page, 'shells.jpg')).toHaveCount(0)
+  await page.getByRole('combobox', { name: t.filterWhen }).selectOption('month')
+  await expect(row(page, 'harbor.mp4')).toHaveCount(0)
+  await page.getByRole('combobox', { name: t.filterKind }).selectOption('')
+  await page.getByRole('combobox', { name: t.filterSize }).selectOption('10485760')
+  await expect(row(page, 'sunset.mp4')).toBeVisible()
+  await expect(row(page, 'shells.jpg')).toHaveCount(0)
+  await page.keyboard.press('Escape')
+  await expect(page.getByRole('group', { name: t.searchFilters })).toHaveCount(0)
+  await expect(page.locator('[data-name="shells.jpg"]')).toBeVisible()
 })
 
 test('searching finds words inside text and markdown files and opens the match in its folder', async ({ page }) => {

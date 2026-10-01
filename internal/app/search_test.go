@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"database/sql"
+	"fmt"
 	"net/url"
 	"os"
 	"path/filepath"
@@ -126,5 +127,38 @@ func TestSearchContentAPI(t *testing.T) {
 	}
 	if r := decode[result](t, f.do("GET", "/api/search?q=plan.txt", nil)); r.Content == nil {
 		t.Fatalf("content must stay an empty list %+v", r)
+	}
+}
+
+func TestSearchFilters(t *testing.T) {
+	f := newTestApp(t)
+	old := time.Now().Add(-60 * 24 * time.Hour)
+	f.write(t, "trip/beach.jpg", "jpg")
+	f.write(t, "trip/beach.mp4", string(bytes.Repeat([]byte("v"), 4096)))
+	f.write(t, "trip/old beach.mp4", "v")
+	f.write(t, "trip/beach notes.txt", "t")
+	os.Chtimes(filepath.Join(f.Dir, "trip/old beach.mp4"), old, old)
+	os.MkdirAll(filepath.Join(f.Dir, "beach day"), 0o755)
+	f.App.Index.Scan(f.App.Vols)
+	since := time.Now().Add(-7 * 24 * time.Hour).UnixMilli()
+	cases := map[string][]string{
+		"q=beach&kind=video":                            {"v:trip/beach.mp4", "v:trip/old beach.mp4"},
+		"q=beach&kind=video&after=" + fmt.Sprint(since): {"v:trip/beach.mp4"},
+		"q=beach&kind=dir":                              {"v:beach day"},
+		"min=1000":                                      {"v:trip/beach.mp4"},
+		"kind=image":                                    {"v:trip/beach.jpg"},
+	}
+	for q, want := range cases {
+		got := f.search(t, q)
+		slices.Sort(got)
+		if !slices.Equal(got, want) {
+			t.Errorf("%s: %v, want %v", q, got, want)
+		}
+	}
+	if w := f.do("GET", "/api/search?q=beach&kind=exe", nil); w.Code != 400 {
+		t.Errorf("unknown kind %d", w.Code)
+	}
+	if w := f.do("GET", "/api/search?q=", nil); w.Code != 400 {
+		t.Errorf("empty query without filters %d", w.Code)
 	}
 }
