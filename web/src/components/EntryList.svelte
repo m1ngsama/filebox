@@ -16,7 +16,7 @@
   import FileIcon from './FileIcon.svelte'
   import { selectURL, type Entry, type Loc } from '../lib/api'
   import { link } from '../lib/router.svelte'
-  import { amount, date, ago, look, fallback, flip, sorts, mostlyMedia, mostlyBooks, stem, ends, SEP, type Sort } from '../lib/format'
+  import { amount, clock, date, ago, look, fallback, flip, sorts, mostlyMedia, mostlyBooks, stem, ends, SEP, type Sort } from '../lib/format'
   import { t } from '../lib/i18n'
   import { narrow } from '../lib/shell.svelte'
   import { carry, drop, target, type Carried, type Target } from '../lib/dnd'
@@ -49,6 +49,7 @@
     expanded,
     nested,
     dnd,
+    meta,
   }: {
     entries: Entry[]
     grid: boolean
@@ -57,6 +58,7 @@
     desc?: boolean
     thumb: (e: Entry) => string | null
     raw?: (e: Entry) => string | null
+    meta?: (e: Entry) => string
     actions: (e: Entry | null) => Action[]
     onaction: (id: string, e: Entry | null) => void
     onopen: (e: Entry) => void
@@ -102,6 +104,15 @@
   let seeking = $state(false)
   let seekTimer = 0
 
+  const lengths = new SvelteMap<string, string>()
+  const length = (e: Entry) => () => {
+    const k = id(e)
+    if (!meta || lengths.has(k)) return
+    lengths.set(k, '')
+    fetch(meta(e))
+      .then((r) => (r.ok ? r.json() : {}))
+      .then((m: { duration?: number }) => m.duration && lengths.set(k, clock(m.duration)), () => {})
+  }
   const shown = (ev: Event) => (ev.currentTarget as HTMLElement).classList.add('ok')
   const media = $derived(grid && mostlyMedia(entries))
   const shelf = $derived(grid && !media && mostlyBooks(entries))
@@ -519,7 +530,7 @@
                         <FileIcon name={e.name} dir={e.dir} size={tiles ? 40 : 56} />
                         <img src={s} alt="" draggable="false" loading="lazy" decoding="async" onload={shown} onerror={() => miss(e)} {@attach cancel} />
                         {@const g = tag?.(e)}
-                        {#if look(e.name) === 'video' || g}<span class="card-badge">{#if look(e.name) === 'video'}<Play size={icon.sm} />{/if}{g}</span>{/if}
+                        {#if look(e.name) === 'video' || g}<span class="card-badge" {@attach look(e.name) === 'video' ? length(e) : undefined}>{#if look(e.name) === 'video'}<Play size={icon.sm} />{lengths.get(id(e))}{/if}{#if g}{lengths.get(id(e)) ? ' · ' : ''}{g}{/if}</span>{/if}
                         {#if e.dir}<span class="card-badge"><FileIcon name={e.name} dir size={icon.sm} /></span>{/if}
                       {:else}
                         <FileIcon name={e.name} dir={e.dir} size={tiles ? 40 : 56} />

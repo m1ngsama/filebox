@@ -59,6 +59,13 @@ export const date = (ms: number, seconds = false) => dtf[+seconds].format(ms)
 const moment = new Intl.DateTimeFormat(locale, { dateStyle: 'long', timeStyle: 'short' })
 export const when = (ms: number) => moment.format(ms)
 
+export function clock(sec: number) {
+  const s = Math.round(sec)
+  const [h, m] = [Math.floor(s / 3600), Math.floor((s % 3600) / 60)]
+  const ss = String(s % 60).padStart(2, '0')
+  return h ? `${h}:${String(m).padStart(2, '0')}:${ss}` : `${m}:${ss}`
+}
+
 export type Meta = Partial<Record<keyof typeof t.meta, string>> & { width?: number; height?: number }
 
 export function metaRows(m: Meta) {

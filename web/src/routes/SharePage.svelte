@@ -336,6 +336,7 @@
           bind:sort
           bind:desc
           thumb={(e) => (e.dir || thumbable(e.name) ? shareThumbURL(token, join(e.name)) : null)}
+          meta={(e) => shareFileURL(token, join(e.name), 'meta')}
           raw={(e) => (rawThumb(e) ? shareRawURL(token, join(e.name)) : null)}
           {actions}
           {onaction}

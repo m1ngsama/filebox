@@ -25,6 +25,14 @@ func TestMetaFromExif(t *testing.T) {
 	}
 }
 
+func TestMetaFromVideoFormat(t *testing.T) {
+	var p probed
+	json.Unmarshal([]byte(`{"streams":[{"width":1920,"height":1080}],"format":{"duration":"95.480000","tags":{"creation_time":"2024-10-03T14:20:05.000000Z"}}}`), &p)
+	if got := p.meta(); got != (Meta{Width: 1920, Height: 1080, Duration: 95.48, Taken: "2024-10-03 14:20:05"}) {
+		t.Fatalf("%+v", got)
+	}
+}
+
 func TestMetaIgnoresCoverArt(t *testing.T) {
 	ff, err := exec.LookPath("ffmpeg")
 	if err != nil {

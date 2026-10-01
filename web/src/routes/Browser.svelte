@@ -917,6 +917,7 @@
         bind:desc
         {thumb}
         {raw}
+        meta={(e) => fileURL(vol, join(e.name), 'meta')}
         {actions}
         {onaction}
         onopen={open}

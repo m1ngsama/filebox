@@ -15,21 +15,26 @@ import (
 )
 
 type Meta struct {
-	Width    int    `json:"width,omitempty"`
-	Height   int    `json:"height,omitempty"`
-	Camera   string `json:"camera,omitempty"`
-	Lens     string `json:"lens,omitempty"`
-	Focal    string `json:"focal,omitempty"`
-	Aperture string `json:"aperture,omitempty"`
-	Shutter  string `json:"shutter,omitempty"`
-	ISO      string `json:"iso,omitempty"`
-	Taken    string `json:"taken,omitempty"`
-	GPS      string `json:"gps,omitempty"`
+	Width    int     `json:"width,omitempty"`
+	Height   int     `json:"height,omitempty"`
+	Camera   string  `json:"camera,omitempty"`
+	Lens     string  `json:"lens,omitempty"`
+	Focal    string  `json:"focal,omitempty"`
+	Aperture string  `json:"aperture,omitempty"`
+	Shutter  string  `json:"shutter,omitempty"`
+	ISO      string  `json:"iso,omitempty"`
+	Taken    string  `json:"taken,omitempty"`
+	GPS      string  `json:"gps,omitempty"`
+	Duration float64 `json:"duration,omitempty"`
 }
 
 type probed struct {
 	Frames  []dims `json:"frames"`
 	Streams []dims `json:"streams"`
+	Format  struct {
+		Duration string            `json:"duration"`
+		Tags     map[string]string `json:"tags"`
+	} `json:"format"`
 }
 
 type dims struct {
@@ -79,6 +84,8 @@ func (s *Service) probe(ctx context.Context, f *os.File, image bool) Meta {
 	if image {
 		entries += ":frame=width,height:frame_tags"
 		args = append(args, "-read_intervals", "%+#1")
+	} else {
+		entries += ":format=duration:format_tags=creation_time"
 	}
 	cmd := s.command(ctx, s.FFprobe, append(args, "-show_entries", entries, "-of", "json", "/dev/fd/3")...)
 	cmd.ExtraFiles = []*os.File{f}
@@ -96,6 +103,12 @@ func (p probed) meta() Meta {
 		if m.Width == 0 && d.Width > 0 {
 			m.Width, m.Height = d.Width, d.Height
 		}
+	}
+	if d, err := strconv.ParseFloat(p.Format.Duration, 64); err == nil && d > 0 {
+		m.Duration = d
+	}
+	if c := p.Format.Tags["creation_time"]; len(c) >= 19 {
+		m.Taken = strings.Replace(c[:19], "T", " ", 1)
 	}
 	if len(p.Frames) == 0 || len(p.Frames[0].Tags) == 0 {
 		return m
