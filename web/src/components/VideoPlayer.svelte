@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { onMount } from 'svelte'
+  import { onMount, untrack } from 'svelte'
   import { load, save } from '../lib/storage'
   import { t } from '../lib/i18n'
   import { toast } from '../lib/toast.svelte'
@@ -8,6 +8,7 @@
   type Mode = 'direct' | '1080' | '720' | '480'
   let {
     src,
+    size,
     hls,
     poster,
     tracks,
@@ -19,13 +20,14 @@
     onfail,
   }: {
     src: string
+    size: number
     hls: (q: string) => string
     poster?: string
     tracks: { src: string; lang: string }[]
     autoplay: boolean
     spot: string
     audio?: boolean
-    meta: () => Promise<{ width?: number }>
+    meta: () => Promise<{ width?: number; height?: number; duration?: number }>
     onready: () => void
     onfail: () => void
   } = $props()
@@ -39,6 +41,35 @@
   let stalls: number[] = []
   let last = 0
   let started = false
+  let seekWatch = 0
+  const info = untrack(() => meta())
+  const rates = { '1080': 5e6, '720': 2.5e6, '480': 1e6 }
+  const nearby = /^(localhost|127\.|10\.|192\.168\.|172\.(1[6-9]|2\d|3[01])\.|\[|[^.]+$)|\.local$/.test(location.hostname)
+
+  async function initial(): Promise<Mode> {
+    const m = await Promise.race([info, new Promise<Awaited<typeof info>>((r) => setTimeout(() => r({}), 1500))])
+    const speed = Number(load('net-speed')) || (nearby ? Infinity : 8e6)
+    const need = (bps: number) => bps * 1.5 < speed
+    if (!m.duration || need((size * 8) / m.duration)) return 'direct'
+    return (['1080', '720'] as const).find((q) => need(rates[q])) ?? '480'
+  }
+
+  function measure(list: PerformanceObserverEntryList) {
+    for (const e of list.getEntries() as PerformanceResourceTiming[]) {
+      const secs = (e.responseEnd - e.responseStart) / 1000
+      if (!e.name.includes('/stream/seg') || e.encodedBodySize < 2e5 || secs < 0.05) continue
+      const old = Number(load('net-speed'))
+      const now = (e.encodedBodySize * 8) / secs
+      save('net-speed', String(Math.round(old ? old * 0.7 + now * 0.3 : now)))
+    }
+  }
+
+  function seeking() {
+    clearTimeout(seekWatch)
+    seekWatch = setTimeout(() => {
+      if (pick === 'auto' && video && video.readyState < 3) degrade()
+    }, 4000)
+  }
 
   async function play(next: Mode, at = video?.currentTime ?? 0, resume = !(video?.paused ?? !autoplay)) {
     if (!video) return
@@ -86,7 +117,7 @@
   async function loaded() {
     const m = video!
     if (!m.videoWidth && mode === 'direct') {
-      if ((await meta()).width) return degrade()
+      if ((await info).width) return degrade()
       audio = true
     }
     const at = Number(load(spot))
@@ -106,8 +137,15 @@
   }
 
   onMount(() => {
-    play(mode, 0, autoplay)
-    return () => engine?.destroy()
+    const watch = new PerformanceObserver(measure)
+    watch.observe({ type: 'resource' })
+    if (pick === 'auto') initial().then((m) => play(m, 0, autoplay))
+    else play(mode, 0, autoplay)
+    return () => {
+      watch.disconnect()
+      clearTimeout(seekWatch)
+      engine?.destroy()
+    }
   })
 </script>
 
@@ -121,7 +159,11 @@
     preload="metadata"
     class:audio-only={audio}
     onloadedmetadata={loaded}
-    onplaying={() => (started = true)}
+    onplaying={() => {
+      started = true
+      clearTimeout(seekWatch)
+    }}
+    onseeking={seeking}
     onwaiting={stalled}
     ontimeupdate={track}
     onpause={() => save(spot, String(Math.floor(video!.currentTime)))}

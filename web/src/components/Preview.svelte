@@ -274,6 +274,7 @@
         {#key src}
           <VideoPlayer
             {src}
+            size={entry.size}
             hls={(q) => `${url(entry, 'stream')}&q=${q}`}
             poster={thumbable(entry.name) ? url(entry, 'thumb') : undefined}
             {tracks}
