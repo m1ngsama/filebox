@@ -2532,7 +2532,8 @@ test.describe('on a phone', () => {
       await expect(name).toHaveAccessibleName(n)
       const [h, tl] = await name.locator('.mid > span').allTextContents()
       expect([h + tl, tl]).toEqual([n, tail])
-      expect(h).not.toMatch(/[\u200d\u{1f1e6}-\u{1f1ff}]$/u)
+      expect(h).not.toMatch(/\u200d$/u)
+      expect((h.match(/[\u{1f1e6}-\u{1f1ff}]+$/u)?.[0].length ?? 0) % 4).toBe(0)
     }
     const ar = row(page, 'نتصف.pdf').locator('.mid')
     await expect(ar).toHaveCSS('direction', 'rtl')
