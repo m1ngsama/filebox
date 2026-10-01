@@ -79,7 +79,7 @@
 
   let { vol, path, vols }: { vol: string; path: string; vols: string[] } = $props()
 
-  type Dialog = { kind: 'mkdir' } | { kind: 'rename'; e: Entry } | { kind: 'move'; names: string[] }
+  type Dialog = { kind: 'mkdir' } | { kind: 'rename'; e: Entry } | { kind: 'renameMany'; names: string[] } | { kind: 'move'; names: string[] }
 
   let collapsed = $state(false)
   let entries = $state.raw<Entry[]>([])
@@ -596,10 +596,42 @@
     if (stem(n) !== stem(e.name)) for (const x of entries) if (extra.includes(x.name)) pairs.push([x, subtitleRename(e.name, n, x.name)])
     vacant(n)
     for (const [x, to] of pairs.slice(1)) if (to !== x.name && entries.some((y) => y.name === to)) throw new Error(t.failedItem(t.what([to]), t.errors[409]))
-    const ms = pairs.map(([x, to]) => ({ from: { vol, path: join(x.name) }, to: { vol, path: join(to) } }))
     if (details?.name === e.name) details = { ...e, name: n }
+    apply(pairs, t.renamed(n), n, () => details?.name === n && (details = e))
+  }
+
+  function renameMany(plan: [string, string][]) {
+    const moving = new Set(plan.map(([from]) => from))
+    const pairs: [Entry, string][] = []
+    for (const [from, to] of plan) {
+      const e = entries.find((x) => x.name === from)
+      if (!e) continue
+      pairs.push([e, to])
+      if (stem(to) === stem(from)) continue
+      for (const x of side.get(from) ?? []) {
+        const sub = entries.find((y) => y.name === x)
+        if (sub && !moving.has(x)) pairs.push([sub, subtitleRename(from, to, x)])
+      }
+    }
+    const after = new Set([...entries.map((x) => x.name).filter((x) => !pairs.some(([e]) => e.name === x)), ...pairs.map(([, to]) => to)])
+    if (after.size !== entries.length) throw new Error(t.errors[409])
+    selected.clear()
+    apply(pairs, t.renamedMany(plan.length), plan[0][1])
+  }
+
+  // apply moves names in place; when one new name is another's old one, everything passes through a temporary name first.
+  function apply(pairs: [Entry, string][], said: string, focus: string, failed?: () => void) {
+    forgetUndo()
+    pairs = pairs.filter(([x, to]) => x.name !== to)
+    const olds = new Set(pairs.map(([x]) => x.name))
+    const chained = pairs.some(([, to]) => olds.has(to))
+    const at = (n: string) => ({ vol, path: join(n) })
+    const tmp = (i: number) => `.filebox-rename-${Date.now().toString(36)}-${i}`
+    const ms: Move[] = chained
+      ? [...pairs.map(([x], i) => ({ from: at(x.name), to: at(tmp(i)) })), ...pairs.map(([, to], i) => ({ from: at(tmp(i)), to: at(to) }))]
+      : pairs.map(([x, to]) => ({ from: at(x.name), to: at(to) }))
     const mine = begin(pairs.flatMap(([x, to]): [string, Entry | null][] => [[x.name, null], [to, { ...x, name: to }]]))
-    pick(n)
+    pick(focus)
     const pending = queue(ms.flatMap((m) => [m.from, m.to]).map((l) => `${l.vol}/${l.path}`), async (s) => {
       const done: Move[] = []
       for (const m of ms) {
@@ -610,13 +642,13 @@
           const landed = now ? ms.filter((x) => now.has(base(x.to.path)) && !now.has(base(x.from.path))) : done
           const stuck: string[] = []
           for (const x of [...landed].reverse()) await api.move(x.to, x.from).catch(() => stuck.unshift(base(x.to.path)))
-          const why = ms.length > 1 ? t.failedItem(t.what([base(m.from.path)]), (err as Error).message) : (err as Error).message
+          const why = pairs.length > 1 ? t.failedItem(t.what([base(m.from.path)]), (err as Error).message) : (err as Error).message
           throw new Error(stuck.length ? `${why} ${t.stuckAt(t.what(stuck), place(vol, path))}` : why)
         }
         done.push(m)
       }
     })
-    const id = toast(t.renamed(n), { actions: [undo(() => pending.then(() => reverse(ms)))] })
+    const id = toast(said, { actions: [undo(() => pending.then(() => reverse(ms)))] })
     pending.then(
       () => {
         settle(mine)
@@ -624,7 +656,7 @@
       },
       (err) => {
         retract(id)
-        if (details?.name === n) details = e
+        failed?.()
         rollback(mine, err)
       },
     )
@@ -756,6 +788,7 @@
       else if (e.key === '?') help = true
       else if (e.key === 'n') dialog = { kind: 'mkdir' }
       else if (e.key === 'u') files?.click()
+      else if (selected.size > 1) dialog = { kind: 'renameMany', names: shown.filter((x) => selected.has(x.name)).map((x) => x.name) }
       else if (target) dialog = { kind: 'rename', e: target }
     } else if ((e.key === 'Delete' || e.key === 'Backspace') && !(e.target as Element).closest('[data-seeking]') && selected.size && !e.repeat && performance.now() > calm && inList(e.target as Element)) remove([...selected])
     else if (e.key === 'Enter' && selected.size === 1 && !(e.target as Element).closest('button, a, [role=grid]')) {
@@ -774,6 +807,7 @@
     <Download size={icon.sm} />{t.download}
   </button>
   <button class="ghost" onclick={() => (dialog = { kind: 'move', names: [...selected] })}><FolderInput size={icon.sm} />{t.moveOrCopy}</button>
+  {#if selected.size > 1}<button class="ghost" onclick={() => (dialog = { kind: 'renameMany', names: shown.filter((x) => selected.has(x.name)).map((x) => x.name) })}><Pencil size={icon.sm} />{t.rename}</button>{/if}
   <button class="ghost" onclick={() => toggleStar([...selected], !allStarred)}>
     {#if allStarred}<StarOff size={icon.sm} />{t.unstar}{:else}<Star size={icon.sm} />{t.star}{/if}
   </button>
@@ -1040,7 +1074,10 @@
     {@const items =
       sheet === 'new'
         ? creators
-        : [{ ...mark, run: () => toggleStar(names, mark === act.star) }, ...(one ? [act.rename, act.details].map((a) => ({ ...a, run: () => pass(a.id) })) : [])]}
+        : [
+            { ...mark, run: () => toggleStar(names, mark === act.star) },
+            ...(one ? [act.rename, act.details].map((a) => ({ ...a, run: () => pass(a.id) })) : [{ ...act.rename, run: () => (dialog = { kind: 'renameMany', names: shown.filter((x) => selected.has(x.name)).map((x) => x.name) }) }]),
+          ]}
     <Sheet title={sheet === 'new' ? t.new : (one?.name ?? t.selected(selected.size))} onclose={() => (sheet = null)}>
       {#each items as c (c.label)}
         <button
@@ -1099,6 +1136,10 @@
       >
         {#if extra.length}<label class="check"><input type="checkbox" bind:checked={carry} />{t.withSubtitles(extra.length)}</label>{/if}
       </NameDialog>
+    {:else if dialog?.kind === 'renameMany'}
+      {#await import('../components/BatchRename.svelte') then { default: BatchRename }}
+        <BatchRename names={dialog.names} taken={new Set(entries.map((x) => x.name))} onsave={renameMany} onclose={() => (dialog = null)} />
+      {/await}
     {:else if dialog?.kind === 'move'}
       <MoveDialog
         {vols}

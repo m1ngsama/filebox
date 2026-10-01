@@ -541,7 +541,7 @@ button.busy::before { content: ''; width: 14px; height: 14px; border: 2px solid 
   .scroller:not(.selecting) :is(.row, .card):is(:hover, :focus-within, .sel) :is(.check-cell > *, .more, .card-check), .list-head:is(:hover, :focus-within) > .hit { opacity: 1; }
   .card-foot { position: relative; }
   .card-foot > .more { position: absolute; right: 0; top: 50%; translate: 0 -50%; }
-  .scroller:not(.selecting) .card:is(:hover, :focus-within, .sel) .card-name { mask-image: linear-gradient(to left, transparent 32px, #000 52px); }
+  .scroller:not(.selecting) .card:is(:hover, :focus-within, .sel) .card-name, .scroller.selecting .card-name { mask-image: linear-gradient(to left, transparent 32px, #000 52px); }
 }
 @media (hover: none), (pointer: coarse) {
   button:not(.primary, .danger-fill):active:not(:disabled), a.button:not(.primary):active, .icon-btn:active, .nav a:active, .up:active, .crumbs a:active, .sub a:active, a.chip:active, .settings-nav a:active, .row:active:not(.sel), .card:active:not(.sel), .sheet-item:active { background: var(--hover); }
