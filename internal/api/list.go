@@ -43,6 +43,11 @@ func counted(root *os.Root, rel string, es []Entry) []Entry {
 		names, _ := f.Readdirnames(maxItems)
 		f.Close()
 		n := len(names) - len(sidecars(names))
+		for _, x := range names {
+			if vol.Junk(x, false) {
+				n--
+			}
+		}
 		es[i].Items = &n
 	}
 	return es
@@ -52,7 +57,7 @@ func entries(root *os.Root, rel string, des []fs.DirEntry) []Entry {
 	out := make([]Entry, 0, len(des))
 	for _, de := range des {
 		name := de.Name()
-		if rel == "." && vol.Reserved(name) {
+		if rel == "." && vol.Reserved(name) || vol.Junk(name, de.IsDir()) {
 			continue
 		}
 		var fi fs.FileInfo

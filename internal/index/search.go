@@ -19,7 +19,7 @@ type Query struct {
 	Limit            int
 }
 
-const visible = ` AND NOT (f.path = '.trash' OR f.path GLOB '.trash/*' OR f.path = '.filebox' OR f.path GLOB '.filebox/*')`
+const visible = ` AND NOT (f.path = '.trash' OR f.path GLOB '.trash/*' OR f.path = '.filebox' OR f.path GLOB '.filebox/*' OR f.name GLOB '._*' OR f.name IN ('.DS_Store', 'Thumbs.db', 'desktop.ini'))`
 
 func likeEscape(s string) string {
 	return strings.NewReplacer(`\`, `\\`, `%`, `\%`, `_`, `\_`).Replace(s)
