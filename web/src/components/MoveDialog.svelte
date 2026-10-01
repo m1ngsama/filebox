@@ -26,7 +26,7 @@
   async function run(copy: boolean) {
     busy = true
     error = ''
-    const r = await api.transfer(vol, dir, names, at, copy, (i, n, s) =>
+    const r = await api[carry && extra.length ? 'transferAll' : 'transfer'](vol, dir, names, at, copy, (i, n, s) =>
       (status = t.progress(i + 1, names.length, n, s?.total ? `${Math.floor((s.done / s.total) * 100)}%` : '')),
     )
     ondone(r.done, copy)

@@ -154,6 +154,7 @@ const zh = {
   subtitles: '字幕',
   showSubtitles: '显示字幕文件',
   withSubtitles: (n: number) => `同时带上 ${n} 个字幕文件`,
+  keptSubtitles: (n: number) => `，保留了 ${n} 个字幕文件`,
   uploads: '上传',
   uploading: (ok: number, n: number) => `正在上传 ${ok}/${n}`,
   eta: (s: number) => `剩余约 ${s < 60 ? `${Math.ceil(s)} 秒` : s < 3600 ? `${Math.ceil(s / 60)} 分钟` : `${Math.round(s / 360) / 10} 小时`}`,

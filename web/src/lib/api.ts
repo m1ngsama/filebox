@@ -202,6 +202,12 @@ export const api = {
       return { done, error: e as Error }
     }
   },
+  async transferAll(vol: string, dir: string, names: string[], to: Loc, copy: boolean, onstatus?: (i: number, name: string, s?: JobStatus) => void) {
+    const r = await api.transfer(vol, dir, names, to, copy, onstatus)
+    if (!r.error || copy) return r
+    for (const m of [...r.done].reverse()) await api.move(m.to, m.from).catch(() => {})
+    return { done: [], error: new Error(t.failedItem(t.what([names[r.done.length]]), r.error.message)) }
+  },
   async waitJob(id: string, onprogress?: (s: JobStatus) => void) {
     for (;;) {
       const s = await req<JobStatus>('GET', `/api/jobs/${id}`)
