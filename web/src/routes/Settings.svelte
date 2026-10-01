@@ -19,7 +19,7 @@
   import { toast } from '../lib/toast.svelte'
   import { theme, setTheme, type Theme } from '../lib/theme'
 
-  let { vols, origin }: { vols: string[]; origin?: string } = $props()
+  let { vols, origins = [] }: { vols: string[]; origins?: string[] } = $props()
 
   let tokens = $state<Token[] | null>(null)
   let tokensError = $state('')
@@ -40,7 +40,8 @@
   let removing = $state<Passkey | null>(null)
   let mode = $state(theme())
   const language = langPref()
-  const dav = $derived(`${origin || location.origin}/dav/`)
+  const origin = $derived(origins.includes(location.origin) ? location.origin : (origins.find((o) => o.startsWith('https://')) ?? location.origin))
+  const dav = $derived(`${origin}/dav/`)
   const vol = $derived(encodeURIComponent(vols[0] ?? ''))
   const sections = $derived([
     ['appearance', t.appearance],
@@ -145,7 +146,8 @@
       <dl class="clients">
         {#each t.clients as [name, how] (name)}<dt>{name}</dt><dd>{how}</dd>{/each}
         <dt>rclone</dt>
-        <dd><code>rclone config create filebox webdav url={dav} vendor=other user=filebox pass=$(rclone obscure {t.appPasswordArg})</code></dd>
+        <dd>{t.rcloneHint}</dd>
+        <dd><code>rclone config create filebox webdav url={dav} vendor=other user=filebox pass={t.appPasswordArg}</code></dd>
         <dt>{t.iosShortcut}</dt>
         <dd>{t.iosShortcutHow(`${dav}${vol}/`)}</dd>
       </dl>
