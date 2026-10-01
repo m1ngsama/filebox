@@ -1,6 +1,7 @@
 package api
 
 import (
+	"context"
 	"path"
 
 	"github.com/m1ngsama/filebox/internal/index"
@@ -41,6 +42,10 @@ func newCollapser(limit int) *collapser {
 	return &collapser{limit: limit, open: map[[2]string]int{}}
 }
 
+func (c *collapser) apart(r int, f index.File) bool {
+	return c.runs[r].Last-f.Mtime > runGap
+}
+
 func weight(n int) int {
 	if n >= runMin {
 		return 1
@@ -51,7 +56,7 @@ func weight(n int) int {
 func (c *collapser) add(f index.File) bool {
 	if c.shown >= c.limit {
 		for k, r := range c.open {
-			if c.runs[r].Last-f.Mtime > runGap {
+			if c.apart(r, f) {
 				delete(c.open, k)
 			}
 		}
@@ -66,7 +71,7 @@ func (c *collapser) add(f index.File) bool {
 	}
 	k := [2]string{f.Vol, dir}
 	r, ok := c.open[k]
-	if !ok || c.runs[r].Last-f.Mtime > runGap {
+	if !ok || c.apart(r, f) {
 		if c.shown >= c.limit {
 			return true
 		}
@@ -119,26 +124,12 @@ func (c *collapser) result(capped bool) ([]recentFile, []recentRun) {
 	return out, kept
 }
 
-func recentRuns(ix *index.Index, limit int) ([]recentFile, []recentRun, error) {
+func recentRuns(ctx context.Context, ix *index.Index, limit int) ([]recentFile, []recentRun, error) {
 	c := newCollapser(limit)
-	cur := index.Newest
-	for c.scanned < recentCap {
-		fs, next, err := ix.RecentFrom(cur, min(recentPage, recentCap-c.scanned))
-		if err != nil {
-			return nil, nil, err
-		}
-		for _, f := range fs {
-			if !c.add(f) {
-				out, runs := c.result(false)
-				return out, runs, nil
-			}
-		}
-		if len(fs) < recentPage {
-			out, runs := c.result(false)
-			return out, runs, nil
-		}
-		cur = next
+	capped, err := ix.RecentScan(ctx, recentPage, recentCap, c.add)
+	if err != nil {
+		return nil, nil, err
 	}
-	out, runs := c.result(true)
+	out, runs := c.result(capped)
 	return out, runs, nil
 }

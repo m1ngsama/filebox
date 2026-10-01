@@ -1,6 +1,7 @@
 package api
 
 import (
+	"context"
 	"fmt"
 	"path/filepath"
 	"testing"
@@ -82,7 +83,7 @@ func TestRecentSeesPastAHugeBurst(t *testing.T) {
 	if err := tx.Commit(); err != nil {
 		t.Fatal(err)
 	}
-	out, runs, err := recentRuns(index.New(d), 200)
+	out, runs, err := recentRuns(context.Background(), index.New(d), 200)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -90,3 +91,4 @@ func TestRecentSeesPastAHugeBurst(t *testing.T) {
 		t.Fatalf("runs %+v, last %+v", runs, out[len(out)-1])
 	}
 }
+

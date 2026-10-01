@@ -180,33 +180,52 @@ func (x *Index) Size(vol, rel string) (Size, error) {
 	return s, err
 }
 
-type Cursor struct{ Mtime, ID int64 }
-
-var Newest = Cursor{math.MaxInt64, 0}
-
 func (x *Index) Recent(limit int) ([]File, error) {
-	fs, _, err := x.RecentFrom(Newest, limit)
-	return fs, err
+	out := []File{}
+	_, err := x.RecentScan(context.Background(), limit, limit, func(f File) bool {
+		out = append(out, f)
+		return true
+	})
+	return out, err
 }
 
-func (x *Index) RecentFrom(c Cursor, limit int) ([]File, Cursor, error) {
-	rows, err := x.db.Query(`SELECT id, vol, path, size, mtime FROM files INDEXED BY files_mtime
-		WHERE dir = 0 AND mtime <= ?1 AND NOT (mtime = ?1 AND id <= ?2) ORDER BY mtime DESC, id LIMIT ?3`, c.Mtime, c.ID, limit)
+func (x *Index) RecentScan(ctx context.Context, page, limit int, each func(File) bool) (capped bool, err error) {
+	tx, err := x.db.BeginTx(ctx, &sql.TxOptions{ReadOnly: true})
 	if err != nil {
-		return nil, c, err
+		return false, err
 	}
-	defer rows.Close()
-	out := []File{}
-	for rows.Next() {
-		var f File
-		if err := rows.Scan(&c.ID, &f.Vol, &f.Path, &f.Size, &f.Mtime); err != nil {
-			return nil, c, err
+	defer tx.Rollback()
+	mtime, id := int64(math.MaxInt64), int64(0)
+	for seen := 0; seen < limit; {
+		rows, err := tx.QueryContext(ctx, `SELECT id, vol, path, size, mtime FROM files INDEXED BY files_mtime
+			WHERE dir = 0 AND mtime <= ?1 AND NOT (mtime = ?1 AND id <= ?2) ORDER BY mtime DESC, id LIMIT ?3`, mtime, id, min(page, limit-seen))
+		if err != nil {
+			return false, err
 		}
-		c.Mtime = f.Mtime
-		f.Name = path.Base(f.Path)
-		out = append(out, f)
+		n := 0
+		for rows.Next() {
+			var f File
+			if err := rows.Scan(&id, &f.Vol, &f.Path, &f.Size, &f.Mtime); err != nil {
+				rows.Close()
+				return false, err
+			}
+			mtime = f.Mtime
+			f.Name = path.Base(f.Path)
+			n++
+			if !each(f) {
+				rows.Close()
+				return false, nil
+			}
+		}
+		rows.Close()
+		if err := rows.Err(); err != nil {
+			return false, err
+		}
+		if seen += n; n < page {
+			return false, nil
+		}
 	}
-	return out, c, rows.Err()
+	return true, nil
 }
 
 func (x *Index) scan(vols *vol.Set) (int, error) {
