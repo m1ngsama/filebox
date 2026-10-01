@@ -20,6 +20,7 @@
   let host = $state<HTMLDivElement>()
   let view: View | undefined
   let rtl = $state(false)
+  let read = $state<number | null>(null)
 
   const turn = (d: number) => (d > 0 ? view?.next() : view?.prev())
 
@@ -77,9 +78,12 @@
         doc.addEventListener('keydown', (k) => window.dispatchEvent(new KeyboardEvent('keydown', k)))
         v.setStyles?.(styles())
       })
+      const weights = book.sections.map((s: { size?: number; linear?: string }) => (s.linear === 'no' ? 0 : (s.size ?? 0)))
+      const total = weights.reduce((a: number, b: number) => a + b, 0)
       v.addEventListener('relocate', (e) => {
         const { index, fraction } = (e as CustomEvent<{ index: number; fraction: number }>).detail
         save(spot, JSON.stringify([index, fraction ?? 0]))
+        if (total) read = (weights.slice(0, index).reduce((a: number, b: number) => a + b, 0) + (fraction ?? 0) * weights[index]) / total
       })
       let at: unknown = null
       try {
@@ -101,6 +105,9 @@
 <div class="reader" bind:this={host}>
   <button class="icon-btn turn prev" onclick={() => turn(rtl ? 1 : -1)} aria-label={rtl ? t.nextPage : t.prevPage}><ChevronLeft size={24} /></button>
   <button class="icon-btn turn next" onclick={() => turn(rtl ? -1 : 1)} aria-label={rtl ? t.prevPage : t.nextPage}><ChevronRight size={24} /></button>
+  <button class="zone prev" tabindex="-1" aria-hidden="true" onclick={() => turn(rtl ? 1 : -1)}></button>
+  <button class="zone next" tabindex="-1" aria-hidden="true" onclick={() => turn(rtl ? -1 : 1)}></button>
+  {#if read !== null}<div class="read" role="status">{Math.round(read * 100)}%</div>{/if}
 </div>
 
 <style>
@@ -126,5 +133,37 @@
   }
   .next {
     right: 0;
+  }
+  .zone {
+    display: none;
+    position: absolute;
+    z-index: 1;
+    top: 0;
+    bottom: 0;
+    width: 22%;
+    padding: 0;
+    border: 0;
+    border-radius: 0;
+    background: none;
+  }
+  .read {
+    position: absolute;
+    z-index: 1;
+    left: 0;
+    right: 0;
+    bottom: calc(env(safe-area-inset-bottom) + var(--space-2));
+    text-align: center;
+    color: var(--muted);
+    font-size: var(--text-xs);
+    font-variant-numeric: tabular-nums;
+    pointer-events: none;
+  }
+  @media (pointer: coarse) {
+    .turn {
+      display: none;
+    }
+    .zone {
+      display: block;
+    }
   }
 </style>

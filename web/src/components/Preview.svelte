@@ -7,7 +7,7 @@
   import ChevronRight from '@lucide/svelte/icons/chevron-right'
   import ExternalLink from '@lucide/svelte/icons/external-link'
   import type { Entry, Src } from '../lib/api'
-  import { kind, look, thumbable, subtitleOf, subtitleLang } from '../lib/format'
+  import { kind, look, thumbable, subtitleOf, subtitleLang, stem } from '../lib/format'
   import { load, save } from '../lib/storage'
   import '../lib/render.css'
   import { t } from '../lib/i18n'
@@ -248,8 +248,8 @@
 >
   {#if !inline}
     <header>
-      <span class="title">{entry.name}</span>
-      {#if list.length > 1}
+      <span class="title" title={entry.name}>{k === 'book' ? stem(entry.name) : entry.name}</span>
+      {#if list.length > 1 && k !== 'book'}
         <button class="icon-btn" onclick={() => step(-1)} disabled={at <= 0} aria-label={t.prevFile}><ChevronLeft size={20} /></button>
         <button class="icon-btn" onclick={() => step(1)} disabled={at < 0 || at >= list.length - 1} aria-label={t.nextFile}><ChevronRight size={20} /></button>
       {/if}
