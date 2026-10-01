@@ -34,7 +34,7 @@
               export HOME=$TMPDIR
               cp -R ${webDeps} node_modules
               chmod -R u+w node_modules
-              bun node_modules/vite/bin/vite.js build
+              for m in index share reader; do bun node_modules/vite/bin/vite.js build --mode $m; done
             '';
             installPhase = "cp -R dist $out";
           };
@@ -43,7 +43,7 @@
           pname = "filebox";
           version = self.shortRev or "dirty";
           src = self;
-          vendorHash = "sha256-KzYSTnFs2k2xOjl0ezTftq1j7dpsFKhDVrGOM3zd5lU=";
+          vendorHash = "sha256-4k70EQ+MzaXw6IgTv03b44PAU/mNzgskbtS0JP4HfU0=";
           subPackages = [ "cmd/filebox" ];
           env.CGO_ENABLED = 0;
           ldflags = [ "-s" "-w" ];
