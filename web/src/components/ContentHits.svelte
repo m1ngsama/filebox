@@ -14,7 +14,7 @@
   <ul>
     {#each hits as h (`${h.vol}:${h.path}`)}
       <li>
-        <button class="hit" onclick={() => onopen(h)} title={place(h.vol, h.path)}>
+        <button class="match" onclick={() => onopen(h)} title={place(h.vol, h.path)}>
           <FileIcon name={h.name} dir={false} size={icon.md} />
           <span class="head"><span class="name">{h.name}</span><span class="where">{place(h.vol, parent(h.path), 3)}</span></span>
           <span class="snippet">{#each h.snippet as s, i (i)}{#if i % 2}<mark>{s}</mark>{:else}{s}{/if}{/each}</span>
@@ -26,18 +26,21 @@
 
 <style>
   .content-hits { padding: var(--space-3) var(--space-2) var(--space-6); border-top: 1px solid var(--line); }
+  @media (min-width: 768px) {
+    .content-hits { padding-left: calc(var(--space-2) + var(--hit) - var(--space-1-5)); }
+  }
   h2 { padding: 0 var(--space-2); font-size: var(--text-sm); font-weight: 600; color: var(--muted); }
   .progress { margin: var(--space-1) var(--space-2) 0; font-size: var(--text-xs); color: var(--muted); }
   ul { list-style: none; margin: var(--space-2) 0 0; padding: 0; }
-  .hit {
-    display: grid; grid-template-columns: 28px minmax(0, 1fr); column-gap: var(--space-2); align-items: center;
-    width: 100%; padding: var(--space-2); border: 0; border-radius: var(--radius-md); background: none; color: inherit; text-align: left; font: inherit; white-space: normal; cursor: pointer;
+  .match {
+    display: grid; grid-template-columns: var(--hit) minmax(0, 1fr); column-gap: var(--space-3); align-items: center;
+    width: 100%; padding: var(--space-2) 0; border: 0; border-radius: var(--radius-md); background: none; color: inherit; text-align: left; font: inherit; white-space: normal; cursor: pointer;
   }
   @media (hover: hover) and (pointer: fine) {
-    .hit:hover { background: var(--hover); }
+    .match:hover { background: var(--hover); }
   }
-  .hit:active { background: var(--hover); }
-  .hit > :global(.ficon) { justify-self: center; }
+  .match:active { background: var(--hover); }
+  .match > :global(.ficon) { justify-self: center; }
   .head { display: flex; align-items: baseline; gap: var(--space-2); min-width: 0; }
   .name { flex: none; max-width: 70%; font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .where { color: var(--muted); font-size: var(--text-xs); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

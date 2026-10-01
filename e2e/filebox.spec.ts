@@ -2183,7 +2183,7 @@ test('searching finds words inside text and markdown files and opens the match i
     expect(async () => {
       await page.getByLabel(t.filter).fill('')
       await page.getByLabel(t.filter).fill(q)
-      await expect(section.locator('.hit')).toHaveCount(1, { timeout: 1500 })
+      await expect(section.locator('.match')).toHaveCount(1, { timeout: 1500 })
     }).toPass({ timeout: 30_000 })
 
   await search('the **zebrafish')
@@ -2191,7 +2191,7 @@ test('searching finds words inside text and markdown files and opens the match i
   await expect(section.locator('mark')).toHaveText('the **zebrafish')
 
   await search('budget <b>rev')
-  const hit = section.locator('.hit')
+  const hit = section.locator('.match')
   await expect(hit.locator('.name')).toHaveText('minutes.txt')
   await expect(hit.locator('.where')).toHaveText(place('v', 'docs'))
   await expect(hit.locator('mark')).toHaveText('budget <b>rev')
@@ -2214,7 +2214,7 @@ test('one or two Chinese characters find names and words inside documents', asyn
     expect(async () => {
       await page.getByLabel(t.filter).fill('')
       await page.getByLabel(t.filter).fill(q)
-      await expect(section.locator('.hit')).toHaveCount(1, { timeout: 1500 })
+      await expect(section.locator('.match')).toHaveCount(1, { timeout: 1500 })
     }).toPass({ timeout: 30_000 })
   await search('\u8bd1\u8005')
   await expect(section.locator('mark')).toHaveText('\u8bd1\u8005')

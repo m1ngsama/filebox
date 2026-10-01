@@ -22,7 +22,7 @@ import (
 	"github.com/m1ngsama/filebox/internal/serve"
 )
 
-const Version = 2
+const Version = 3
 
 const (
 	MaxText      = 1 << 20
@@ -85,6 +85,8 @@ func kind(name string) string {
 		return "epub"
 	case ext == ".html" || ext == ".htm" || ext == ".xhtml" || ext == ".xml" || ext == ".svg":
 		return "html"
+	case ext == ".md" || ext == ".markdown" || ext == ".mdown":
+		return "markdown"
 	case plain[ext]:
 		return "text"
 	}
@@ -127,7 +129,7 @@ func (x *Extractor) Extract(ctx context.Context, root *os.Root, rel string) (str
 	}
 	var w text
 	switch k {
-	case "text":
+	case "text", "markdown":
 		b, err := io.ReadAll(io.LimitReader(f, MaxText))
 		if err != nil {
 			return "", err
@@ -138,7 +140,11 @@ func (x *Extractor) Extract(ctx context.Context, root *os.Root, rel string) (str
 		if len(b) == MaxText {
 			b = wholeRunes(b)
 		}
-		w.write(serve.UTF8(b))
+		if k == "markdown" {
+			w.write(prose([]byte(serve.UTF8(b))))
+		} else {
+			w.write(serve.UTF8(b))
+		}
 	case "html":
 		err = markup(&w, io.LimitReader(f, markupBudget))
 	case "epub":

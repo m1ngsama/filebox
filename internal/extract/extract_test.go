@@ -64,6 +64,7 @@ func TestPlainText(t *testing.T) {
 	gbk, _ := simplifiedchinese.GB18030.NewEncoder().String("年度报告\n第二行 内容")
 	r := fixture(t, map[string][]byte{
 		"a.md":      []byte("\xef\xbb\xbf# Title\r\n\r\nSome  *markdown*\x02text\x03 here\n"),
+		"plan.md":   []byte("# 旅行计划\n\n| 日期 | 地点 |\n|---|---|\n| 10/3 | 京都 |\n\n```go\nfmt.Println(\"hi\")\n```\n\nSee [docs](https://x.y) and <b>bold</b>.\n"),
 		"gbk.txt":   []byte(gbk),
 		"main.go":   []byte("package main\n\nfunc main() {}\n"),
 		"Makefile":  []byte("all:\n\tgo build\n"),
@@ -73,7 +74,8 @@ func TestPlainText(t *testing.T) {
 	})
 	x := &Extractor{}
 	for name, want := range map[string]string{
-		"a.md":     "# Title Some *markdown* text here",
+		"a.md":     "Title Some markdown text here",
+		"plan.md":  "旅行计划 日期 地点 10/3 京都 fmt.Println(\"hi\") See docs and bold.",
 		"gbk.txt":  "年度报告第二行 内容",
 		"main.go":  "package main func main() {}",
 		"Makefile": "all: go build",
