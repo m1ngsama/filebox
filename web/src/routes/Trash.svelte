@@ -92,7 +92,7 @@
       <button class="ghost danger" disabled={busy} onclick={() => (confirm = picked)}><TrashIcon size={icon.sm} />{t.deleteForever}</button>
       <button class="icon-btn" aria-label={t.clearSelection} onclick={() => selected.clear()}><X size={icon.sm} /></button>
     {:else}
-      <span class="hint">{t.trashCount(items.length)}{#if items.length} · {size(items.reduce((n, x) => n + x.size, 0))}{/if}</span>
+      <span class="hint">{t.trashCount(items.length)}{#if items.length}{' · '}{size(items.reduce((n, x) => n + x.size, 0))}{/if}</span>
     {/if}
   </div>
 {/if}
