@@ -116,18 +116,24 @@ func ZipEntry(w http.ResponseWriter, r *http.Request, root *os.Root, rel string)
 			break
 		}
 	}
-	release()
-	w = idle{w, http.NewResponseController(w)}
 	if e == nil {
+		release()
 		httpx.Error(w, fs.ErrNotExist)
 		return
 	}
-	if e.UncompressedSize64 > maxZipEntry {
+	size, crc, method := e.UncompressedSize64, e.CRC32, e.Method
+	rc, err := extract.Detach(e, src, maxZipEntry)
+	off, _ := e.DataOffset()
+	z, e = nil, nil
+	release()
+	w = idle{w, http.NewResponseController(w)}
+	if err != nil {
 		httpx.Fail(w, 413, "entry too large")
 		return
 	}
+	defer rc.Close()
 	h := w.Header()
-	tag := fmt.Sprintf(`"%x-%x-%x"`, st.Size(), st.ModTime().UnixNano(), e.CRC32)
+	tag := fmt.Sprintf(`"%x-%x-%x"`, st.Size(), st.ModTime().UnixNano(), crc)
 	h.Set("ETag", tag)
 	h.Set("Cache-Control", "private, no-cache")
 	ct := extract.ImageType(name)
@@ -136,24 +142,16 @@ func ZipEntry(w http.ResponseWriter, r *http.Request, root *os.Root, rel string)
 	}
 	h.Set("Content-Type", ct)
 	serve.SafeHeaders(h, ct)
-	if e.Method == zip.Store {
-		if off, err := e.DataOffset(); err == nil {
-			http.ServeContent(w, r, "", st.ModTime(), io.NewSectionReader(src, off, int64(e.UncompressedSize64)))
-			return
-		}
+	if method == zip.Store {
+		http.ServeContent(w, r, "", st.ModTime(), io.NewSectionReader(src, off, int64(size)))
+		return
 	}
 	h.Set("Accept-Ranges", "none")
 	if match(r.Header.Get("If-None-Match"), tag) {
 		w.WriteHeader(304)
 		return
 	}
-	rc, err := extract.Open(e, maxZipEntry)
-	if err != nil {
-		httpx.Fail(w, 413, "entry too large")
-		return
-	}
-	defer rc.Close()
-	h.Set("Content-Length", strconv.FormatUint(e.UncompressedSize64, 10))
+	h.Set("Content-Length", strconv.FormatUint(size, 10))
 	if r.Method != http.MethodHead {
 		io.Copy(w, rc)
 	}

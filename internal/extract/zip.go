@@ -4,6 +4,7 @@ import (
 	"archive/zip"
 	"bufio"
 	"cmp"
+	"compress/flate"
 	"encoding/binary"
 	"encoding/xml"
 	"io"
@@ -31,10 +32,38 @@ func Zip(f io.ReaderAt, size int64) (*zip.Reader, error) {
 }
 
 // Open inflates at most limit bytes of an entry whose directory sizes pass the ratio guard.
+func sane(e *zip.File, limit int64) bool {
+	return e != nil && !e.FileInfo().IsDir() && limit > 0 && e.UncompressedSize64 <= uint64(limit) &&
+		!(e.CompressedSize64 == 0 && e.UncompressedSize64 > 0) &&
+		!(e.CompressedSize64 > 0 && e.UncompressedSize64/e.CompressedSize64 > maxRatio)
+}
+
+// Detach reads e straight from src without keeping the parsed archive alive, so a slow reader pins only its own entry.
+func Detach(e *zip.File, src io.ReaderAt, limit int64) (io.ReadCloser, error) {
+	if !sane(e, limit) {
+		return nil, ErrSkipped
+	}
+	off, err := e.DataOffset()
+	if err != nil {
+		return nil, ErrSkipped
+	}
+	body := io.NewSectionReader(src, off, int64(e.CompressedSize64))
+	size := int64(e.UncompressedSize64)
+	switch e.Method {
+	case zip.Store:
+		return io.NopCloser(io.LimitReader(body, size)), nil
+	case zip.Deflate:
+		fr := flate.NewReader(body)
+		return struct {
+			io.Reader
+			io.Closer
+		}{io.LimitReader(fr, size), fr}, nil
+	}
+	return nil, ErrSkipped
+}
+
 func Open(e *zip.File, limit int64) (io.ReadCloser, error) {
-	if e == nil || e.FileInfo().IsDir() || limit <= 0 || e.UncompressedSize64 > uint64(limit) ||
-		e.CompressedSize64 == 0 && e.UncompressedSize64 > 0 ||
-		e.CompressedSize64 > 0 && e.UncompressedSize64/e.CompressedSize64 > maxRatio {
+	if !sane(e, limit) {
 		return nil, ErrSkipped
 	}
 	r, err := e.Open()
