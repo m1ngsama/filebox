@@ -35,7 +35,7 @@ func TestCollapseBulkWrites(t *testing.T) {
 		add(fmt.Sprintf("dl/big/g%d.log", i), 50*minute-int64(i))
 	}
 	add("root.txt", 10*minute)
-	c := newCollapser(200)
+	c := newCollapser(200, 0)
 	feed(c, fs)
 	out, runs := c.result(false)
 	if len(runs) != 2 || runs[0].Count != 80 || runs[0].Dir != "dl/big" || runs[0].Mtime != 90*minute || runs[1].Count != 7 || runs[1].More {
@@ -53,13 +53,13 @@ func TestCollapseBulkWrites(t *testing.T) {
 		t.Fatalf("plain %d grouped %v last %+v", plain, grouped, out[len(out)-1])
 	}
 
-	c = newCollapser(200)
+	c = newCollapser(200, 0)
 	feed(c, fs)
 	if _, runs = c.result(true); !runs[1].More || runs[0].More {
 		t.Fatalf("a capped scan marks only the runs still open: %+v", runs)
 	}
 
-	c = newCollapser(3)
+	c = newCollapser(3, 0)
 	if n := feed(c, fs); n != 87 {
 		t.Fatalf("stopped after %d rows, want 87", n)
 	}
@@ -83,7 +83,7 @@ func TestRecentSeesPastAHugeBurst(t *testing.T) {
 	if err := tx.Commit(); err != nil {
 		t.Fatal(err)
 	}
-	out, runs, err := recentRuns(context.Background(), index.New(d), 200)
+	out, runs, err := recentRuns(context.Background(), index.New(d), 200, 0)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -92,3 +92,17 @@ func TestRecentSeesPastAHugeBurst(t *testing.T) {
 	}
 }
 
+func TestRunsEndAtLocalMidnight(t *testing.T) {
+	const day = 24 * 60 * 60 * 1000
+	tz := int64(8 * 60 * 60 * 1000)
+	var fs []index.File
+	for i := range 2 * 24 * 60 / 3 {
+		fs = append(fs, index.File{Vol: "v", Path: fmt.Sprintf("logs/%05d", i), Mtime: 100*day - tz - 60*1000 - int64(i)*3*60*1000})
+	}
+	c := newCollapser(200, tz)
+	feed(c, fs)
+	_, runs := c.result(false)
+	if len(runs) != 2 || runs[0].Count != 480 || runs[1].Count != 480 {
+		t.Fatalf("periodic writes should split per local day: %d runs %+v", len(runs), runs[:min(len(runs), 3)])
+	}
+}

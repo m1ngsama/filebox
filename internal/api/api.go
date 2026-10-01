@@ -330,7 +330,8 @@ func (a *API) recent(w http.ResponseWriter, r *http.Request) {
 	if err != nil || limit <= 0 {
 		limit = 200
 	}
-	out, runs, err := recentRuns(r.Context(), a.Index, min(limit, 500))
+	tz, _ := strconv.ParseInt(r.URL.Query().Get("tz"), 10, 64)
+	out, runs, err := recentRuns(r.Context(), a.Index, min(limit, 500), -tz*60*1000)
 	if err != nil {
 		httpx.Error(w, err)
 		return

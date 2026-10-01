@@ -32,18 +32,23 @@ type recentRun struct {
 
 type collapser struct {
 	limit, shown, scanned int
+	tz                    int64
 	runs                  []recentRun
 	open                  map[[2]string]int
 	kept                  []index.File
 	of                    []int
 }
 
-func newCollapser(limit int) *collapser {
-	return &collapser{limit: limit, open: map[[2]string]int{}}
+func newCollapser(limit int, tz int64) *collapser {
+	return &collapser{limit: limit, tz: tz, open: map[[2]string]int{}}
+}
+
+func (c *collapser) day(ms int64) int64 {
+	return (ms + c.tz) / (24 * 60 * 60 * 1000)
 }
 
 func (c *collapser) apart(r int, f index.File) bool {
-	return c.runs[r].Last-f.Mtime > runGap
+	return c.runs[r].Last-f.Mtime > runGap || c.day(c.runs[r].Mtime) != c.day(f.Mtime)
 }
 
 func weight(n int) int {
@@ -124,8 +129,8 @@ func (c *collapser) result(capped bool) ([]recentFile, []recentRun) {
 	return out, kept
 }
 
-func recentRuns(ctx context.Context, ix *index.Index, limit int) ([]recentFile, []recentRun, error) {
-	c := newCollapser(limit)
+func recentRuns(ctx context.Context, ix *index.Index, limit int, tz int64) ([]recentFile, []recentRun, error) {
+	c := newCollapser(limit, tz)
 	capped, err := ix.RecentScan(ctx, recentPage, recentCap, c.add)
 	if err != nil {
 		return nil, nil, err

@@ -1723,7 +1723,7 @@ test('recent folds a burst of writes into one folder row that expands', async ({
 test('recent stops polling the index in a background tab and after leaving the page', async ({ page }) => {
   await page.clock.install()
   let asked = 0
-  await page.route('**/api/recent', async (r) => {
+  await page.route((u) => u.pathname === '/api/recent', async (r) => {
     asked++
     const res = await r.fetch()
     r.fulfill({ response: res, json: { ...(await res.json()), scanning: true } })

@@ -176,7 +176,7 @@ export const api = {
   size: (vol: string, path: string) => req<{ size: number; files: number; scanning: boolean }>('GET', `/api/size?${q({ vol, path })}`),
   favorites: () => req<{ entries: Favorite[] }>('GET', '/api/favorites'),
   star: (vol: string, paths: string[], star: boolean) => req<void>('POST', '/api/favorites', { vol, paths, star }),
-  recent: (signal?: AbortSignal) => req<{ entries: (Omit<RecentFile, 'dir'> & { run?: number })[]; runs: Run[]; scanning: boolean }>('GET', '/api/recent', undefined, signal),
+  recent: (signal?: AbortSignal) => req<{ entries: (Omit<RecentFile, 'dir'> & { run?: number })[]; runs: Run[]; scanning: boolean }>('GET', `/api/recent?tz=${new Date().getTimezoneOffset()}`, undefined, signal),
   mkdir: (vol: string, path: string, signal?: AbortSignal) => req<Entry>('POST', '/api/mkdir', { vol, path }, signal),
   mv: (src: Loc, dst: Loc, signal?: AbortSignal) => req<{ job: string } | undefined>('POST', '/api/mv', { src, dst }, signal),
   cp: (src: Loc, dst: Loc) => req<{ job: string }>('POST', '/api/cp', { src, dst }),
