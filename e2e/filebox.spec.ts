@@ -427,6 +427,7 @@ test('a hostile book runs no script, reaches no API and frames no page', async (
     '<?xml version="1.0" encoding="utf-8"?><html xmlns="http://www.w3.org/1999/xhtml"><head><title>c</title>' +
     `<script src="${'/raw/v/docs/evil.js'}"></` +
     'script><script>document.documentElement.setAttribute("data-inline", "ran")</' +
+    'script><link rel="prefetch" href="/api/me?prefetch"/><link rel="preload" as="fetch" href="/api/vols?preload"/><script>1</' +
     'script></head><body><h1>第1章</h1>' +
     '<img src="/api/me" onerror="top.document.documentElement.setAttribute(\'data-onerror\', \'ran\')"/>' +
     '<a id="js" href="javascript:top.document.documentElement.setAttribute(\'data-href\', \'ran\')">go</a>' +
@@ -446,7 +447,7 @@ test('a hostile book runs no script, reaches no API and frames no page', async (
   )
   const hits: string[] = []
   const fromBook = (r: { frame: () => { url: () => string } }) => r.frame().url().startsWith('blob:')
-  page.on('request', (r) => (fromBook(r) || /evil\.js/.test(r.url())) && hits.push(new URL(r.url()).pathname))
+  page.on('request', (r) => (fromBook(r) || /evil\.js|prefetch|preload/.test(r.url())) && hits.push(new URL(r.url()).pathname))
   await login(page)
   await row(page, 'docs').locator('button.name').click()
   await row(page, 'evil.epub').locator('button.name').click()

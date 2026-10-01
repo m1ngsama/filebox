@@ -34,8 +34,8 @@ const spaCSP = "default-src 'self'; img-src 'self' blob: data:; media-src 'self'
 	"frame-src 'self'; object-src 'none'; base-uri 'none'; frame-ancestors 'none'; form-action 'self'"
 
 // A book's sections render in blob: iframes that inherit this document's policy, so script-src must exclude /raw and /s.
-const readerCSP = "default-src 'none'; style-src %s 'unsafe-inline' blob:; img-src blob: data:; font-src blob: data:; " +
-	"media-src blob:; connect-src 'self'; frame-src blob:; object-src 'none'; base-uri 'none'; frame-ancestors 'self'; form-action 'none'"
+const readerCSP = "default-src 'none'; style-src {assets} 'unsafe-inline' blob:; img-src blob: data:; font-src blob: data:; " +
+	"media-src blob:; connect-src {api}; frame-src blob:; object-src 'none'; base-uri 'none'; frame-ancestors 'self'; form-action 'none'"
 
 type App struct {
 	Vols     *vol.Set
@@ -201,7 +201,7 @@ var inlineScript = regexp.MustCompile(`(?s)<script>(.*?)</script>`)
 func spaPolicy(page string, index []byte) string {
 	csp, self := spaCSP, "'self'"
 	if page == "reader.html" {
-		csp, self = readerCSP, "%s"
+		csp, self = readerCSP, "{assets}"
 	}
 	if m := inlineScript.FindAllSubmatch(index, -1); m != nil {
 		csp += "; script-src " + self
@@ -216,10 +216,10 @@ func spaPolicy(page string, index []byte) string {
 var badHost = regexp.MustCompile(`[^A-Za-z0-9.:\[\]-]`)
 
 // A proxy may rewrite Host, so a configured origin wins: the one the request names, else all of them plus Host.
-func (a *App) assets(r *http.Request) (string, bool) {
+func (a *App) sources(r *http.Request) []string {
 	var all []string
 	if r.Host != "" && !badHost.MatchString(r.Host) {
-		all = append(all, r.Host+"/assets/")
+		all = append(all, r.Host)
 	}
 	for _, o := range a.Origins {
 		u, err := url.Parse(o)
@@ -227,11 +227,22 @@ func (a *App) assets(r *http.Request) (string, bool) {
 			continue
 		}
 		if u.Host == r.Host || u.Host == r.Header.Get("X-Forwarded-Host") {
-			return o + "/assets/", true
+			return []string{o}
 		}
-		all = append(all, o+"/assets/")
+		all = append(all, o)
 	}
-	return strings.Join(all, " "), len(all) > 0
+	return all
+}
+
+// The reader fetches only archive entries; a source path without a trailing slash matches that path exactly.
+func readerSources(srcs []string, paths ...string) string {
+	var out []string
+	for _, s := range srcs {
+		for _, p := range paths {
+			out = append(out, s+p)
+		}
+	}
+	return strings.Join(out, " ")
 }
 
 func (a *App) spa(page string) http.Handler {
@@ -271,13 +282,14 @@ func (a *App) spa(page string) http.Handler {
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
 		w.Header().Set("Cache-Control", "no-cache")
 		policy := csp
-		if strings.Contains(policy, "%s") {
-			src, ok := a.assets(r)
-			if !ok {
+		if strings.Contains(policy, "{assets}") {
+			srcs := a.sources(r)
+			if len(srcs) == 0 {
 				httpx.Fail(w, 400, "bad host")
 				return
 			}
-			policy = strings.ReplaceAll(policy, "%s", src)
+			policy = strings.NewReplacer("{assets}", readerSources(srcs, "/assets/"),
+				"{api}", readerSources(srcs, "/api/zip-entries", "/api/zip-entry", "/s/")).Replace(policy)
 		}
 		w.Header().Set("Content-Security-Policy", policy)
 		w.Write(index)

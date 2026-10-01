@@ -230,12 +230,12 @@ func TestReaderPolicy(t *testing.T) {
 	if w.Code != 200 || !strings.Contains(csp, "script-src example.com/assets/ 'sha256-") {
 		t.Fatalf("reader %d %q", w.Code, csp)
 	}
-	for _, s := range []string{"default-src 'none'", "img-src blob: data:", "frame-src blob:", "frame-ancestors 'self'", "connect-src 'self'"} {
+	for _, s := range []string{"default-src 'none'", "img-src blob: data:", "frame-src blob:", "frame-ancestors 'self'", "connect-src example.com/api/zip-entries example.com/api/zip-entry example.com/s/;"} {
 		if !strings.Contains(csp, s) {
 			t.Errorf("reader policy misses %q: %q", s, csp)
 		}
 	}
-	for _, s := range []string{"'self'/assets", "script-src 'self'", "'unsafe-eval'"} {
+	for _, s := range []string{"'self'/assets", "script-src 'self'", "'unsafe-eval'", "connect-src 'self'", "/api/;", "/api/ "} {
 		if strings.Contains(csp, s) {
 			t.Errorf("reader policy has %q: %q", s, csp)
 		}
