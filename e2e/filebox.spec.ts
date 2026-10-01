@@ -2492,6 +2492,12 @@ test.describe('on a phone', () => {
         for (let i = 1; i <= 6; i++) await send('touchMove', x + (dx * i) / 6, y + (dy * i) / 6)
         await send('touchEnd')
       },
+      async pinch(from: number, to: number, [x, y] = [195, 420]) {
+        const two = (type: string, d: number) => cdp.send('Input.dispatchTouchEvent', { type, touchPoints: [{ x: x - d / 2, y, id: 1 }, { x: x + d / 2, y, id: 2 }] })
+        await two('touchStart', from)
+        for (let i = 1; i <= 8; i++) await two('touchMove', from + ((to - from) * i) / 8)
+        await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] })
+      },
     }
   }
 
@@ -2798,6 +2804,20 @@ test.describe('on a phone', () => {
     await page.locator('.scroller').evaluate((s) => s.scrollTo(0, 400))
     await expect(small).toHaveCSS('opacity', '1')
     await expect(row(page, 'n20.txt')).toBeInViewport()
+  })
+
+  test('a PDF zooms with two fingers instead of zooming the whole page', async ({ page, server }) => {
+    writeFileSync(join(server.vol, 'docs', 'a.pdf'), pdf(['alpha page one', 'bravo page two']))
+    await login(page)
+    await row(page, 'docs').locator('button.name').tap()
+    await row(page, 'a.pdf').tap()
+    const sheet = page.getByRole('dialog', { name: 'a.pdf' }).locator('.pdfViewer .page').first()
+    await expect(sheet).toBeVisible()
+    const before = (await sheet.boundingBox())!.width
+    const f = await finger(page)
+    await f.pinch(80, 240)
+    await expect.poll(async () => (await sheet.boundingBox())!.width).toBeGreaterThan(before * 1.5)
+    expect(await page.evaluate(() => visualViewport!.scale)).toBe(1)
   })
 
   test('a long text preview scrolls by touch', async ({ page, server }) => {

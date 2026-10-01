@@ -29,6 +29,7 @@
 
   onMount(() => {
     let gone = false
+    let stop = () => {}
     let doc: { destroy: () => Promise<void> } | undefined
     ;(async () => {
       const pdfjs = await import('pdfjs-dist')
@@ -42,6 +43,14 @@
       const finder = new viewer.PDFFindController({ eventBus: bus, linkService: links })
       view = new viewer.PDFViewer({ container: host, eventBus: bus, linkService: links, findController: finder, textLayerMode: 1, removePageBorders: true })
       links.setViewer(view)
+      let width = host.clientWidth
+      const fit = new ResizeObserver(() => {
+        if (!view?.pagesCount || host!.clientWidth === width) return
+        width = host!.clientWidth
+        if (/^(auto|page-width)$/.test(view.currentScaleValue)) view.currentScaleValue = innerWidth < 768 ? 'page-width' : 'auto'
+      })
+      fit.observe(host)
+      stop = () => fit.disconnect()
       bus.on('pagesinit', () => {
         view!.currentScaleValue = innerWidth < 768 ? 'page-width' : 'auto'
         const at = Number(load(spot))
@@ -68,6 +77,7 @@
     })().catch(() => !gone && onfail())
     return () => {
       gone = true
+      stop()
       view?.setDocument(null as never)
       doc?.destroy()
     }
@@ -76,7 +86,27 @@
   function wheel(e: WheelEvent) {
     if (!view || (!e.ctrlKey && !e.metaKey)) return
     e.preventDefault()
-    view.currentScale = Math.min(4, Math.max(0.25, view.currentScale * Math.exp(-e.deltaY / 300)))
+    view.updateScale({ drawingDelay: 300, scaleFactor: Math.exp(-e.deltaY / 300), origin: [e.clientX, e.clientY] })
+  }
+
+  let pinch = 0
+  let pending = 1
+  const spread = (e: TouchEvent) => Math.hypot(e.touches[0].clientX - e.touches[1].clientX, e.touches[0].clientY - e.touches[1].clientY)
+
+  function touchstart(e: TouchEvent) {
+    pinch = e.touches.length === 2 ? spread(e) : 0
+    pending = 1
+  }
+
+  function touchmove(e: TouchEvent) {
+    if (!view || !pinch || e.touches.length !== 2) return
+    const d = spread(e)
+    pending *= d / pinch
+    pinch = d
+    if (Math.abs(pending - 1) < 0.02) return
+    const [a, b] = e.touches
+    view.updateScale({ drawingDelay: 300, scaleFactor: pending, origin: [(a.clientX + b.clientX) / 2, (a.clientY + b.clientY) / 2] })
+    pending = 1
   }
 
   const zoom = (d: number) => view && (d > 0 ? view.increaseScale() : view.decreaseScale())
@@ -103,7 +133,7 @@
 
 <svelte:window onkeydown={key} />
 
-<div class="pdf" bind:this={host} onwheel={wheel}>
+<div class="pdf" role="document" bind:this={host} onwheel={wheel} ontouchstart={touchstart} ontouchmove={touchmove} ontouchend={touchstart}>
   <div class="pdfViewer"></div>
 </div>
 {#if panel === 'outline'}
@@ -172,6 +202,7 @@
     overflow: auto;
     background: var(--viewer-bg);
     overscroll-behavior: contain;
+    touch-action: pan-x pan-y;
   }
   .pdf :global(.pdfViewer) {
     padding: var(--space-3) 0 calc(var(--hit) * 2);
