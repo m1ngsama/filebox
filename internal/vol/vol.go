@@ -34,6 +34,7 @@ type Usage struct {
 	Used  uint64 `json:"used"`
 	Free  uint64 `json:"free"`
 	Total uint64 `json:"total"`
+	Type  uint64 `json:"-"`
 }
 
 func (v *Volume) Usage() (Usage, error) {
@@ -43,7 +44,7 @@ func (v *Volume) Usage() (Usage, error) {
 	}
 	b := uint64(st.Bsize)
 	used, free := (uint64(st.Blocks)-uint64(st.Bfree))*b, uint64(st.Bavail)*b
-	return Usage{Used: used, Free: free, Total: used + free}, nil
+	return Usage{Used: used, Free: free, Total: used + free, Type: uint64(st.Type)}, nil
 }
 
 func (v *Volume) Device() (string, error) {

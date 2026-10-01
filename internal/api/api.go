@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"os"
 	"path"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -380,16 +381,33 @@ func (a *API) vols(w http.ResponseWriter, r *http.Request) {
 		FS   string `json:"fs,omitempty"`
 		vol.Usage
 	}
-	out := []usage{}
-	for _, v := range a.Vols.All() {
-		u, err := v.Usage()
-		if err != nil {
+	vs := a.Vols.All()
+	us, devs := make([]vol.Usage, len(vs)), make([]string, len(vs))
+	for i, v := range vs {
+		var err error
+		if us[i], err = v.Usage(); err != nil {
 			slog.Warn("volume usage", "vol", v.Name, "err", err)
 		}
-		fs, _ := v.Device()
-		out = append(out, usage{v.Name, fs, u})
+		devs[i], _ = v.Device()
+	}
+	out := []usage{}
+	for i, fs := range filesystems(devs, us) {
+		out = append(out, usage{vs[i].Name, fs, us[i]})
 	}
 	httpx.JSON(w, 200, map[string]any{"vols": out})
+}
+
+func filesystems(devs []string, us []vol.Usage) []string {
+	keys := slices.Clone(devs)
+	for i, u := range us {
+		for j := range i {
+			if (devs[i] != "" && devs[j] == devs[i]) || (u.Total > 0 && us[j] == u) {
+				keys[i] = keys[j]
+				break
+			}
+		}
+	}
+	return keys
 }
 
 func (a *API) size(w http.ResponseWriter, r *http.Request) {
