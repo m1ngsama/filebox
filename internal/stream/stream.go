@@ -21,6 +21,7 @@ import (
 	"time"
 
 	"github.com/m1ngsama/filebox/internal/httpx"
+	"github.com/m1ngsama/filebox/internal/thumb"
 	"github.com/m1ngsama/filebox/internal/vol"
 )
 
@@ -145,7 +146,7 @@ func (s *Service) info(ctx context.Context, f *os.File, fi fs.FileInfo) (info, e
 	if ok {
 		return in, nil
 	}
-	cmd := exec.CommandContext(ctx, s.FFprobe, "-v", "error", "-protocol_whitelist", "file", "-select_streams", "V:0",
+	cmd := exec.CommandContext(ctx, s.FFprobe, "-v", "error", "-max_pixels", thumb.MaxPixels, "-protocol_whitelist", "file", "-select_streams", "V:0",
 		"-show_entries", "stream=height:format=duration", "-of", "json", "/dev/fd/3")
 	cmd.ExtraFiles = []*os.File{f}
 	out, err := cmd.Output()
@@ -318,7 +319,7 @@ func (s *Service) restart(k string, f *os.File, in info, q, n int) (*session, er
 		args = append(args, "-init_hw_device", "vaapi=va:"+s.Device, "-filter_hw_device", "va", "-hwaccel", "vaapi", "-hwaccel_device", "va", "-hwaccel_output_format", "vaapi")
 		video = []string{"-vf", fmt.Sprintf("format=nv12|vaapi,hwupload,scale_vaapi=w=-2:h=%d:format=nv12", h), "-c:v", "h264_vaapi"}
 	}
-	args = append(args, "-ss", strconv.FormatFloat(start, 'f', 3, 64), "-protocol_whitelist", "file", "-i", "/dev/fd/3",
+	args = append(args, "-ss", strconv.FormatFloat(start, 'f', 3, 64), "-max_pixels", thumb.MaxPixels, "-protocol_whitelist", "file", "-i", "/dev/fd/3",
 		"-map", "0:V:0", "-map", "0:a:0?")
 	args = append(args, video...)
 	args = append(args, "-b:v", rates[q], "-maxrate", rates[q], "-bufsize", rates[q],

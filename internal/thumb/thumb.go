@@ -34,6 +34,9 @@ const (
 
 var probeTimeout = 10 * time.Second
 
+// MaxPixels stops a small file that declares a huge picture from making a decoder allocate gigabytes; 120 MP still covers 100 MP cameras.
+const MaxPixels = "120000000"
+
 var errCanceled = errors.New("thumb: request canceled")
 
 var kinds = map[string]string{
@@ -332,7 +335,7 @@ func (s *Service) render(ctx context.Context, key string, src *os.File, kind, ou
 		}
 	}
 	tmp := out + ".tmp"
-	args = append(args, "-protocol_whitelist", "file", "-i", "/dev/fd/3", "-frames:v", "1", "-vf", fmt.Sprintf("scale='min(%d,iw)':-2", side))
+	args = append(args, "-max_pixels", MaxPixels, "-protocol_whitelist", "file", "-i", "/dev/fd/3", "-frames:v", "1", "-vf", fmt.Sprintf("scale='min(%d,iw)':-2", side))
 	args = append(append(args, s.format.args...), tmp)
 	src.Seek(0, io.SeekStart)
 	cmd := s.command(rctx, s.FFmpeg, args...)

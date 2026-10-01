@@ -4,6 +4,8 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"image"
+	stdpng "image/png"
 	"log/slog"
 	"net/http/httptest"
 	"os"
@@ -313,5 +315,24 @@ func TestWarmRendersAhead(t *testing.T) {
 			t.Fatal("no thumbnail rendered ahead")
 		}
 		time.Sleep(50 * time.Millisecond)
+	}
+}
+
+func TestPixelBombGetsNoThumbnail(t *testing.T) {
+	ff, err := exec.LookPath("ffmpeg")
+	if err != nil {
+		t.Skip("ffmpeg not installed")
+	}
+	s, v, dir := setup(t, ff)
+	s.format = jpeg
+	f, _ := os.Create(filepath.Join(dir, "bomb.png"))
+	stdpng.Encode(f, &image.Gray{Pix: make([]byte, 11000*11000), Stride: 11000, Rect: image.Rect(0, 0, 11000, 11000)})
+	f.Close()
+	exec.Command(ff, "-v", "error", "-f", "lavfi", "-i", "color=red:s=640x480", "-frames:v", "1", filepath.Join(dir, "ok.png")).Run()
+	if w := get(s, v, "bomb.png"); w.Code != 404 {
+		t.Fatalf("bomb thumbnail %d", w.Code)
+	}
+	if w := get(s, v, "ok.png"); w.Code != 200 {
+		t.Fatalf("ordinary thumbnail %d", w.Code)
 	}
 }
