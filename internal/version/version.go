@@ -27,6 +27,7 @@ const (
 	Upload    = "upload"
 	WebDAV    = "webdav"
 	Restore   = "restore"
+	Edit      = "edit"
 	Recovered = "recovered"
 
 	PerFile    = 50

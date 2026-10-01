@@ -7,6 +7,7 @@
   import Table from '@lucide/svelte/icons/table'
   import ArrowUp from '@lucide/svelte/icons/arrow-up'
   import ArrowDown from '@lucide/svelte/icons/arrow-down'
+  import Pencil from '@lucide/svelte/icons/pencil'
   import type { Entry, Src } from '../lib/api'
   import { look, size } from '../lib/format'
   import { load, save } from '../lib/storage'
@@ -14,7 +15,7 @@
   import '../lib/render.css'
   import { t } from '../lib/i18n'
 
-  let { entry, url, onready, onfail }: { entry: Entry; url: Src; onready: () => void; onfail: () => void } = $props()
+  let { entry, url, saveTo, onready, onfail }: { entry: Entry; url: Src; saveTo?: string; onready: () => void; onfail: () => void } = $props()
 
   const LIMIT = 1 << 20
   const PAGE = 500
@@ -40,6 +41,9 @@
   let shown = $state(PAGE)
   let order = $state<{ col: number; desc: boolean } | null>(null)
   let more = $state<HTMLElement>()
+  let editing = $state(false)
+  let fresh = $state(0)
+  const editable = $derived(!!saveTo && entry.size <= 8 << 20)
 
   $effect(() => {
     source = false
@@ -58,6 +62,7 @@
   }
 
   $effect(() => {
+    fresh
     let stale = false
     raw = html = null
     plain = ''
@@ -174,6 +179,20 @@
   )
 </script>
 
+{#if editing && saveTo}
+  {#await import('./Editor.svelte') then { default: Editor }}
+    <Editor
+      name={entry.name}
+      src={url(entry)}
+      save={saveTo}
+      bind:wrap
+      ondone={(wrote) => {
+        editing = false
+        if (wrote) fresh++
+      }}
+    />
+  {/await}
+{:else}
 <div class="text" class:wrap>
   {#if sheet && !source && table}
     <div class="grid-wrap">
@@ -234,8 +253,10 @@
       <button type="button" class="icon-btn" aria-label={copied ? t.copied : t.copyAll} title={t.copyAll} onclick={copy}>
         {#if copied}<Check size={18} />{:else}<Copy size={18} />{/if}
       </button>
+      {#if editable}<button type="button" class="icon-btn" aria-label={t.edit} title={t.edit} onclick={() => (editing = true)}><Pencil size={18} /></button>{/if}
     </div>
   </div>
+{/if}
 {/if}
 
 <style>

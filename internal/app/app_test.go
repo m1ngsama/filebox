@@ -51,7 +51,7 @@ func newTestApp(t *testing.T) *fixture {
 	sess, _ := a.Login("admin", "pw-pw-pw-pw", "127.0.0.1", "")
 	bearer, _ := a.NewAppToken(uid, "test", false)
 	web := fstest.MapFS{
-		"index.html":           {Data: []byte("<!doctype html>app")},
+		"index.html":           {Data: []byte("<!doctype html><head></head>app")},
 		"share.html":           {Data: []byte("<!doctype html><title>filebox</title>share")},
 		"reader.html":          {Data: []byte("<!doctype html><script>var t=1</script>reader")},
 		"sw.js":                {Data: []byte("self")},
@@ -143,7 +143,7 @@ func TestRawEscapedPath(t *testing.T) {
 func TestSPA(t *testing.T) {
 	f := newTestApp(t)
 	w := f.do("GET", "/files/v/deep/path", nil, "X-No-Auth", "1")
-	if w.Code != 200 || w.Body.String() != "<!doctype html>app" {
+	if w.Code != 200 || !strings.HasSuffix(w.Body.String(), "</head>app") {
 		t.Fatalf("fallback %d %q", w.Code, w.Body.String())
 	}
 	if w.Header().Get("Content-Security-Policy") == "" {
@@ -178,7 +178,7 @@ func TestSPA(t *testing.T) {
 		t.Errorf("uncompressed asset %q %v", w.Body.String(), w.Header())
 	}
 	w = f.do("GET", "/", nil, "X-No-Auth", "1", "Accept-Encoding", "br, gzip")
-	if w.Header().Get("Content-Encoding") != "" || w.Body.String() != "<!doctype html>app" {
+	if w.Header().Get("Content-Encoding") != "" || !strings.HasSuffix(w.Body.String(), "</head>app") {
 		t.Errorf("index %q %v", w.Body.String(), w.Header())
 	}
 }
@@ -244,9 +244,15 @@ func TestReaderPolicy(t *testing.T) {
 	if w := f.do("GET", "/reader", nil, "X-Host", "evil host"); w.Code != 400 {
 		t.Fatalf("bad host = %d", w.Code)
 	}
-	spa := f.do("GET", "/files/v/", nil).Header().Get("Content-Security-Policy")
-	if spa != spaCSP || !strings.Contains(spa, "frame-ancestors 'none'") || strings.Contains(spa, "'unsafe-inline'") {
-		t.Errorf("spa policy: %q", spa)
+	page := f.do("GET", "/files/v/", nil)
+	spa := page.Header().Get("Content-Security-Policy")
+	_, nonce, _ := strings.Cut(spa, "'nonce-")
+	nonce, _, _ = strings.Cut(nonce, "'")
+	if !strings.HasPrefix(spa, spaCSP+"; style-src 'self' 'nonce-") || strings.Contains(spa, "'unsafe-inline'") || !strings.Contains(page.Body.String(), `<meta name="csp-nonce" content="`+nonce+`">`) {
+		t.Errorf("spa policy: %q, page %q", spa, page.Body)
+	}
+	if again := f.do("GET", "/files/v/", nil).Header().Get("Content-Security-Policy"); again == spa {
+		t.Error("style nonce repeats across responses")
 	}
 }
 

@@ -1,4 +1,4 @@
-.doc {
+.doc, .editor {
   --hl-keyword: light-dark(#cf222e, #ff7b72);
   --hl-string: light-dark(#0a3069, #a5d6ff);
   --hl-comment: light-dark(#6e7781, #8b949e);
@@ -9,6 +9,8 @@
   --hl-del: light-dark(#ffebe9, #490202);
   --hl-ins: light-dark(#dafbe1, #04260f);
   --code-bg: light-dark(#f6f8fa, #161b22);
+}
+.doc {
   align-self: flex-start; box-sizing: border-box; width: 100%; max-width: 72ch; min-height: 100%; margin: 0 auto; padding: var(--space-8) var(--space-6);
   background: var(--panel); color: var(--fg); border-radius: var(--radius-lg); line-height: 1.65; overflow-wrap: anywhere; user-select: text;
 }

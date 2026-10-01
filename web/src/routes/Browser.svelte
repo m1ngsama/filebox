@@ -1057,7 +1057,7 @@
 
 {#if preview}
   {#await import('../components/Preview.svelte') then { default: Preview }}
-    <Preview bind:entry={preview} entries={hidden.size ? [...shown, ...entries.filter((e) => hidden.has(e.name))] : shown} url={(e, as) => fileURL(vol, join(e.name), as)} onclose={() => (preview = null)} />
+    <Preview bind:entry={preview} entries={hidden.size ? [...shown, ...entries.filter((e) => hidden.has(e.name))] : shown} url={(e, as) => fileURL(vol, join(e.name), as)} saveTo={(e) => `/api/file?${new URLSearchParams({ vol, path: join(e.name) })}`} onclose={() => (preview = null)} />
   {/await}
 {/if}
 

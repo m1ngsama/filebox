@@ -78,6 +78,7 @@ func (a *API) Register(mux *http.ServeMux) {
 	h("GET /api/size", a.size)
 	h("GET /api/favorites", a.favorites)
 	h("POST /api/favorites", a.star)
+	h("PUT /api/file", a.save)
 	h("POST /api/mkdir", a.mkdir)
 	h("POST /api/mv", a.mv)
 	h("POST /api/cp", a.cp)

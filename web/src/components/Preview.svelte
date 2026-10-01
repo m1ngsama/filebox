@@ -19,7 +19,8 @@
     onclose,
     siblings = true,
     inline = false,
-  }: { entry: Entry; entries: Entry[]; url: Src; onclose: () => void; siblings?: boolean; inline?: boolean } = $props()
+    saveTo,
+  }: { entry: Entry; entries: Entry[]; url: Src; onclose: () => void; siblings?: boolean; inline?: boolean; saveTo?: (e: Entry) => string } = $props()
   const k = $derived(kind(entry.name))
   const src = $derived(url(entry))
   const images = $derived(k === 'image' ? entries.filter((e) => !e.dir && kind(e.name) === 'image') : [])
@@ -125,7 +126,7 @@
   })
 
   function key(e: KeyboardEvent) {
-    if (k === 'image' || (k === 'comic' && pages?.length) || inline || e.defaultPrevented) return
+    if (k === 'image' || (k === 'comic' && pages?.length) || inline || e.defaultPrevented || (e.target as Element).closest?.('input, textarea, [contenteditable]')) return
     if (e.key === 'Escape') onclose()
     else if ((e.key === 'ArrowLeft' || e.key === 'ArrowRight') && k !== 'book' && k !== 'comic' && !e.metaKey && !e.ctrlKey && !e.altKey && !(e.target instanceof HTMLMediaElement))
       step(e.key === 'ArrowRight' ? 1 : -1)
@@ -271,7 +272,7 @@
       <iframe class="book" src={reader} title={entry.name} bind:this={frame} onerror={failed}></iframe>
     {:else if k === 'text'}
       {#await import('./TextView.svelte') then { default: TextView }}
-        {#key src}<TextView {entry} {url} onready={ready} onfail={failed} />{/key}
+        {#key src}<TextView {entry} {url} saveTo={saveTo?.(entry)} onready={ready} onfail={failed} />{/key}
       {/await}
     {:else if k !== 'comic'}
       <div class="viewer-error">

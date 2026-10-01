@@ -3,6 +3,7 @@ package app
 import (
 	"bytes"
 	"cmp"
+	"crypto/rand"
 	"crypto/sha256"
 	"encoding/base64"
 	"io"
@@ -326,11 +327,18 @@ func (a *App) spa(page string, head ...func(*http.Request) string) http.Handler 
 			policy = strings.NewReplacer("{assets}", readerSources(srcs, "/assets/"),
 				"{api}", readerSources(srcs, "/api/zip-entries", "/api/zip-entry", "/s/")).Replace(policy)
 		}
+		body := index
+		if page == "index.html" {
+			// The text editor mounts its styles at run time, so this page lets in a style element carrying the per-response nonce.
+			nonce := rand.Text()
+			policy += "; style-src 'self' 'nonce-" + nonce + "'"
+			body = bytes.Replace(index, []byte("<head>"), []byte(`<head><meta name="csp-nonce" content="`+nonce+`">`), 1)
+		}
 		w.Header().Set("Content-Security-Policy", policy)
 		if len(head) > 0 {
-			w.Write(bytes.Replace(index, []byte("<title>filebox</title>"), []byte(head[0](r)), 1))
+			w.Write(bytes.Replace(body, []byte("<title>filebox</title>"), []byte(head[0](r)), 1))
 			return
 		}
-		w.Write(index)
+		w.Write(body)
 	})
 }
