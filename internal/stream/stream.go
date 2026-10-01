@@ -360,9 +360,9 @@ func (s *Service) kill(ss *session) {
 	}()
 }
 
-// reap pauses encoders that ran far ahead of the player, prunes played segments and ends idle sessions.
+// reap ends idle sessions, prunes played segments and paces the encoders.
 func (s *Service) reap() {
-	for range time.Tick(500 * time.Millisecond) {
+	for range time.Tick(250 * time.Millisecond) {
 		s.mu.Lock()
 		for k, ss := range s.sessions {
 			if time.Since(ss.last) > idle {
@@ -370,17 +370,34 @@ func (s *Service) reap() {
 				delete(s.sessions, k)
 				continue
 			}
-			if closed(ss.exited) {
-				continue
-			}
-			if made(ss) > ss.want+ahead && !ss.stopped {
-				syscall.Kill(ss.cmd.Process.Pid, syscall.SIGSTOP)
-				ss.stopped = true
-			}
 			for i := ss.start; i < ss.want-ahead; i++ {
 				os.Remove(segName(ss.dir, i))
 			}
 		}
+		s.pace()
 		s.mu.Unlock()
+	}
+}
+
+// pace is called with s.mu held. Encoders share one GPU or CPU, so a player that is waiting gets it to itself
+// while players with a buffer pause; an encoder resumes once its buffer drops below a third.
+func (s *Service) pace() {
+	buffered := map[*session]int{}
+	waiting := false
+	for _, ss := range s.sessions {
+		if !closed(ss.exited) {
+			buffered[ss] = made(ss) - ss.want
+			waiting = waiting || buffered[ss] <= 1
+		}
+	}
+	for ss, a := range buffered {
+		yield := waiting && a > 2
+		if !ss.stopped && (a > ahead || yield) {
+			syscall.Kill(ss.cmd.Process.Pid, syscall.SIGSTOP)
+			ss.stopped = true
+		} else if ss.stopped && a <= ahead/3 && !yield {
+			syscall.Kill(ss.cmd.Process.Pid, syscall.SIGCONT)
+			ss.stopped = false
+		}
 	}
 }

@@ -50,3 +50,43 @@ func TestTranscodesSegmentsOnDemand(t *testing.T) {
 		t.Fatalf("segment past the end: %d", w.Code)
 	}
 }
+
+func TestWaitingPlayerGetsTheEncoder(t *testing.T) {
+	s := New("", t.TempDir())
+	spawn := func(start, want, made int) *session {
+		cmd := exec.Command("sleep", "30")
+		if err := cmd.Start(); err != nil {
+			t.Fatal(err)
+		}
+		t.Cleanup(func() { cmd.Process.Kill(); cmd.Wait() })
+		ss := &session{dir: t.TempDir(), start: start, want: want, cmd: cmd, exited: make(chan struct{})}
+		for i := start; i < made; i++ {
+			os.WriteFile(segName(ss.dir, i), nil, 0o644)
+		}
+		return ss
+	}
+	busy, fresh := spawn(0, 3, 12), spawn(40, 40, 40)
+	s.sessions = map[string]*session{"busy": busy, "fresh": fresh}
+
+	s.pace()
+	if !busy.stopped || fresh.stopped {
+		t.Fatalf("while one player waits: busy stopped=%v, fresh stopped=%v", busy.stopped, fresh.stopped)
+	}
+	for i := 40; i < 44; i++ {
+		os.WriteFile(segName(fresh.dir, i), nil, 0o644)
+	}
+	s.pace()
+	if !busy.stopped {
+		t.Fatal("busy encoder resumed with most of its buffer left")
+	}
+	busy.want = 8
+	s.pace()
+	if busy.stopped {
+		t.Fatal("busy encoder stayed paused with its buffer running low")
+	}
+	busy.want = -10
+	s.pace()
+	if !busy.stopped {
+		t.Fatal("encoder far ahead of its player kept running")
+	}
+}
