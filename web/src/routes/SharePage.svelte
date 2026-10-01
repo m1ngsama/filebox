@@ -257,7 +257,7 @@
     <div class="public-info">
       {#if shared.note}<p class="public-note">{shared.note}</p>{/if}
       <p class="hint">
-        {#if listed}<span class="public-count">{at === p && !error ? t.folderSummary(shown.length, size(shown.reduce((n, e) => n + e.size, 0))) : '\u00a0'}</span>{/if}
+        {#if listed}<span class="public-count">{at === p && !error ? t.folderSummary(shown.filter((e) => e.dir).length, shown.filter((e) => !e.dir).length, size(shown.reduce((n, e) => n + e.size, 0))) : '\u00a0'}</span>{/if}
         {#if shared.expires}<span><Clock size={icon.sm} />{left > 0 ? t.expiresIn(left) : t.expired}</span>{/if}
         {#if canUpload && shared.max_upload}<span>{t.maxUpload(size(shared.max_upload))}</span>{/if}
       </p>

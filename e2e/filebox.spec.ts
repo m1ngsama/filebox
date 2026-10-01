@@ -2894,7 +2894,7 @@ test('each folder keeps its own view, and photo folders open as a grid here and 
   const anon = await browser.newPage()
   await anon.goto(url)
   await expect(anon.locator('.card')).toHaveCount(5)
-  await expect(anon.locator('.public-count')).toHaveText(t.folderSummary(5, `${total} B`))
+  await expect(anon.locator('.public-count')).toHaveText(t.folderSummary(0, 5, `${total} B`))
   await expect(anon.getByRole('link', { name: t.downloadAll })).toBeVisible()
   await anon.getByRole('button', { name: t.listView }).click()
   await anon.reload()

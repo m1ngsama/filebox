@@ -266,7 +266,7 @@ export default (locale: string) => {
     deletedAt: (d: string) => `Deleted ${d}`,
     trashNote: 'Files in the trash are removed automatically after 30 days, oldest first when the disk is less than 10% free. Once deleted permanently or emptied, they can’t be recovered.',
     trashCount: (n: number) => count(n, 'item'),
-    folderSummary: (n: number, size: string) => `${count(n, 'item')} · ${size}`,
+    folderSummary: (dirs: number, files: number, size: string) => [dirs && count(dirs, 'folder'), files && `${count(files, 'file')} · ${size}`].filter(Boolean).join(' · ') || 'Empty folder',
     deleteForever: 'Delete permanently',
     deleteForeverMessage: (what: string) => `${what} will be permanently deleted. This can’t be undone.`,
     restored: (what: string) => `Restored ${what}`,

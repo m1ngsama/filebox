@@ -266,7 +266,7 @@ const zh = {
   deletedAt: (d: string) => `删除于 ${d}`,
   trashNote: '回收站里的文件会在 30 天后自动清除，磁盘剩余空间不足 10% 时会先清除最早删除的文件。永久删除或清空后无法恢复。',
   trashCount: (n: number) => `共 ${n} 项`,
-  folderSummary: (n: number, size: string) => `${n} 项 · ${size}`,
+  folderSummary: (dirs: number, files: number, size: string) => [dirs && `${dirs} 个文件夹`, files && `${files} 个文件 · ${size}`].filter(Boolean).join(' · ') || '空文件夹',
   deleteForever: '永久删除',
   deleteForeverMessage: (what: string) => `${what}会被永久删除，无法恢复。`,
   restored: (what: string) => `${what}已恢复`,
