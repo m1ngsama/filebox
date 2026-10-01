@@ -24,7 +24,7 @@
             '';
             dontFixup = true;
             outputHashMode = "recursive";
-            outputHash = "sha256-KSCq77XBQbe1/wb4ZM23aLrh3eH0b+jd7fYQrgICIzc=";
+            outputHash = "sha256-faPskOslaQeL4bLwePzTXS/10j5j6Au5z75Bv8rLq90=";
           };
           web = pkgs.stdenvNoCC.mkDerivation {
             name = "filebox-web";
