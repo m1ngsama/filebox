@@ -201,6 +201,16 @@ export function days(now = new Date()) {
   return (ms: number) => (ms >= today ? t.today : ms >= yesterday ? t.yesterday : ms >= week ? t.thisWeek : t.earlier)
 }
 
+const dayName = [false, true].map((y) => new Intl.DateTimeFormat(locale, { year: y ? 'numeric' : undefined, month: 'long', day: 'numeric', weekday: 'short' }))
+export function dated(now = new Date()) {
+  const coarse = days(now)
+  const year = now.getFullYear()
+  return (ms: number) => {
+    const c = coarse(ms)
+    return c === t.today || c === t.yesterday ? c : dayName[+(new Date(ms).getFullYear() !== year)].format(ms)
+  }
+}
+
 export const SEP = '\u00a0› '
 export function place(vol: string, path = '', max = Infinity) {
   const segs = [vol, ...path.split('/').filter((s) => s && s !== '.')]

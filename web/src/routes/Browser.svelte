@@ -67,7 +67,7 @@
   import { enqueue, type Replaced } from '../lib/uploads.svelte'
   import { loadStars, starred, star } from '../lib/favorites.svelte'
   import { folderAction, downloadAction, actOn, saveZip } from '../lib/located'
-  import { thumbable, rawThumb, arrange, parent, base, child, flip, sorts, place, prefersGrid, sidecars, subtitleRename, stem, type Sort } from '../lib/format'
+  import { thumbable, rawThumb, arrange, parent, base, child, flip, sorts, place, prefersGrid, mostlyMedia, dated, days, sidecars, subtitleRename, stem, type Sort } from '../lib/format'
   import { t } from '../lib/i18n'
   import { load, save, viewOf, keepView, type View } from '../lib/storage'
   import NavToggle from '../components/NavToggle.svelte'
@@ -138,6 +138,10 @@
   let frozen = $state<boolean>()
   const auto = $derived(frozen ?? (at === here && (!streaming || entries.length >= 200) ? prefersGrid(visible) : undefined))
   const grid = $derived(chosen ? chosen === 'grid' : !!auto)
+  const byDay = $derived.by(() => {
+    const day = grid && mostlyMedia(shown) ? dated() : days()
+    return (e: Entry) => day(e.mtime)
+  })
   $effect(() => {
     if (frozen === undefined && auto !== undefined) frozen = auto
   })
@@ -930,6 +934,7 @@
         busy={streaming}
         head={!error}
         title={error ? undefined : crumbs.length ? crumbs[crumbs.length - 1] : vol}
+        group={sort === 'mtime' && !query && !streaming ? byDay : undefined}
         bind:collapsed
       >
         {#snippet empty()}

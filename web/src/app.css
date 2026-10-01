@@ -229,6 +229,7 @@ p.error::before { content: ''; flex: none; width: 1em; height: 1lh; background: 
 .row .sub { max-width: 100%; padding: 0 var(--space-1-5); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .sub a { color: inherit; }
 .group-head { position: absolute; top: 0; left: 0; right: 0; height: 36px; display: flex; align-items: flex-end; padding: 0 var(--space-4) var(--space-1-5); color: var(--muted); font-size: var(--text-sm); font-weight: 600; border-bottom: 1px solid var(--line); background: var(--nav); }
+.group-head.grid { height: 48px; padding-bottom: var(--space-2); color: var(--fg); font-size: var(--text-md); border-bottom: 0; background: none; }
 .num { color: var(--muted); font-size: var(--text-sm); text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; padding-right: var(--space-1-5); }
 .more { color: var(--muted); }
 .cards { position: absolute; top: 0; left: 0; right: 0; display: grid; gap: var(--space-3); padding: var(--space-1-5) var(--space-3); }
@@ -536,6 +537,9 @@ button.busy::before { content: ''; width: 14px; height: 14px; border: 2px solid 
   .toast .icon-btn:hover { color: inherit; opacity: 1; }
   .scroller:not(.selecting) :is(.row > .check-cell > *, .row .more, .card .more, .card-check), .list-head:not(.batch) > .hit { opacity: 0; transition: opacity var(--dur-1) var(--ease-out); }
   .scroller:not(.selecting) :is(.row, .card):is(:hover, :focus-within, .sel) :is(.check-cell > *, .more, .card-check), .list-head:is(:hover, :focus-within) > .hit { opacity: 1; }
+  .card-foot { position: relative; }
+  .card-foot > .more { position: absolute; right: 0; top: 50%; translate: 0 -50%; }
+  .scroller:not(.selecting) .card:is(:hover, :focus-within, .sel) .card-name { mask-image: linear-gradient(to left, transparent 32px, #000 52px); }
 }
 @media (hover: none), (pointer: coarse) {
   button:not(.primary, .danger-fill):active:not(:disabled), a.button:not(.primary):active, .icon-btn:active, .nav a:active, .up:active, .crumbs a:active, .sub a:active, a.chip:active, .settings-nav a:active, .row:active:not(.sel), .card:active:not(.sel), .sheet-item:active { background: var(--hover); }

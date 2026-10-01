@@ -306,6 +306,28 @@ test('text previews copy the whole file, keep the wrap choice and show CSV as a 
   await expect(code.getByRole('button', { name: t.wrapLines })).toHaveAttribute('aria-pressed', 'true')
 })
 
+test('a photo folder sorted by date groups its grid by day', async ({ page, server }) => {
+  const dir = join(server.vol, 'docs', 'camera')
+  mkdirSync(dir)
+  const day = 86_400_000
+  const noon = new Date().setHours(12, 0, 0, 0)
+  for (const [n, ago] of [['a.png', 0], ['b.png', 0], ['c.png', 1], ['d.png', 30]] as const) {
+    writeFileSync(join(dir, n), png(8, 8))
+    utimesSync(join(dir, n), (noon - ago * day) / 1000, (noon - ago * day) / 1000)
+  }
+  await login(page)
+  await row(page, 'docs').locator('button.name').click()
+  await row(page, 'camera').locator('button.name').click()
+  await expect(page.locator('.card')).toHaveCount(4)
+  await expect(page.locator('.group-head')).toHaveCount(0)
+  await page.locator('.list-head .sort.mtime').click()
+  const heads = page.locator('.group-head')
+  await expect(heads).toHaveCount(3)
+  await expect(heads.nth(0)).toHaveText(t.today)
+  await expect(heads.nth(1)).toHaveText(t.yesterday)
+  await expect(page.locator('.cards').nth(0).locator('.card')).toHaveCount(2)
+})
+
 test('images open in a lightbox that zooms, steps, shows info and closes back to the row', async ({ page, server }) => {
   await page.emulateMedia({ reducedMotion: 'reduce' })
   for (const n of ['big1.png', 'big2.png']) writeFileSync(join(server.vol, 'docs', n), png(2400, 1600))
@@ -2772,6 +2794,7 @@ test.describe('on a phone', () => {
     const small = page.locator('.bar .title')
     await expect(big).toHaveText('docs')
     await expect(small).toHaveCSS('opacity', '0')
+    await expect(row(page, 'n1.txt')).toBeVisible()
     await page.locator('.scroller').evaluate((s) => s.scrollTo(0, 400))
     await expect(small).toHaveCSS('opacity', '1')
     await expect(row(page, 'n20.txt')).toBeInViewport()

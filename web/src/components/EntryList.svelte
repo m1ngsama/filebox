@@ -130,15 +130,21 @@
   const rowH = $derived(shelf ? tile * 1.5 + 56 : !media ? 212 : tiles ? tile + gap : tile + 52)
   const rowPx = $derived(grid ? rowH : narrow.current ? 56 : 48)
   const layout = $derived.by(() => {
-    if (!group || grid) return null
-    const items: (string | number)[] = []
+    if (!group) return null
+    const items: (string | number | [number, number])[] = []
     const rowOf = new Int32Array(entries.length)
     let last: string | undefined
+    let row: [number, number] | null = null
     entries.forEach((e, i) => {
       const g = group(e)
-      if (g !== last) items.push((last = g))
-      rowOf[i] = items.length
-      items.push(i)
+      if (g !== last) {
+        items.push((last = g))
+        row = null
+      }
+      if (!grid) items.push(i)
+      else if (row && row[1] - row[0] < cols) row[1]++
+      else items.push((row = [i, i + 1]))
+      rowOf[i] = items.length - 1
     })
     return { items, rowOf }
   })
@@ -160,8 +166,8 @@
     const h = rowPx
     const opts = {
       count: rows,
-      estimateSize: (i: number) => (typeof items?.[i] === 'string' ? 36 : h),
-      getItemKey: grid ? (i: number) => i
+      estimateSize: (i: number) => (typeof items?.[i] === 'string' ? (grid ? 48 : 36) : h),
+      getItemKey: grid ? (i: number) => (typeof items?.[i] === 'string' ? `\0${items[i]}` : i)
         : items ? (i: number) => (typeof items[i] === 'string' ? `\0${items[i]}` : id(list[items[i] as number]))
         : (i: number) => (list[i] ? id(list[i]) : i),
     }
@@ -505,11 +511,16 @@
         {:else if !entries.length && empty}<div class="empty">{@render empty()}</div>{/if}
         <div class="spacer" role="grid" aria-label={t.fileList} aria-multiselectable={selected ? true : undefined} aria-busy={busy || undefined} aria-rowcount={rows} aria-colcount={grid ? cols : undefined} style:height={`${$v.getTotalSize()}px`}>
           {#each $v.getVirtualItems().filter((r) => r.index < rows) as r (r.key)}
-            {#if grid}
+            {#if typeof layout?.items[r.index] === 'string'}
+              <div class="group-head" class:grid role="row" aria-rowindex={r.index + 1} style:transform={`translateY(${r.start - off}px)`}>
+                <span role="columnheader">{layout?.items[r.index]}</span>
+              </div>
+            {:else if grid}
+              {@const [a, b] = layout ? (layout.items[r.index] as [number, number]) : [r.index * cols, r.index * cols + cols]}
               <div class="cards" class:media class:shelf class:tiles role="row" aria-rowindex={r.index + 1} style:transform={`translateY(${r.start - off}px)`} style:height={`${rowH}px`} style:grid-template-columns={`repeat(${cols}, minmax(0, 1fr))`}>
-                {#each entries.slice(r.index * cols, r.index * cols + cols) as e, j (id(e))}
+                {#each entries.slice(a, b) as e, j (id(e))}
                   {@const s = src(e)}
-                  {@const i = r.index * cols + j}
+                  {@const i = a + j}
                   <div
                     class="card"
                     {draggable}
@@ -556,10 +567,6 @@
                     {/if}
                   </div>
                 {/each}
-              </div>
-            {:else if typeof layout?.items[r.index] === 'string'}
-              <div class="group-head" role="row" aria-rowindex={r.index + 1} style:transform={`translateY(${r.start - off}px)`}>
-                <span role="columnheader">{layout?.items[r.index]}</span>
               </div>
             {:else}
               {@const n = layout ? (layout.items[r.index] as number) : r.index}
