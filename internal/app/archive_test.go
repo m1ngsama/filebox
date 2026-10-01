@@ -3,12 +3,19 @@ package app
 import (
 	"archive/zip"
 	"bytes"
+	"context"
+	"fmt"
+	"net"
+	"net/http"
+	"net/http/httptest"
 	"net/url"
 	"os"
 	"path/filepath"
+	"runtime"
 	"slices"
 	"strings"
 	"testing"
+	"time"
 )
 
 func cbz(t *testing.T, stored bool, entries ...[2]string) string {
@@ -132,5 +139,35 @@ func TestZipEntries(t *testing.T) {
 	drop := mkShare(t, f, `{"vol":"v","path":"manga","mode":"drop"}`)
 	if c, _, _ := anon(f, "GET", "/s/"+drop+"/zip-entries?p="+url.QueryEscape("vol 1.cbz"), ""); c != 403 {
 		t.Fatalf("drop share listing %d", c)
+	}
+}
+
+func TestSlowReadersDoNotStallArchives(t *testing.T) {
+	f := newTestApp(t)
+	f.write(t, "big.cbz", cbz(t, true, [2]string{"page.jpg", strings.Repeat("x", 40<<20)}))
+	f.write(t, "small.cbz", cbz(t, false, [2]string{"1.jpg", "one"}))
+	srv := httptest.NewServer(f.H)
+	defer srv.Close()
+	addr := strings.TrimPrefix(srv.URL, "http://")
+	for range runtime.NumCPU() + 2 {
+		c, err := net.Dial("tcp", addr)
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer c.Close()
+		fmt.Fprintf(c, "GET /api/zip-entry?vol=v&p=big.cbz&e=page.jpg HTTP/1.1\r\nHost: %s\r\nCookie: %s=%s\r\n\r\n", addr, f.Cookie.Name, f.Cookie.Value)
+	}
+	time.Sleep(500 * time.Millisecond)
+	req, _ := http.NewRequest("GET", srv.URL+"/api/zip-entries?vol=v&p=small.cbz", nil)
+	req.AddCookie(f.Cookie)
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+	res, err := http.DefaultClient.Do(req.WithContext(ctx))
+	if err != nil {
+		t.Fatalf("listing stalled behind slow readers: %v", err)
+	}
+	res.Body.Close()
+	if res.StatusCode != 200 {
+		t.Fatalf("listing %d", res.StatusCode)
 	}
 }
