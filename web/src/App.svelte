@@ -8,7 +8,7 @@
   import Browser from './routes/Browser.svelte'
   import Lazy from './components/Lazy.svelte'
   import UploadPanel from './components/UploadPanel.svelte'
-  import MiniPlayer from './components/MiniPlayer.svelte'
+  import { player } from './lib/player.svelte'
   import Nav from './components/Nav.svelte'
   import NavToggle from './components/NavToggle.svelte'
   import Toasts from './components/Toasts.svelte'
@@ -112,7 +112,7 @@
     </main>
   </div>
   <UploadPanel />
-  <MiniPlayer />
+  {#if player.track}{#await import('./components/MiniPlayer.svelte') then { default: MiniPlayer }}<MiniPlayer />{/await}{/if}
   {#if shared !== null}
     <Lazy load={() => import('./components/ShareTarget.svelte')} vols={me.vols} status={shared} onclose={() => (shared = null)} />
   {/if}
