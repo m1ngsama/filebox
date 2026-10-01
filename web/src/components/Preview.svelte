@@ -6,9 +6,8 @@
   import ChevronLeft from '@lucide/svelte/icons/chevron-left'
   import ChevronRight from '@lucide/svelte/icons/chevron-right'
   import type { Entry, Src } from '../lib/api'
-  import { kind, look, thumbable, subtitleOf, subtitleLang, sidecars, stem } from '../lib/format'
+  import { kind, thumbable, subtitleOf, subtitleLang, sidecars, stem } from '../lib/format'
   import { load, save } from '../lib/storage'
-  import '../lib/render.css'
   import { t } from '../lib/i18n'
 
   let {
@@ -49,7 +48,6 @@
     else if (kind === 'fail') failed()
     else if (kind === 'close') onclose()
   }
-  const LIMIT = 1 << 20
   const tracks = $derived(
     k === 'video' && siblings
       ? entries
@@ -60,12 +58,6 @@
   const spot = $derived('pos:' + src)
   let last = 0
   let audioOnly = $state(false)
-  const md = $derived(/\.(md|markdown)$/i.test(entry.name))
-  const rich = $derived(k === 'text' && (md || look(entry.name) === 'code'))
-  let text = $state<string | null>(null)
-  let html = $state<string | null>(null)
-  let partial = $state(false)
-  let plain = $state('')
   let status = $state<'loading' | 'ready' | 'error'>('loading')
   let root = $state<HTMLDivElement>()
   let closer = $state<HTMLButtonElement>()
@@ -100,33 +92,6 @@
     rtl = !rtl
     save(folder, rtl ? '1' : '')
   }
-
-  $effect(() => {
-    if (k !== 'text') return
-    let stale = false
-    const r = rich
-    text = html = null
-    fetch(r ? url(entry, 'render') : src, r ? {} : { headers: { Range: `bytes=0-${LIMIT - 1}` } })
-      .then((res) => {
-        if (!res.ok) throw new Error(String(res.status))
-        if (stale) return res.text()
-        partial = r ? res.headers.has('X-Truncated') : Number(res.headers.get('Content-Range')?.split('/')[1] ?? 0) > LIMIT
-        plain = res.headers.get('X-Plain') ?? ''
-        return res.text()
-      })
-      .then(
-        (s) => {
-          if (stale) return
-          if (r) html = s
-          else text = s
-          status = 'ready'
-        },
-        () => !stale && (status = 'error'),
-      )
-    return () => {
-      stale = true
-    }
-  })
 
   onMount(() => {
     const vv = visualViewport
@@ -296,11 +261,9 @@
     {:else if k === 'book'}
       <iframe class="book" src={reader} title={entry.name} bind:this={frame} onerror={failed}></iframe>
     {:else if k === 'text'}
-      {#if html !== null}
-        <article class="doc" class:code={!md} tabindex="-1">{@html html}</article>
-      {:else if text !== null}<pre tabindex="-1">{text}</pre>{/if}
-      {#if plain}<p class="hint">{plain === 'large' ? t.tooLarge : t.tooComplex}</p>{/if}
-      {#if partial}<p class="hint">{t.truncated}</p>{/if}
+      {#await import('./TextView.svelte') then { default: TextView }}
+        {#key src}<TextView {entry} {url} onready={ready} onfail={failed} />{/key}
+      {/await}
     {:else if k !== 'comic'}
       <div class="viewer-error">
         <p>{t.noPreview}</p>
