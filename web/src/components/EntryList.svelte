@@ -16,7 +16,7 @@
   import FileIcon from './FileIcon.svelte'
   import { selectURL, type Entry, type Loc } from '../lib/api'
   import { link } from '../lib/router.svelte'
-  import { size, date, ago, look, fallback, flip, sorts, mostlyMedia, ends, SEP, type Sort } from '../lib/format'
+  import { amount, date, ago, look, fallback, flip, sorts, mostlyMedia, ends, SEP, type Sort } from '../lib/format'
   import { t } from '../lib/i18n'
   import { narrow } from '../lib/shell.svelte'
   import { carry, drop, target, type Carried, type Target } from '../lib/dnd'
@@ -104,7 +104,7 @@
 
   const media = $derived(grid && mostlyMedia(entries))
   const tiles = $derived(media && narrow.current)
-  const gap = $derived(tiles ? 4 : 12)
+  const gap = $derived(tiles ? 2 : 12)
   const cols = $derived(!grid ? 1 : Math.max(1, media ? Math.floor((width - gap) / ((tiles ? 110 : 128) + gap)) : Math.floor((width - 16) / 172)))
   const tile = $derived((width - (cols + 1) * gap) / cols)
   const rowH = $derived(!media ? 212 : tiles ? tile + gap : tile + 52)
@@ -205,9 +205,13 @@
     timer = setTimeout(() => {
       pressing = -1
       swallow = true
+      navigator.vibrate?.(10)
+      if (tiles && !selected.size) {
+        sheet = entries[i]
+        return
+      }
       anchor = key
       selected.add(key)
-      navigator.vibrate?.(10)
     }, 450)
   }
 
@@ -513,7 +517,6 @@
                         {#if tiles}<span class="tile-name">{@render label(e.name)}</span>{/if}
                       {/if}
                     </button>
-                    {#if tiles}{@render more(e)}{/if}
                     {#if !tiles}
                       <div class="card-foot">
                         <span class="card-name" title={e.name}>{@render label(e.name)}</span>
@@ -566,13 +569,13 @@
                 <span class="cell name-cell" role="gridcell">
                   <button class="name" tabindex="-1" onclick={() => tap(n)} title={e.name} aria-label={named(e)} aria-expanded={expanded?.(e)}>{@render label(e.name)}{#if tag?.(e)}<span class="tag">{tag(e)}</span>{/if}</button>
                   {#if narrow.current}
-                    <span class="hint sub">{#if gone}{@render trail(e)} · {gone}{:else}{e.dir ? '' : `${size(e.size)} · `}{ago(e.mtime)}{#if loc}{' · '}{@render trail(e)}{/if}{/if}</span>
+                    <span class="hint sub">{#if gone}{@render trail(e)} · {gone}{:else}{amount(e) ? `${amount(e)} · ` : ''}{ago(e.mtime)}{#if loc}{' · '}{@render trail(e)}{/if}{/if}</span>
                   {:else if loc}
                     <span class="hint sub">{@render trail(e)}{gone ? ` · ${gone}` : ''}</span>
                   {/if}
                 </span>
                 <span class="cell" role="gridcell">{@render more(e)}</span>
-                <span class="num size" role="gridcell">{e.dir || gone ? '' : size(e.size)}</span>
+                <span class="num size" role="gridcell">{gone ? '' : amount(e)}</span>
                 <span class="num mtime" role="gridcell" title={gone ? undefined : date(e.mtime)}>{gone ? '' : ago(e.mtime)}</span>
               </div>
             {/if}
@@ -590,7 +593,7 @@
 {#if sheet}
   {@const e = sheet}
   {#await import('./Sheet.svelte') then { default: Sheet }}
-    <Sheet title={e.name} sub={e.dir ? date(e.mtime) : `${size(e.size)} · ${date(e.mtime)}`} onclose={() => (sheet = null)}>
+    <Sheet title={e.name} sub={amount(e) ? `${amount(e)} · ${date(e.mtime)}` : date(e.mtime)} onclose={() => (sheet = null)}>
       {#snippet lead()}
         {@const s = src(e)}
         <span class="thumb" data-look={e.dir ? 'dir' : look(e.name)}>{#if s}<img src={s} alt="" />{:else}<FileIcon name={e.name} dir={e.dir} />{/if}</span>

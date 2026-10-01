@@ -12,6 +12,11 @@ export function size(n: number): string {
   return `${decimals[i && n < 10 ? 1 : 0].format(n)} ${u[i]}`
 }
 
+const maxItems = 1000
+
+export const amount = (e: { dir: boolean; size: number; items?: number }) =>
+  e.dir ? (e.items == null ? '' : t.runCount(e.items, e.items >= maxItems)) : size(e.size)
+
 export type Sort = 'name' | 'size' | 'mtime'
 export const sorts: [Sort, string][] = [['name', t.name], ['size', t.size], ['mtime', t.mtime]]
 export const flip = (sort: Sort, desc: boolean, k: Sort) => (sort === k ? !desc : k !== 'name')
@@ -50,6 +55,9 @@ export function arrange<T extends Row>(list: T[], filter: string, sort: Sort, de
 
 const dtf = [new Intl.DateTimeFormat(locale, { dateStyle: 'short', timeStyle: 'short' }), new Intl.DateTimeFormat(locale, { dateStyle: 'short', timeStyle: 'medium' })]
 export const date = (ms: number, seconds = false) => dtf[+seconds].format(ms)
+
+const moment = new Intl.DateTimeFormat(locale, { dateStyle: 'long', timeStyle: 'short' })
+export const when = (ms: number) => moment.format(ms)
 
 export type Meta = Partial<Record<keyof typeof t.meta, string>> & { width?: number; height?: number }
 

@@ -15,7 +15,38 @@ import (
 	"github.com/m1ngsama/filebox/internal/vol"
 )
 
-const lsChunk = 1000
+const (
+	lsChunk  = 1000
+	maxDirs  = 200
+	maxItems = 1000
+)
+
+// counted fills in child counts for small folders only; a listing never reads more than maxDirs extra directories.
+func counted(root *os.Root, rel string, es []Entry) []Entry {
+	dirs := 0
+	for _, e := range es {
+		if e.Dir {
+			dirs++
+		}
+	}
+	if dirs > maxDirs {
+		return es
+	}
+	for i, e := range es {
+		if !e.Dir {
+			continue
+		}
+		f, err := root.Open(path.Join(rel, e.Name))
+		if err != nil {
+			continue
+		}
+		names, _ := f.Readdirnames(maxItems)
+		f.Close()
+		n := len(names)
+		es[i].Items = &n
+	}
+	return es
+}
 
 func entries(root *os.Root, rel string, des []fs.DirEntry) []Entry {
 	out := make([]Entry, 0, len(des))
@@ -73,7 +104,7 @@ func WriteList(w http.ResponseWriter, r *http.Request, root *os.Root, rel string
 		return
 	}
 	if len(des) < lsChunk {
-		httpx.Tagged(w, r, map[string]any{"entries": sorted(entries(root, rel, des))})
+		httpx.Tagged(w, r, map[string]any{"entries": counted(root, rel, sorted(entries(root, rel, des)))})
 		return
 	}
 	h := w.Header()

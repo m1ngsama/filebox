@@ -27,6 +27,7 @@ type Entry struct {
 	Dir   bool   `json:"dir"`
 	Size  int64  `json:"size"`
 	Mtime int64  `json:"mtime"`
+	Items *int   `json:"items,omitempty"`
 }
 
 type Loc struct {

@@ -103,8 +103,8 @@ p.error::before { content: ''; flex: none; width: 1em; height: 1lh; background: 
 .usage-bar { height: 4px; border-radius: var(--radius-full); background: linear-gradient(to right, var(--accent) var(--p), var(--line) var(--p)); }
 .nav-foot { border-top: 1px solid var(--line); padding-top: var(--space-2) !important; }
 .nav-toggle { display: none; }
-.skip { position: fixed; top: calc(env(safe-area-inset-top) + var(--space-2)); left: var(--space-2); z-index: 80; padding: var(--space-2) var(--space-3); border-radius: var(--radius-md); background: var(--panel); box-shadow: var(--shadow); font-weight: 600; translate: 0 -200%; }
-.skip:focus { translate: none; }
+.skip { position: fixed; top: calc(env(safe-area-inset-top) + var(--space-2)); left: var(--space-2); z-index: 80; padding: var(--space-2) var(--space-3); border-radius: var(--radius-md); background: var(--panel); font-weight: 600; translate: 0 -200%; }
+.skip:focus { translate: none; box-shadow: var(--shadow); }
 .scrim { position: fixed; inset: 0; z-index: 40; border: 0; padding: 0; border-radius: 0; }
 .scrim { background: var(--scrim); animation: appear var(--dur-2) var(--ease-out); }
 
@@ -234,11 +234,9 @@ p.error::before { content: ''; flex: none; width: 1em; height: 1lh; background: 
 .card-name { flex: 1; min-width: 0; }
 .card-badge { position: absolute; right: var(--space-1); bottom: var(--space-1); display: flex; align-items: center; gap: var(--space-0); font-size: var(--text-xs); padding: var(--space-0) var(--space-1); border-radius: var(--radius-sm); background: color-mix(in srgb, var(--viewer-bg) 55%, transparent); color: var(--viewer-fg); }
 .cards.media .card-open { flex: none; aspect-ratio: 1; }
-.cards.tiles { gap: var(--space-1); padding: 0 var(--space-1); align-items: start; }
-.tiles .card { padding: 0; border-radius: var(--radius-sm); }
-.tiles .card-open { border-radius: var(--radius-sm); }
-.tiles .more { position: absolute; top: 0; right: 0; z-index: 1; }
-.tiles .card:has(img) .more { color: var(--viewer-fg); filter: drop-shadow(0 0 2px var(--viewer-bg)); }
+.cards.tiles { gap: var(--space-0); padding: 0 var(--space-0); align-items: start; }
+.tiles .card { padding: 0; border-radius: 0; }
+.tiles .card-open { border-radius: 0; }
 .tiles .card.sel { outline: 3px solid var(--accent); outline-offset: -3px; }
 .tile-name { position: absolute; left: var(--space-1); right: var(--space-1); bottom: var(--space-1); font-size: var(--text-xs); }
 .tile-name .mid { justify-content: center; }

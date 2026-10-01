@@ -4,7 +4,7 @@
   import 'photoswipe/style.css'
   import X from '@lucide/svelte/icons/x'
   import type { Entry, Src } from '../lib/api'
-  import { size, date, thumbable, metaRows, type Meta } from '../lib/format'
+  import { size, date, when, thumbable, metaRows, type Meta } from '../lib/format'
   import { t } from '../lib/i18n'
 
   type Book = { title: string; rtl: boolean; onpage: (i: number) => void; onrtl: () => void }
@@ -41,14 +41,25 @@
     return [...r, ...metaRows(m)]
   })
 
+  const metas = new Map<string, Promise<Meta>>()
+  const metaOf = (e: Entry) => {
+    let m = metas.get(e.name)
+    if (!m) {
+      m = fetch(url(e, 'meta')).then((r) => (r.ok ? r.json() : {}), () => ({}))
+      metas.set(e.name, m)
+    }
+    return m
+  }
+  const taken = (m: Meta) => {
+    const at = m.taken ? new Date(m.taken.replace(' ', 'T')).getTime() : NaN
+    return Number.isNaN(at) ? '' : when(at)
+  }
+
   $effect(() => {
     if (!info) return
-    const e = entry
     let stale = false
     meta = null
-    fetch(url(e, 'meta'))
-      .then((r) => (r.ok ? r.json() : {}))
-      .then((m: Meta) => !stale && (meta = m), () => !stale && (meta = {}))
+    metaOf(entry).then((m) => !stale && (meta = m))
     return () => {
       stale = true
     }
@@ -115,7 +126,14 @@
         order: 6,
         appendTo: 'bar',
         className: 'fb-name',
-        onInit: (el) => pswp.on('change', () => (el.textContent = book ? book.title : item(pswp.currIndex).name)),
+        onInit: (el) =>
+          pswp.on('change', () => {
+            if (book) return void (el.textContent = book.title)
+            const e = item(pswp.currIndex)
+            el.textContent = e.name
+            el.title = e.name
+            if (thumbable(e.name)) metaOf(e).then((m) => item(pswp.currIndex) === e && taken(m) && (el.textContent = taken(m)))
+          }),
       })
       if (book)
         pswp.ui?.registerElement({
@@ -250,6 +268,12 @@
   }
   :global(.pswp--one-slide.fb-edges .pswp__button--arrow) {
     display: block;
+  }
+  @media (pointer: coarse) {
+    :global(.pswp .pswp__button--arrow),
+    :global(.pswp .pswp__button--zoom) {
+      display: none;
+    }
   }
   :global(.pswp__top-bar) {
     padding-top: env(safe-area-inset-top);
