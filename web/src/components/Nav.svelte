@@ -8,6 +8,9 @@
   import Settings from '@lucide/svelte/icons/settings'
   import LogOut from '@lucide/svelte/icons/log-out'
   import { link } from '../lib/router.svelte'
+  import ChevronRight from '@lucide/svelte/icons/chevron-right'
+  import { tree } from '../lib/tree.svelte'
+  import { target, inside, sink } from '../lib/dnd'
   import { api, type Usage } from '../lib/api'
   import { size } from '../lib/format'
   import { shell, narrow } from '../lib/shell.svelte'
@@ -29,6 +32,19 @@
   })
   const solo = $derived(new Set(groups.filter((g) => g.length === 1).map((g) => g[0])))
   const cur = $derived(parts[0] === 'files' || parts[0] === 'trash' ? parts[1] : undefined)
+
+  const here = $derived(parts[0] === 'files' ? parts.slice(2).join('/') : '\0')
+
+  $effect(() => {
+    if (parts[0] !== 'files' || !parts[1]) return
+    const segs = parts.slice(2)
+    for (let i = 0; i < segs.length; i++) tree.open.add(`${parts[1]}/${segs.slice(0, i).join('/')}`)
+  })
+
+  const root = (v: string) => ({
+    accepts: (c: Parameters<typeof inside>[0]) => !!sink.into && !inside(c, { vol: v, path: '' }),
+    drop: (c: Parameters<typeof inside>[0], copy: boolean) => sink.into?.({ vol: v, path: '' }, c, copy),
+  })
 
   function go(e: MouseEvent) {
     shell.nav = false
@@ -58,10 +74,19 @@
       </li>
     {/if}
     {#each vols as v}
-      <li>
-        <a href={`/files/${encodeURIComponent(v)}/`} onclick={go} aria-current={parts[0] === 'files' && cur === v ? 'page' : undefined}>
-          <HardDrive size={icon.md} /><span>{v}</span>
-        </a>
+      {@const open = tree.open.has(`${v}/`)}
+      <li class="vol-item">
+        <div class="vol-row" use:target={root(v)}>
+          <a href={`/files/${encodeURIComponent(v)}/`} onclick={go} aria-current={parts[0] === 'files' && cur === v && !here ? 'page' : undefined}>
+            <HardDrive size={icon.md} /><span>{v}</span>
+          </a>
+          <button type="button" class="twisty vol-twisty" class:open aria-expanded={open} aria-label={open ? t.collapseFolders(v) : t.expandFolders(v)} onclick={() => (open ? tree.open.delete(`${v}/`) : tree.open.add(`${v}/`))}><ChevronRight size={14} /></button>
+        </div>
+        {#if open}
+          <div role="tree" tabindex="-1" aria-label={t.foldersOf(v)} class="tree">
+            {#await import('./FolderTree.svelte') then { default: FolderTree }}<FolderTree vol={v} path="" depth={0} here={cur === v ? here : '\0'} />{/await}
+          </div>
+        {/if}
         {#if solo.has(v)}
           {@render bar(usage[v])}
         {:else if !measured && v === vols.at(-1)}

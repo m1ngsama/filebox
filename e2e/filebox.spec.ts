@@ -2254,6 +2254,27 @@ test('recent groups files by day and sorting by name drops the groups', async ({
   await expect(page.locator('.row button.name')).toHaveText(['old.txt', 'old.txt', 'readme.txt'])
 })
 
+test('the sidebar tree follows the open folder, walks by keyboard and takes dropped files', async ({ page, server }) => {
+  mkdirSync(join(server.vol, 'docs', 'deep', 'deeper'), { recursive: true })
+  mkdirSync(join(server.vol, 'archive'))
+  await login(page)
+  await page.goto('/files/v/docs/deep/deeper/')
+  const tree = page.getByRole('tree', { name: t.foldersOf('v') })
+  await expect(tree.getByRole('link', { name: 'deeper' })).toHaveAttribute('aria-current', 'page')
+  await tree.getByRole('link', { name: 'docs' }).focus()
+  await page.keyboard.press('ArrowDown')
+  await expect(tree.getByRole('link', { name: 'deep', exact: true })).toBeFocused()
+  await page.keyboard.press('ArrowLeft')
+  await expect(tree.getByRole('link', { name: 'deeper' })).toHaveCount(0)
+  await page.keyboard.press('ArrowRight')
+  await expect(tree.getByRole('link', { name: 'deeper' })).toBeVisible()
+  await tree.getByRole('link', { name: 'docs' }).click()
+  await expect(page).toHaveURL(/\/files\/v\/docs\/$/)
+  await row(page, 'readme.txt').locator('.num.size').dragTo(tree.getByRole('link', { name: 'archive' }))
+  await expect.poll(() => existsSync(join(server.vol, 'archive', 'readme.txt'))).toBe(true)
+  await expect(row(page, 'readme.txt')).toHaveCount(0)
+})
+
 test('starred items show under favorites, follow a rename and open where they live', async ({ page, server }) => {
   await login(page)
   await row(page, 'docs').locator('button.more').click()

@@ -26,7 +26,7 @@
 
 <script lang="ts">
   import { icon } from '../lib/icon'
-  import { tick, untrack } from 'svelte'
+  import { onMount, tick, untrack } from 'svelte'
   import { SvelteSet } from 'svelte/reactivity'
   import { DropdownMenu } from 'bits-ui'
   import Plus from '@lucide/svelte/icons/plus'
@@ -76,7 +76,7 @@
   import EntryList, { type Action } from '../components/EntryList.svelte'
   import ContentHits from '../components/ContentHits.svelte'
   import type { Choice } from '../components/ConflictDialog.svelte'
-  import { target, inside, type Carried, type Target } from '../lib/dnd'
+  import { target, inside, sink, type Carried, type Target } from '../lib/dnd'
 
   let { vol, path, vols }: { vol: string; path: string; vols: string[] } = $props()
 
@@ -747,6 +747,13 @@
     accepts: (c) => !inside(c, to),
     drop: (c, copy) => dropInto(to, c, copy),
     spring,
+  })
+
+  onMount(() => {
+    sink.into = dropInto
+    return () => {
+      if (sink.into === dropInto) sink.into = undefined
+    }
   })
 
   const dnd = {

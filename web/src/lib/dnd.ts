@@ -70,3 +70,6 @@ export function target(node: HTMLElement, t: Target) {
     },
   }
 }
+
+// sink lets targets outside the open folder, such as the sidebar tree, drop through the browser that owns the move.
+export const sink: { into?: (to: Loc, c: Carried, copy: boolean) => void } = {}
