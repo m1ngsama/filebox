@@ -14,10 +14,11 @@
   import { folderAction, downloadAction, actOn } from '../lib/located'
   import { fail } from '../lib/toast.svelte'
 
-  type Item = RecentFile & { run?: number; head?: boolean }
+  type Item = RecentFile & { run?: number; key?: string; head?: boolean }
   let files = $state.raw<Item[]>([])
   let runs = $state.raw<Run[]>([])
-  const open = new SvelteSet<number>()
+  const open = new SvelteSet<string>()
+  const keyOf = (r: Run) => `${r.vol}\0${r.dir}\0${r.oldest}`
   let scanning = $state(false)
   let loaded = $state(false)
   let error = $state('')
@@ -25,12 +26,12 @@
   let desc = $state(true)
   let preview = $state.raw<Entry | null>(null)
 
-  const heads = $derived(runs.map((r, i): Item => ({ name: base(r.dir) || r.vol, dir: true, size: r.size, mtime: r.mtime, vol: r.vol, path: r.dir, run: i, head: true })))
+  const heads = $derived(runs.map((r, i): Item => ({ name: base(r.dir) || r.vol, dir: true, size: r.size, mtime: r.mtime, vol: r.vol, path: r.dir, run: i, key: keyOf(r), head: true })))
   const shown = $derived.by(() => {
-    if (sort !== 'mtime') return arrange(files, '', sort, desc)
     const d = desc ? -1 : 1
-    const top = [...files.filter((f) => f.run === undefined), ...heads].sort((a, b) => d * (a.mtime - b.mtime))
-    return top.flatMap((x) => (x.head && open.has(x.run!) ? [x, ...files.filter((f) => f.run === x.run)] : [x]))
+    const order = (xs: Item[]) => (sort === 'mtime' ? [...xs].sort((a, b) => d * (a.mtime - b.mtime)) : arrange(xs, '', sort, desc))
+    const top = order([...files.filter((f) => f.run === undefined), ...heads])
+    return top.flatMap((x) => (x.head && open.has(x.key!) ? [x, ...order(files.filter((f) => f.run === x.run))] : [x]))
   })
   const day = $derived(files && days())
   const loc = (e: Entry) => e as Item
@@ -39,19 +40,30 @@
   $effect(() => {
     void tries
     let timer = 0
-    const load = () =>
-      api.recent().then(
+    let parked = false
+    const stop = new AbortController()
+    const load = () => {
+      if ((parked = document.hidden)) return
+      api.recent(stop.signal).then(
         (r) => {
+          if (stop.signal.aborted) return
           files = r.entries.map((f) => ({ ...f, dir: false }))
           runs = r.runs
           scanning = r.scanning
           loaded = true
           if (r.scanning) timer = setTimeout(load, 3000)
         },
-        (e: Error) => (loaded ? fail(e) : (error = e.message)),
+        (e: Error) => !stop.signal.aborted && (loaded ? fail(e) : (error = e.message)),
       )
+    }
+    const wake = () => parked && load()
+    document.addEventListener('visibilitychange', wake)
     load()
-    return () => clearTimeout(timer)
+    return () => {
+      stop.abort()
+      clearTimeout(timer)
+      document.removeEventListener('visibilitychange', wake)
+    }
   })
 
   const actions: Action[] = [{ id: 'open', label: t.open, icon: Eye }, downloadAction, folderAction]
@@ -65,10 +77,10 @@
   }
 
   function onopen(e: Entry) {
-    const r = loc(e).run
+    const k = loc(e).key!
     if (!loc(e).head) preview = e
-    else if (open.has(r!)) open.delete(r!)
-    else open.add(r!)
+    else if (open.has(k)) open.delete(k)
+    else open.add(k)
   }
 </script>
 
@@ -99,7 +111,9 @@
     actions={(e) => (!e ? [] : loc(e).head ? [{ id: 'into', label: t.openNamed(e.name), icon: FolderOpen }] : actions)}
     {onaction}
     {onopen}
-    tag={(e) => (loc(e).head ? t.runCount(runs[loc(e).run!].count) : undefined)}
+    tag={(e) => (loc(e).head ? t.runCount(runs[loc(e).run!].count, runs[loc(e).run!].more) : undefined)}
+    expanded={(e) => (loc(e).head ? open.has(loc(e).key!) : undefined)}
+    nested={(e) => !loc(e).head && loc(e).run !== undefined}
     loading={!loaded && !error}
     empty={recentEmpty}
     id={(e) => (loc(e).head ? `\0${loc(e).run}` : `${loc(e).vol}:${loc(e).path}`)}

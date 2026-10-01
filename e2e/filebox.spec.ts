@@ -1705,17 +1705,47 @@ test('recent folds a burst of writes into one folder row that expands', async ({
   await expect(page.locator('.uploads', { hasText: t.uploaded(30) })).toHaveCount(1)
   await page.getByRole('link', { name: t.recent, exact: true }).click()
   const head = page.locator('.row', { has: page.locator('.tag') })
-  await expect(head.locator('button.name')).toHaveAccessibleName('bulk')
+  await expect(head.locator('button.name')).toHaveAccessibleName(`bulk, ${t.runCount(30)}`)
+  await expect(head.locator('button.name')).toHaveAttribute('aria-expanded', 'false')
   await expect(head.locator('.tag')).toHaveText(t.runCount(30))
   await expect(page.locator('.row button.name')).toHaveText([`bulk${t.runCount(30)}`, 'readme.txt'])
   await head.locator('button.name').click()
-  await expect(page.locator('.row', { hasText: '.log' }).first()).toBeVisible()
+  await expect(head.locator('button.name')).toHaveAttribute('aria-expanded', 'true')
+  await expect(page.locator('.row.nested', { hasText: '.log' }).first()).toBeVisible()
   await expect(page.locator('.row').nth(1)).toContainText('.log')
   await head.locator('button.name').click()
   await expect(page.locator('.row', { hasText: '.log' })).toHaveCount(0)
   await head.locator('button.more').click()
   await page.getByRole('menuitem', { name: t.openNamed('bulk') }).click()
   await expect(page).toHaveURL(/\/files\/v\/bulk\/$/)
+})
+
+test('recent stops polling the index in a background tab and after leaving the page', async ({ page }) => {
+  await page.clock.install()
+  let asked = 0
+  await page.route('**/api/recent', async (r) => {
+    asked++
+    const res = await r.fetch()
+    r.fulfill({ response: res, json: { ...(await res.json()), scanning: true } })
+  })
+  await login(page)
+  await page.getByRole('link', { name: t.recent, exact: true }).click()
+  await expect.poll(() => asked).toBe(1)
+  await page.clock.runFor(3100)
+  await expect.poll(() => asked).toBe(2)
+  const hide = (hidden: boolean) =>
+    page.evaluate((h) => {
+      Object.defineProperty(document, 'hidden', { value: h, configurable: true })
+      document.dispatchEvent(new Event('visibilitychange'))
+    }, hidden)
+  await hide(true)
+  await page.clock.runFor(10_000)
+  expect(asked).toBe(2)
+  await hide(false)
+  await expect.poll(() => asked).toBe(3)
+  await page.getByRole('link', { name: t.favorites, exact: true }).click()
+  await page.clock.runFor(10_000)
+  expect(asked).toBe(3)
 })
 
 test('recent groups files by day and sorting by name drops the groups', async ({ page, server }) => {

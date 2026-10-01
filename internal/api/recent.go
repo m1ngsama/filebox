@@ -26,7 +26,7 @@ type recentRun struct {
 	More  bool   `json:"more,omitempty"`
 	Size  int64  `json:"size"`
 	Mtime int64  `json:"mtime"`
-	last  int64
+	Last  int64  `json:"oldest"`
 }
 
 type collapser struct {
@@ -51,7 +51,7 @@ func weight(n int) int {
 func (c *collapser) add(f index.File) bool {
 	if c.shown >= c.limit {
 		for k, r := range c.open {
-			if c.runs[r].last-f.Mtime > runGap {
+			if c.runs[r].Last-f.Mtime > runGap {
 				delete(c.open, k)
 			}
 		}
@@ -66,7 +66,7 @@ func (c *collapser) add(f index.File) bool {
 	}
 	k := [2]string{f.Vol, dir}
 	r, ok := c.open[k]
-	if !ok || c.runs[r].last-f.Mtime > runGap {
+	if !ok || c.runs[r].Last-f.Mtime > runGap {
 		if c.shown >= c.limit {
 			return true
 		}
@@ -78,7 +78,7 @@ func (c *collapser) add(f index.File) bool {
 	c.shown += weight(run.Count+1) - weight(run.Count)
 	run.Count++
 	run.Size += f.Size
-	run.last = f.Mtime
+	run.Last = f.Mtime
 	if run.Count <= runMembers {
 		c.kept = append(c.kept, f)
 		c.of = append(c.of, r)
