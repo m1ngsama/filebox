@@ -2826,9 +2826,14 @@ async function apiShare(page: Page, data: Record<string, unknown>) {
 
 test('my shares keep one visible action per row and put expired links last, dimmed', async ({ page }) => {
   await login(page)
-  await apiShare(page, { path: 'docs', expires_in: 1 })
-  await page.waitForTimeout(1100)
+  const { id } = await apiShare(page, { path: 'docs', expires_in: 3600 })
   await apiShare(page, { path: 'docs/readme.txt' })
+  await page.route('**/api/shares', async (r) => {
+    const res = await r.fetch()
+    const body = await res.json()
+    for (const x of body.shares) if (x.id === id) x.expires = Math.floor(Date.now() / 1000) - 60
+    r.fulfill({ response: res, json: body })
+  })
   await page.goto('/shares')
   const rows = page.locator('.rows li')
   await expect(rows).toHaveCount(2)
@@ -2836,7 +2841,8 @@ test('my shares keep one visible action per row and put expired links last, dimm
   await expect(rows.last().locator('.share-meta')).toHaveClass(/expired/)
   await expect(rows.last().locator('.share-summary')).toContainText(t.expired)
   await expect(rows.first().locator('.share-meta')).not.toHaveClass(/expired/)
-  for (const r of await rows.all()) await expect(r.getByRole('button')).toHaveCount(2)
+  await expect(rows.first().getByRole('button')).toHaveCount(2)
+  await expect(rows.last().getByRole('button')).toHaveCount(1)
   await rows.last().getByRole('button', { name: t.shareActions }).click()
   await expect(page.getByRole('menuitem')).toHaveText([t.qrCode, t.editShare, t.deleteShare])
 })
