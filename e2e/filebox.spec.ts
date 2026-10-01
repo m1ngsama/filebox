@@ -470,18 +470,39 @@ test('a hostile book runs no script, reaches no API and frames no page', async (
   expect((await page.request.get('/files/v/')).headers()['content-security-policy']).toContain("frame-ancestors 'none'")
 })
 
-test.describe('on iOS', () => {
-  test.use({ userAgent: 'Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.0 Mobile/15E148 Safari/604.1' })
-  test('a PDF opens in a new tab instead of an iframe', async ({ page, server }) => {
-    writeFileSync(join(server.vol, 'docs', 'a.pdf'), '%PDF-1.4\n')
-    await login(page)
-    await row(page, 'docs').locator('button.name').click()
-    await row(page, 'a.pdf').locator('button.name').click()
-    const view = page.getByRole('dialog', { name: 'a.pdf' })
-    await expect(view.getByRole('link', { name: t.openInTab })).toHaveAttribute('href', '/raw/v/docs/a.pdf')
-    await expect(view.getByRole('link', { name: t.openInTab })).toHaveAttribute('target', '_blank')
-    await expect(view.locator('iframe')).toHaveCount(0)
-  })
+function pdf(texts: string[]) {
+  const objs = ['<< /Type /Catalog /Pages 2 0 R >>', `<< /Type /Pages /Kids [${texts.map((_, i) => `${4 + i * 2} 0 R`).join(' ')}] /Count ${texts.length} >>`, '<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>']
+  for (const [i, x] of texts.entries()) {
+    const body = `BT /F1 24 Tf 72 700 Td (${x}) Tj ET`
+    objs.push(`<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 3 0 R >> >> /Contents ${5 + i * 2} 0 R >>`)
+    objs.push(`<< /Length ${body.length} >>\nstream\n${body}\nendstream`)
+  }
+  let out = '%PDF-1.4\n'
+  const at: number[] = []
+  for (const [i, o] of objs.entries()) {
+    at.push(out.length)
+    out += `${i + 1} 0 obj\n${o}\nendobj\n`
+  }
+  const xref = out.length
+  out += `xref\n0 ${objs.length + 1}\n0000000000 65535 f \n${at.map((n) => `${String(n).padStart(10, '0')} 00000 n \n`).join('')}`
+  return out + `trailer\n<< /Size ${objs.length + 1} /Root 1 0 R >>\nstartxref\n${xref}\n%%EOF\n`
+}
+
+test('PDFs open in the built-in viewer with selectable text, search and page jumps', async ({ page, server }) => {
+  writeFileSync(join(server.vol, 'docs', 'a.pdf'), pdf(['alpha page one', 'bravo page two', 'charlie page three']))
+  await login(page)
+  await row(page, 'docs').locator('button.name').click()
+  await row(page, 'a.pdf').locator('button.name').click()
+  const view = page.getByRole('dialog', { name: 'a.pdf' })
+  await expect(view.locator('.pdfViewer .page')).toHaveCount(3)
+  await expect(view.locator('.textLayer').first()).toContainText('alpha page one')
+  await view.getByRole('button', { name: t.findInDocument }).click()
+  await view.getByRole('searchbox', { name: t.findInDocument }).fill('charlie')
+  await expect(view.locator('.find .count')).toHaveText(t.matchOf(1, 1))
+  await view.locator('.find').getByRole('button', { name: t.close }).click()
+  await view.getByLabel(t.goToPage).fill('2')
+  await view.getByLabel(t.goToPage).press('Enter')
+  await expect(view.getByLabel(t.goToPage)).toHaveAttribute('placeholder', '2')
 })
 
 test('videos pick up sibling subtitles and an unplayable one offers a download', async ({ page, server }) => {

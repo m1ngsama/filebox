@@ -1,6 +1,6 @@
 import { defineConfig, type Plugin } from 'vite'
 import { svelte } from '@sveltejs/vite-plugin-svelte'
-import { readdirSync, readFileSync, writeFileSync } from 'node:fs'
+import { cpSync, readdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { brotliCompressSync, gzipSync, constants } from 'node:zlib'
 
@@ -23,8 +23,19 @@ const precompress = (): Plugin => ({
   },
 })
 
+const pdfjs = JSON.parse(readFileSync('node_modules/pdfjs-dist/package.json', 'utf8')).version as string
+
+const pdfData = (): Plugin => ({
+  name: 'pdf-data',
+  apply: 'build',
+  writeBundle({ dir = 'dist' }) {
+    for (const d of ['cmaps', 'standard_fonts']) cpSync(join('node_modules/pdfjs-dist', d), join(dir, 'pdfjs', pdfjs, d), { recursive: true })
+  },
+})
+
 export default defineConfig(({ mode }) => ({
-  plugins: [svelte(), precompress()],
+  plugins: [svelte(), precompress(), ...(mode === 'index' ? [pdfData()] : [])],
+  define: { PDFJS_DATA: JSON.stringify(`/pdfjs/${pdfjs}/`) },
   build: {
     outDir: 'dist',
     emptyOutDir: mode === 'index',

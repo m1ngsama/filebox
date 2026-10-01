@@ -19,6 +19,7 @@
     "@simplewebauthn/browser": "^14.0.0",
     "@tanstack/svelte-virtual": "^3.13.39",
     "bits-ui": "^2.19.3",
+    "pdfjs-dist": "4",
     "photoswipe": "5",
     "qrcode-generator": "^2.0.4",
     "tus-js-client": "^4.3.1"
