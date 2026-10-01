@@ -9,7 +9,7 @@
   --hl-del: light-dark(#ffebe9, #490202);
   --hl-ins: light-dark(#dafbe1, #04260f);
   --code-bg: light-dark(#f6f8fa, #161b22);
-  align-self: flex-start; width: 100%; max-width: 72ch; margin: 0 auto; padding: var(--space-6) var(--space-6);
+  align-self: flex-start; box-sizing: border-box; width: 100%; max-width: 72ch; min-height: 100%; margin: 0 auto; padding: var(--space-8) var(--space-6);
   background: var(--panel); color: var(--fg); border-radius: var(--radius-lg); line-height: 1.65; overflow-wrap: anywhere; user-select: text;
 }
 .doc.code { max-width: none; padding: 0; }

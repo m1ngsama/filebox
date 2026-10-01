@@ -243,6 +243,11 @@
     else onopen(entries[i])
   }
 
+  function launch(ev: MouseEvent, i: number) {
+    if (touch || (ev.target as Element).closest('button, label, a, input')) return
+    onopen(entries[i])
+  }
+
   function pick(ev: MouseEvent, i: number) {
     if (!selected || (ev.target as Element).closest('button, label, a')) return
     if (touch) return tap(i)
@@ -498,6 +503,7 @@
                     data-i={i}
                     class:pressing={pressing === i}
                     onclick={(ev) => pick(ev, i)}
+                    ondblclick={(ev) => launch(ev, i)}
                     onkeydown={(ev) => key(ev, i)}
                     oncompositionend={(ev) => ev.data && typeahead(ev.data, i)}
                     onfocus={() => (cur = id(e))}
@@ -556,6 +562,7 @@
                 data-i={n}
                 class:pressing={pressing === n}
                 onclick={(ev) => pick(ev, n)}
+                ondblclick={(ev) => launch(ev, n)}
                 onkeydown={(ev) => key(ev, n)}
                 oncompositionend={(ev) => ev.data && typeahead(ev.data, n)}
                 onfocus={() => (cur = id(e))}
