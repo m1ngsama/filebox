@@ -398,11 +398,13 @@ func (a *API) vols(w http.ResponseWriter, r *http.Request) {
 	httpx.JSON(w, 200, map[string]any{"vols": out})
 }
 
+const btrfs = 0x9123683e
+
 func filesystems(devs []string, us []vol.Usage) []string {
 	keys := slices.Clone(devs)
 	for i, u := range us {
 		for j := range i {
-			if (devs[i] != "" && devs[j] == devs[i]) || (u.Total > 0 && us[j] == u) {
+			if (devs[i] != "" && devs[j] == devs[i]) || (u.Type == btrfs && us[j].Type == btrfs && u.Size > 0 && us[j].Size == u.Size) {
 				keys[i] = keys[j]
 				break
 			}
