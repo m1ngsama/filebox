@@ -25,6 +25,9 @@ async function asset(r) {
   return res
 }
 
+// Every page carries a fresh style nonce, which must not count as a new release.
+const bare = (html) => html.replace(/<meta name="csp-nonce" content="[^"]*">/, '')
+
 async function page(r) {
   try {
     const res = await fetch(r)
@@ -32,7 +35,7 @@ async function page(r) {
       const c = await caches.open(SHELL)
       const html = await res.clone().text()
       const old = await c.match('/')
-      if (!old || (await old.text()) !== html) for (const k of await c.keys()) await c.delete(k)
+      if (!old || bare(await old.text()) !== bare(html)) for (const k of await c.keys()) await c.delete(k)
       await c.put('/', new Response(html, { headers: res.headers }))
     }
     return res
