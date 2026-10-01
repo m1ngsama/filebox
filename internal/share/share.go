@@ -405,7 +405,7 @@ func (s *Service) ls(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	defer done()
-	api.WriteList(w, r, root, rel)
+	api.WriteList(w, r, root, rel, nil)
 }
 
 func (s *Service) raw(w http.ResponseWriter, r *http.Request) {

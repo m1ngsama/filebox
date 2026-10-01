@@ -29,6 +29,7 @@ type Entry struct {
 	Size  int64  `json:"size"`
 	Mtime int64  `json:"mtime"`
 	Items *int   `json:"items,omitempty"`
+	Bytes *int64 `json:"bytes,omitempty"`
 }
 
 type Loc struct {
@@ -169,7 +170,18 @@ func (a *API) ls(w http.ResponseWriter, r *http.Request) {
 		httpx.Error(w, err)
 		return
 	}
-	WriteList(w, r, v.Root, rel)
+	WriteList(w, r, v.Root, rel, func(es []Entry) {
+		if !a.Index.Ready() {
+			return
+		}
+		for i, e := range es {
+			if e.Dir {
+				if sz, err := a.Index.Size(v.Name, path.Join(rel, e.Name)); err == nil {
+					es[i].Bytes = &sz.Size
+				}
+			}
+		}
+	})
 	a.Index.Reconcile(v, rel)
 }
 

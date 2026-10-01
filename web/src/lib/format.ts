@@ -14,15 +14,15 @@ export function size(n: number): string {
 
 const maxItems = 1000
 
-export const amount = (e: { dir: boolean; size: number; items?: number }) =>
-  e.dir ? (e.items == null ? '' : t.runCount(e.items, e.items >= maxItems)) : size(e.size)
+export const amount = (e: { dir: boolean; size: number; items?: number; bytes?: number }) =>
+  e.dir ? [e.items == null ? '' : t.runCount(e.items, e.items >= maxItems), e.bytes ? size(e.bytes) : ''].filter(Boolean).join(' · ') : size(e.size)
 
 export type Sort = 'name' | 'size' | 'mtime'
 export const sorts: [Sort, string][] = [['name', t.name], ['size', t.size], ['mtime', t.mtime]]
 export const flip = (sort: Sort, desc: boolean, k: Sort) => (sort === k ? !desc : k !== 'name')
 const collator = new Intl.Collator(locale, { numeric: true })
 
-type Row = { name: string; dir: boolean; size: number; mtime: number }
+type Row = { name: string; dir: boolean; size: number; mtime: number; bytes?: number }
 const keys = new WeakMap<Row[], { rank: Int32Array; lower: string[] }>()
 
 function keysOf(list: Row[]) {
@@ -45,7 +45,7 @@ export function arrange<T extends Row>(list: T[], filter: string, sort: Sort, de
   const { rank, lower } = keysOf(list)
   const f = filter.toLowerCase()
   const d = desc ? -1 : 1
-  const key = sort === 'size' ? (i: number) => list[i].size : sort === 'mtime' ? (i: number) => list[i].mtime : (i: number) => rank[i]
+  const key = sort === 'size' ? (i: number) => (list[i].dir ? (list[i].bytes ?? 0) : list[i].size) : sort === 'mtime' ? (i: number) => list[i].mtime : (i: number) => rank[i]
   const idx: number[] = []
   for (let i = 0; i < list.length; i++) if (lower[i].includes(f)) idx.push(i)
   return idx

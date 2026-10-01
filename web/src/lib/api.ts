@@ -11,7 +11,7 @@ export class HttpError extends Error {
   }
 }
 
-export type Entry = { name: string; dir: boolean; size: number; mtime: number; items?: number }
+export type Entry = { name: string; dir: boolean; size: number; mtime: number; items?: number; bytes?: number }
 export type Me = { name: string; vols: string[]; origins?: string[] }
 export type RecentFile = Entry & Loc
 export type Favorite = RecentFile & { missing: boolean }

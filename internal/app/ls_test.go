@@ -160,3 +160,26 @@ func TestListMemoryStaysBounded(t *testing.T) {
 		t.Fatalf("heap grew %d KiB listing %d entries", grew>>10, n)
 	}
 }
+
+func TestListShowsFolderSizesOnceIndexed(t *testing.T) {
+	f := newTestApp(t)
+	f.write(t, "big/a.bin", strings.Repeat("a", 1000))
+	f.write(t, "big/deep/b.bin", strings.Repeat("b", 500))
+	f.App.Index.Scan(f.App.Vols)
+	w := f.do("GET", "/api/ls?vol=v&path=", nil)
+	var got struct {
+		Entries []struct {
+			Name  string
+			Bytes *int64
+		}
+	}
+	json.Unmarshal(w.Body.Bytes(), &got)
+	for _, e := range got.Entries {
+		if e.Name == "big" && (e.Bytes == nil || *e.Bytes != 1500) {
+			t.Fatalf("big folder bytes %v", e.Bytes)
+		}
+	}
+	if w := f.do("GET", "/api/ls?vol=v&path=", nil); !strings.Contains(w.Body.String(), `"bytes":1500`) {
+		t.Fatalf("listing %s", w.Body)
+	}
+}

@@ -130,7 +130,8 @@ func acceptsGzip(r *http.Request) bool {
 	return false
 }
 
-func WriteList(w http.ResponseWriter, r *http.Request, root *os.Root, rel string) {
+// WriteList sends a folder's entries; enrich, when given, adds to a list small enough to send in one piece.
+func WriteList(w http.ResponseWriter, r *http.Request, root *os.Root, rel string, enrich func([]Entry)) {
 	f, err := root.Open(rel)
 	if err != nil {
 		httpx.Error(w, err)
@@ -143,7 +144,11 @@ func WriteList(w http.ResponseWriter, r *http.Request, root *os.Root, rel string
 		return
 	}
 	if len(des) < lsChunk {
-		httpx.Tagged(w, r, map[string]any{"entries": counted(root, rel, sorted(entries(root, rel, des)))})
+		es := counted(root, rel, sorted(entries(root, rel, des)))
+		if enrich != nil {
+			enrich(es)
+		}
+		httpx.Tagged(w, r, map[string]any{"entries": es})
 		return
 	}
 	h := w.Header()
