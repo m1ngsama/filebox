@@ -133,10 +133,11 @@
   const hidden = $derived(new Set(subs ? [] : [...side.values()].flat()))
   const visible = $derived(hidden.size ? entries.filter((e) => !hidden.has(e.name)) : entries)
   const shown = $derived(at !== here ? [] : streaming ? visible : arrange(visible, query, sort, desc))
-  let auto = $state<boolean>()
+  let frozen = $state<boolean>()
+  const auto = $derived(frozen ?? (at === here && (!streaming || entries.length >= 200) ? mostlyMedia(visible) : undefined))
   const grid = $derived(chosen ? chosen === 'grid' : !!auto)
   $effect(() => {
-    if (auto === undefined && at === here && (!streaming || entries.length >= 200)) auto = mostlyMedia(visible)
+    if (frozen === undefined && auto !== undefined) frozen = auto
   })
   const subsOf = (names: string[]) => [...new Set(names.flatMap((n) => side.get(n) ?? []))].filter((n) => !names.includes(n))
 
@@ -256,7 +257,7 @@
     error = null
     details = null
     chosen = viewOf(`${vol}/${path}`)
-    auto = undefined
+    frozen = undefined
     reveal = undefined
     listing = []
     listingKey = ''

@@ -64,14 +64,15 @@
   const folder = $derived(crumbs.at(-1) ?? shared?.name ?? '')
   const left = $derived(shared?.expires ? shared.expires - Date.now() / 1000 : 0)
 
-  let auto = $state<boolean>()
+  let frozen = $state<boolean>()
+  const auto = $derived(frozen ?? (at === p ? mostlyMedia(shown) : undefined))
   const grid = $derived(chosen ? chosen === 'grid' : !!auto)
   $effect(() => {
     chosen = viewOf(`s:${token}/${p}`)
-    auto = undefined
+    frozen = undefined
   })
   $effect(() => {
-    if (auto === undefined && at === p) auto = mostlyMedia(shown)
+    if (frozen === undefined && auto !== undefined) frozen = auto
   })
 
   function flipView() {
