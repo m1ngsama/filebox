@@ -4,7 +4,7 @@
   import Download from '@lucide/svelte/icons/download'
   import CircleAlert from '@lucide/svelte/icons/circle-alert'
   import type { Entry, Src } from '../lib/api'
-  import { kind, look, thumbable } from '../lib/format'
+  import { kind, look, thumbable, subtitleOf, subtitleLang } from '../lib/format'
   import { load, save } from '../lib/storage'
   import '../lib/render.css'
   import { t } from '../lib/i18n'
@@ -21,12 +21,11 @@
   const src = $derived(url(entry))
   const images = $derived(k === 'image' ? entries.filter((e) => !e.dir && kind(e.name) === 'image') : [])
   const LIMIT = 1 << 20
-  const stem = $derived(entry.name.slice(0, entry.name.lastIndexOf('.') + 1))
   const tracks = $derived(
     k === 'video' && siblings
       ? entries
-          .filter((e) => !e.dir && e.name.startsWith(stem) && /\.(srt|vtt)$/i.test(e.name))
-          .map((e) => ({ src: url(e) + '?vtt', lang: e.name.slice(stem.length, e.name.lastIndexOf('.')) }))
+          .filter((e) => !e.dir && subtitleOf(entry.name, e.name))
+          .map((e) => ({ src: url(e) + '?vtt', lang: subtitleLang(entry.name, e.name) }))
       : [],
   )
   const spot = $derived('pos:' + src)

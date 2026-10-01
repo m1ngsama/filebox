@@ -110,16 +110,28 @@ export const visual = (n: string) => /^(image|video)$/.test(kind(n))
 
 export const stem = (n: string) => (n.lastIndexOf('.') > 0 ? n.slice(0, n.lastIndexOf('.')) : n)
 
+const playable = /\.(srt|vtt)$/i
+const nfcStem = (n: string) => stem(n.normalize('NFC'))
+
+export const subtitleOf = (video: string, name: string) => {
+  const v = nfcStem(video)
+  const s = nfcStem(name)
+  return playable.test(name) && (s === v || s.startsWith(`${v}.`))
+}
+
+export const subtitleLang = (video: string, name: string) => nfcStem(name).slice(nfcStem(video).length + 1)
+
+export const subtitleRename = (video: string, to: string, name: string) => stem(to) + name.normalize('NFC').slice(nfcStem(video).length)
+
 export function sidecars(list: Row[]) {
-  const videos = new Map<string, string>()
-  for (const e of list) if (!e.dir && kind(e.name) === 'video') videos.set(stem(e.name), e.name)
+  const videos = new Map<string, string[]>()
+  for (const e of list) if (!e.dir && kind(e.name) === 'video') videos.set(nfcStem(e.name), [...(videos.get(nfcStem(e.name)) ?? []), e.name])
   const of = new Map<string, string[]>()
   if (!videos.size) return of
   for (const e of list) {
-    if (e.dir || !/\.(srt|vtt|ass)$/i.test(e.name)) continue
-    const s = stem(e.name)
-    const v = videos.get(s) ?? videos.get(stem(s))
-    if (v) of.set(v, [...(of.get(v) ?? []), e.name])
+    if (e.dir || !playable.test(e.name)) continue
+    for (let s = nfcStem(e.name), prev = ''; s !== prev; prev = s, s = stem(s))
+      for (const v of videos.get(s) ?? []) of.set(v, [...(of.get(v) ?? []), e.name])
   }
   return of
 }
