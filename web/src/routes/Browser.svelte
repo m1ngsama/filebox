@@ -32,6 +32,8 @@
   import Plus from '@lucide/svelte/icons/plus'
   import Upload from '@lucide/svelte/icons/upload'
   import FolderUp from '@lucide/svelte/icons/folder-up'
+  import Copy from '@lucide/svelte/icons/copy'
+  import ClipboardPaste from '@lucide/svelte/icons/clipboard-paste'
   import FilePlus from '@lucide/svelte/icons/file-plus'
   import FolderPlus from '@lucide/svelte/icons/folder-plus'
   import FolderOpen from '@lucide/svelte/icons/folder-open'
@@ -77,6 +79,7 @@
   import EntryList, { type Action } from '../components/EntryList.svelte'
   import ContentHits from '../components/ContentHits.svelte'
   import type { Choice } from '../components/ConflictDialog.svelte'
+  import { board } from '../lib/board.svelte'
   import { target, inside, sink, type Carried, type Target } from '../lib/dnd'
 
   let { vol, path, vols }: { vol: string; path: string; vols: string[] } = $props()
@@ -503,15 +506,20 @@
     details: { id: 'details', label: t.details, icon: Info },
     remove: { id: 'remove', label: t.remove, icon: Trash, danger: true },
     mkdir: { id: 'mkdir', label: t.newFolder, icon: FolderPlus },
+    touch: { id: 'touch', label: t.newTextFile, icon: FilePlus },
+    paste: { id: 'paste', label: t.paste, icon: ClipboardPaste },
+    duplicate: { id: 'duplicate', label: t.duplicate, icon: Copy },
     upload: { id: 'upload', label: t.upload, icon: Upload },
   } satisfies Record<string, Action>
 
   const actions = (e: Entry | null): Action[] =>
-    !e ? (error ? [] : [act.mkdir, act.upload])
-    : [...(narrow.current ? [act.select] : []), act.open, act.download, act.rename, act.move, act.share, starred(vol, join(e.name)) ? act.unstar : act.star, act.details, act.remove]
+    !e ? (error ? [] : [act.mkdir, act.touch, act.upload, ...(board.items ? [act.paste] : [])])
+    : [...(narrow.current ? [act.select] : []), act.open, act.download, act.rename, act.duplicate, act.move, act.share, starred(vol, join(e.name)) ? act.unstar : act.star, act.details, act.remove]
 
   function onaction(id: string, e: Entry | null) {
     if (id === 'mkdir') dialog = { kind: 'mkdir' }
+    else if (id === 'touch') dialog = { kind: 'touch' }
+    else if (id === 'paste') pasteItems(false)
     else if (id === 'upload') files?.click()
     else if (!e) return
     else if (id === 'select') selected.add(e.name)
@@ -520,6 +528,7 @@
     else if (id === 'rename') dialog = { kind: 'rename', e }
     else if (id === 'move') dialog = { kind: 'move', names: [e.name] }
     else if (id === 'remove') remove([e.name])
+    else if (id === 'duplicate') duplicate(selected.has(e.name) ? [...selected] : [e.name])
     else if (id === 'star' || id === 'unstar') toggleStar([e.name], id === 'star')
     else if (id === 'share') quickShare(e)
     else details = e
@@ -610,6 +619,53 @@
       },
       (err) => rollback(mine, err),
     )
+  }
+
+  const mac = /Mac|iPhone|iPad/.test(navigator.platform)
+  const copyName = (n: string, dir: boolean, k: number) => {
+    const ext = dir ? '' : n.slice(stem(n).length)
+    return `${dir ? n : stem(n)} ${t.copySuffix}${k > 1 ? ` ${k}` : ''}${ext}`
+  }
+
+  async function duplicate(names: string[]) {
+    forgetUndo()
+    const taken = new Set(entries.map((e) => e.name))
+    const made: string[] = []
+    try {
+      for (const n of names) {
+        const dir = !!entries.find((e) => e.name === n)?.dir
+        let to = ''
+        for (let k = 1; taken.has((to = copyName(n, dir, k))); k++);
+        taken.add(to)
+        await api.waitJob((await api.cp({ vol, path: join(n) }, { vol, path: join(to) })).job)
+        made.push(to)
+      }
+    } catch (err) {
+      fail(err)
+    }
+    await refresh()
+    if (!made.length) return
+    selected.clear()
+    for (const m of made) selected.add(m)
+    pick(made[0])
+    const v = vol
+    const paths = made.map(join)
+    toast(t.duplicated(t.what(made)), {
+      actions: [undo(async () => (await api.rm(v, paths)).failed.map((f) => ({ name: base(f.path), error: new Error(f.error) })))],
+    })
+  }
+
+  function clip(names: string[]) {
+    board.items = { vol, dir: path, names }
+    toast(t.clipped(t.what(names), mac ? '⌘V' : 'Ctrl+V'))
+  }
+
+  async function pasteItems(move: boolean) {
+    const c = board.items
+    if (!c) return
+    if (c.vol === vol && c.dir === path) return void (move || duplicate(c.names))
+    if (move) board.items = null
+    await dropInto({ vol, path }, c, !move)
   }
 
   async function note(n: string) {
@@ -815,8 +871,18 @@
       if (details) closeDetails()
       else if (searching || filter || filtering) endSearch()
       else selected.clear()
-    } else if (typing || e.altKey) return
+    } else if (typing || (e.altKey && !(mod && e.code === 'KeyV'))) return
     else if (mod && !e.shiftKey && !e.repeat && k === 'z' && runLatest(t.undo)) e.preventDefault()
+    else if (mod && !e.shiftKey && !e.altKey && k === 'c' && inList(e.target as Element) && (selected.size || target) && !getSelection()?.toString()) {
+      e.preventDefault()
+      clip(selected.size ? shown.filter((x) => selected.has(x.name)).map((x) => x.name) : [target!.name])
+    } else if (mod && !e.shiftKey && e.code === 'KeyV' && board.items && !e.repeat) {
+      e.preventDefault()
+      pasteItems(e.altKey)
+    } else if (mod && !e.shiftKey && !e.altKey && k === 'd' && (selected.size || target)) {
+      e.preventDefault()
+      duplicate(selected.size ? shown.filter((x) => selected.has(x.name)).map((x) => x.name) : [target!.name])
+    }
     else if (mod && !e.shiftKey && k === 'a' && inList(e.target as Element)) {
       e.preventDefault()
       for (const x of shown) selected.add(x.name)
@@ -1131,6 +1197,7 @@
         : [
             { ...mark, run: () => toggleStar(names, mark === act.star) },
             ...(one ? [act.rename, act.details].map((a) => ({ ...a, run: () => pass(a.id) })) : [{ ...act.rename, run: () => (dialog = { kind: 'renameMany', names: shown.filter((x) => selected.has(x.name)).map((x) => x.name) }) }]),
+            { ...act.duplicate, run: () => duplicate(shown.filter((x) => selected.has(x.name)).map((x) => x.name)) },
           ]}
     <Sheet title={sheet === 'new' ? t.new : (one?.name ?? t.selected(selected.size))} onclose={() => (sheet = null)}>
       {#each items as c (c.label)}
