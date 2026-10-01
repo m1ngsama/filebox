@@ -94,7 +94,7 @@ export const device = (ua: string) => [pick(ua, browsers), pick(ua, systems)].fi
 const ext = (n: string) => (n.includes('.') ? n.slice(n.lastIndexOf('.') + 1).toLowerCase() : '')
 
 const groups: Record<string, string> = {
-  image: 'jpg jpeg png gif webp avif bmp svg ico',
+  image: 'jpg jpeg png gif webp avif bmp svg ico heic heif tif tiff',
   video: 'mp4 m4v webm mov mkv ogv',
   audio: 'mp3 m4a aac flac wav ogg opus',
   pdf: 'pdf',
@@ -169,10 +169,13 @@ export const child = (dir: string, n: string) => (dir ? `${dir}/${n}` : n)
 
 export const fallback = (urls: (string | null | false | undefined)[], failures: number) => urls.filter(Boolean)[failures] || null
 
-export const rawThumb = (e: { name: string; size: number; dir: boolean }) => !e.dir && kind(e.name) === 'image' && e.size < 2 << 20
+export const rawThumb = (e: { name: string; size: number; dir: boolean }) => !e.dir && kind(e.name) === 'image' && !converted(e.name) && e.size < 2 << 20
 
 const thumbs = new Set('jpg jpeg png gif webp bmp tif tiff heic heif avif pdf cr2 cr3 nef arw dng mp4 m4v mkv mov avi webm ts flv wmv mpg mpeg epub cbz'.split(' '))
 export const thumbable = (n: string) => thumbs.has(ext(n))
+
+const foreign = new Set(['heic', 'heif', 'tif', 'tiff'])
+export const converted = (n: string) => foreign.has(ext(n))
 
 type WeekLocale = Intl.Locale & { getWeekInfo?: () => { firstDay: number }; weekInfo?: { firstDay: number } }
 const week = new Intl.Locale(locale) as WeekLocale

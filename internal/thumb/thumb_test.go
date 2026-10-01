@@ -74,6 +74,7 @@ func TestRender(t *testing.T) {
 		}
 	}
 	run("-f", "lavfi", "-i", "color=red:s=640x480", "-frames:v", "1", filepath.Join(dir, "red.png"))
+	run("-f", "lavfi", "-i", "testsrc2=size=1600x1200", "-frames:v", "1", filepath.Join(dir, "chart.png"))
 	run("-f", "lavfi", "-i", "testsrc=duration=3:size=640x360:rate=10", "-c:v", "mpeg4", filepath.Join(dir, "clip.mp4"))
 	os.WriteFile(filepath.Join(dir, "broken.jpg"), []byte("not an image"), 0o644)
 
@@ -85,8 +86,13 @@ func TestRender(t *testing.T) {
 			t.Fatalf("%s: %d %q", n, w.Code, w.Header().Get("Content-Type"))
 		}
 	}
+	large := httptest.NewRecorder()
+	s.Serve(large, httptest.NewRequest("GET", "/?large", nil), v, "chart.png")
+	if small := get(s, v, "chart.png"); large.Code != 200 || large.Body.Len() <= small.Body.Len() {
+		t.Fatalf("large preview %d, %d bytes vs %d", large.Code, large.Body.Len(), small.Body.Len())
+	}
 	cached, _ := filepath.Glob(filepath.Join(s.Dir, "*", "*.webp"))
-	if len(cached) != 2 {
+	if len(cached) != 4 {
 		t.Fatalf("cache files = %d", len(cached))
 	}
 	if w := get(s, v, "broken.jpg"); w.Code != 404 {

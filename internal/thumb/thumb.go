@@ -209,14 +209,18 @@ func (s *Service) ServeFrom(w http.ResponseWriter, r *http.Request, root *os.Roo
 		httpx.Fail(w, 404, "no thumbnail")
 		return
 	}
-	key := cacheKey(volName, rel, fi.Size(), fi.ModTime().UnixNano())
+	side, name := 320, rel
+	if kind == "image" && r.URL.Query().Has("large") {
+		side, name = 2048, rel+"\x00large"
+	}
+	key := cacheKey(volName, name, fi.Size(), fi.ModTime().UnixNano())
 	out := filepath.Join(s.Dir, key[:2], key+"."+s.format.ext)
 	if !fileExists(out) {
 		if s.isFailed(key) {
 			httpx.Fail(w, 404, "no thumbnail")
 			return
 		}
-		if err := s.render(r.Context(), key, f, kind, out); err != nil {
+		if err := s.render(r.Context(), key, f, kind, out, side); err != nil {
 			if !errors.Is(err, errCanceled) && !errors.Is(err, os.ErrNotExist) {
 				s.markFailed(key)
 			}
@@ -238,7 +242,7 @@ func (s *Service) ServeFrom(w http.ResponseWriter, r *http.Request, root *os.Roo
 }
 
 // ffmpeg reads fd 3, never the path: resolving the path would follow symlinks out of the volume.
-func (s *Service) render(ctx context.Context, key string, src *os.File, kind, out string) error {
+func (s *Service) render(ctx context.Context, key string, src *os.File, kind, out string, side int) error {
 	s.mu.Lock()
 	if ch, ok := s.inflight[key]; ok {
 		s.mu.Unlock()
@@ -295,7 +299,7 @@ func (s *Service) render(ctx context.Context, key string, src *os.File, kind, ou
 		}
 	}
 	tmp := out + ".tmp"
-	args = append(args, "-protocol_whitelist", "file", "-i", "/dev/fd/3", "-frames:v", "1", "-vf", "scale='min(320,iw)':-2")
+	args = append(args, "-protocol_whitelist", "file", "-i", "/dev/fd/3", "-frames:v", "1", "-vf", fmt.Sprintf("scale='min(%d,iw)':-2", side))
 	args = append(append(args, s.format.args...), tmp)
 	src.Seek(0, io.SeekStart)
 	cmd := s.command(rctx, s.FFmpeg, args...)

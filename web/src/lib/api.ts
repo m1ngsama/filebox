@@ -134,12 +134,12 @@ export const shareRawURL = (tok: string, path: string, dl = false) => `${shareUR
 export const shareThumbURL = (tok: string, path: string) => `${shareURL(tok)}/thumb/${enc(path)}`
 const q = (o: Record<string, string>) => new URLSearchParams(o).toString()
 const lsURL = (vol: string, path: string) => `/api/ls?${q({ vol, path })}`
-export type As = 'dl' | 'thumb' | 'render' | 'meta' | 'zip-entries' | 'zip-entry'
+export type As = 'dl' | 'thumb' | 'large' | 'render' | 'meta' | 'zip-entries' | 'zip-entry'
 export type Src = (e: Entry, as?: As) => string
 export const fileURL = (vol: string, p: string, as?: As) =>
-  as === 'thumb' ? thumbURL(vol, p) : as && as !== 'dl' ? `/api/${as}?${q({ vol, p })}` : rawURL(vol, p, as === 'dl')
+  as === 'thumb' ? thumbURL(vol, p) : as === 'large' ? `${thumbURL(vol, p)}?large` : as && as !== 'dl' ? `/api/${as}?${q({ vol, p })}` : rawURL(vol, p, as === 'dl')
 export const shareFileURL = (tok: string, p: string, as?: As) =>
-  as === 'thumb' ? shareThumbURL(tok, p) : as && as !== 'dl' ? `${shareURL(tok)}/${as}?${q({ p })}` : shareRawURL(tok, p, as === 'dl')
+  as === 'thumb' ? shareThumbURL(tok, p) : as === 'large' ? `${shareThumbURL(tok, p)}?large` : as && as !== 'dl' ? `${shareURL(tok)}/${as}?${q({ p })}` : shareRawURL(tok, p, as === 'dl')
 export const versionURL = (vol: string, id: string, dl = false) => `/api/versions/raw?${q({ vol, id })}${dl ? '&dl' : ''}`
 const zipQuery = (paths: string[], name: string) => new URLSearchParams([...paths.map((p) => ['p', p]), ['name', name]]).toString()
 export const zipURL = (vol: string, paths: string[], name: string) => `/api/zip?vol=${encodeURIComponent(vol)}&${zipQuery(paths, name)}`

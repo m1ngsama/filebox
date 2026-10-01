@@ -4,7 +4,7 @@
   import 'photoswipe/style.css'
   import X from '@lucide/svelte/icons/x'
   import type { Entry, Src } from '../lib/api'
-  import { size, date, when, thumbable, metaRows, type Meta } from '../lib/format'
+  import { size, date, when, thumbable, converted, metaRows, type Meta } from '../lib/format'
   import { t } from '../lib/i18n'
 
   type Book = { title: string; rtl: boolean; onpage: (i: number) => void; onrtl: () => void }
@@ -70,7 +70,7 @@
     const pos = (i: number) => (book?.rtl ? n - 1 - i : i)
     const item = (i: number) => images[pos(i)]
     const at = images.indexOf(entry)
-    const data = images.map((_, i) => item(i)).map((e) => ({ src: url(e), alt: e.name, msrc: !book && thumbable(e.name) ? url(e, 'thumb') : undefined, width: 0, height: 0 }))
+    const data = images.map((_, i) => item(i)).map((e) => ({ src: url(e, !book && converted(e.name) ? 'large' : undefined), alt: e.name, msrc: !book && thumbable(e.name) ? url(e, 'thumb') : undefined, width: 0, height: 0 }))
     let done = false
     const pswp = new PhotoSwipe({
       dataSource: data,
