@@ -2988,22 +2988,21 @@ test.describe('on a phone', () => {
   test('links and primary buttons show touch feedback while pressed', async ({ page, server }) => {
     await login(page)
     await row(page, 'docs').locator('button.name').tap()
-    const bg = async (l: Locator) => {
-      const b = (await l.boundingBox())!
-      await page.mouse.move(b.x + b.width / 2, b.y + b.height / 2)
+    const color = (l: Locator) => l.evaluate((e) => getComputedStyle(e).backgroundColor)
+    const bg = async (l: Locator, idle: string) => {
+      await l.hover()
       await page.mouse.down()
-      const c = await l.evaluate((e) => getComputedStyle(e).backgroundColor)
+      await expect.poll(() => color(l)).not.toBe(idle)
+      await page.waitForTimeout(400)
+      const c = await color(l)
       await page.mouse.move(0, 0)
       await page.mouse.up()
       return c
     }
     const up = page.getByRole('link', { name: t.upTo('v') })
-    const idle = await up.evaluate((e) => getComputedStyle(e).backgroundColor)
-    expect(await bg(up)).not.toBe(idle)
+    await bg(up, await color(up))
     const fab = page.getByRole('button', { name: t.new, exact: true })
-    const accent = await fab.evaluate((e) => getComputedStyle(e).backgroundColor)
-    const pressed = await bg(fab)
-    expect(pressed).not.toBe(accent)
+    const pressed = await bg(fab, await color(fab))
     const hover = await page.evaluate(() => {
       const d = document.body.appendChild(Object.assign(document.createElement('div'), { style: 'background: var(--hover)' }))
       const c = getComputedStyle(d).backgroundColor
