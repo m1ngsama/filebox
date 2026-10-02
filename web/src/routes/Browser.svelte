@@ -309,6 +309,7 @@
   })
 
   function closeDetails() {
+    loadShares()
     const back = document.activeElement === document.body || !!document.activeElement?.closest('.details')
     details = null
     if (back) tick().then(() => document.querySelector<HTMLElement>('.main [role=grid] [tabindex="0"]')?.focus())
@@ -541,12 +542,22 @@
     const made = api.newShare({ vol, path: join(e.name), mode: 'read', password: '', expires_in: 7 * 86400 })
     const copied = copyLater(made.then((r) => shareLink(r.token)))
     made.then(
-      async () => toast((await copied) ? t.quickShared : t.quickSharedShown, { actions: [{ label: t.shareOptions, run: () => (details = e) }] }),
+      async () => (loadShares(), toast((await copied) ? t.quickShared : t.quickSharedShown, { actions: [{ label: t.shareOptions, run: () => (details = e) }] })),
       fail,
     )
   }
 
   $effect(() => void loadStars())
+
+  let sharedPaths = $state(new Set<string>())
+  const loadShares = () =>
+    api.shares().then(
+      (r) => (sharedPaths = new Set(r.shares.map((x) => `${x.vol}/${x.path}`))),
+      () => {},
+    )
+  $effect(() => void loadShares())
+  const marks = (e: Entry) => ({ starred: starred(vol, join(e.name)), shared: sharedPaths.has(`${vol}/${join(e.name)}`) })
+  const quick = (e: Entry): Action[] => [act.share, act.download, starred(vol, join(e.name)) ? act.unstar : act.star]
 
   $effect(() => {
     const mine = refresh
@@ -1122,6 +1133,8 @@
         busy={streaming}
         head={!error}
         title={error ? undefined : crumbs.length ? crumbs[crumbs.length - 1] : vol}
+        {marks}
+        {quick}
         group={sort === 'mtime' && !query && !streaming ? byDay : undefined}
         bind:collapsed
       >

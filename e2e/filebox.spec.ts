@@ -388,6 +388,19 @@ test('a zip extracts into a folder beside it and opens there', async ({ page, se
   await expect(row(page, 'trip')).toBeVisible()
 })
 
+test('rows show starred and shared marks and offer quick actions on hover', async ({ page, context }) => {
+  await context.grantPermissions(['clipboard-read', 'clipboard-write'])
+  await login(page)
+  const docs = row(page, 'docs')
+  await docs.hover()
+  await docs.getByRole('button', { name: t.star, exact: true }).click()
+  await expect(docs.getByLabel(t.starredBadge)).toBeVisible()
+  await docs.hover()
+  await docs.getByRole('button', { name: t.copyLink, exact: true }).click()
+  await expect(docs.getByLabel(t.sharedBadge)).toBeVisible()
+  expect(await page.evaluate(() => navigator.clipboard.readText())).toMatch(/\/s\/[\w-]+$/)
+})
+
 test('a new text file opens straight into the editor', async ({ page, server }) => {
   await login(page)
   await row(page, 'docs').locator('button.name').click()

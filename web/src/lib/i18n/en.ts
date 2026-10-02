@@ -199,6 +199,8 @@ export default (locale: string) => {
     showRendered: 'Show formatted',
     showTable: 'Show table',
     copyAll: 'Copy all',
+    starredBadge: 'Starred',
+    sharedBadge: 'Shared',
     edit: 'Edit',
     discard: 'Discard',
     done: 'Done',

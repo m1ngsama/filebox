@@ -180,7 +180,12 @@ p.error::before { content: ''; flex: none; width: 1em; height: 1lh; background: 
 
 .files-wrap { display: flex; flex: 1; min-height: 0; overflow-x: clip; }
 .files { position: relative; display: flex; flex-direction: column; flex: 1; min-width: 0; }
-.list-head, .row { display: grid; grid-template-columns: var(--hit) var(--hit) minmax(0, 1fr) 40px 96px 128px; align-items: center; }
+.list-head, .row { display: grid; grid-template-columns: var(--hit) var(--hit) minmax(0, 1fr) minmax(40px, auto) 112px 128px; align-items: center; }
+.row > .cell.acts { display: flex; align-items: center; justify-content: flex-end; }
+.row .quick { width: 32px; height: 32px; color: var(--muted); }
+.name .badge { flex: none; margin-left: var(--space-1-5); vertical-align: -2px; }
+.name .badge.star { color: #e0a800; fill: #e0a800; }
+.name .badge.shared { color: var(--accent); }
 .list-head { height: var(--hit); padding: 0 var(--space-2); border-bottom: 1px solid var(--line); color: var(--muted); font-size: var(--text-sm); }
 .list-head .sort { border: 0; background: none; padding: var(--space-1) var(--space-1-5); color: inherit; justify-content: flex-start; }
 .list-head .sort[aria-pressed='true'] { color: var(--fg); }
@@ -243,7 +248,7 @@ p.error::before { content: ''; flex: none; width: 1em; height: 1lh; background: 
 .ficon.sheet, [data-look='sheet'] { --k: light-dark(#23803c, #6fcf85); }
 [data-look='dir'] { --k: var(--accent); }
 .row .name { justify-self: start; max-width: 100%; border: 0; background: none; padding: var(--space-1) var(--space-1-5); min-width: 0; display: block; text-align: left; }
-.row .name:has(.tag) { display: flex; align-items: center; gap: var(--space-1-5); }
+.row .name:has(.tag, .badge) { display: flex; align-items: center; gap: var(--space-1-5); }
 .mid { display: flex; min-width: 0; overflow: hidden; white-space: pre; }
 .mid > :first-child { overflow: hidden; text-overflow: ellipsis; }
 .mid > :nth-child(2) { flex: none; }
@@ -568,8 +573,8 @@ button.busy::before { content: ''; width: 14px; height: 14px; border: 2px solid 
   .viewer .icon-btn:hover, .toast .icon-btn:hover, .toast-action:hover:not(:disabled) { background: var(--viewer-hover); }
   .viewer .icon-btn:hover { color: var(--viewer-fg); }
   .toast .icon-btn:hover { color: inherit; opacity: 1; }
-  .scroller:not(.selecting) :is(.row > .check-cell > *, .row .more, .card .more, .card-check), .list-head:not(.batch) > .hit { opacity: 0; transition: opacity var(--dur-1) var(--ease-out); }
-  .scroller:not(.selecting) :is(.row, .card):is(:hover, :focus-within, .sel) :is(.check-cell > *, .more, .card-check), .list-head:is(:hover, :focus-within) > .hit { opacity: 1; }
+  .scroller:not(.selecting) :is(.row > .check-cell > *, .row .more, .row .quick, .card .more, .card-check), .list-head:not(.batch) > .hit { opacity: 0; transition: opacity var(--dur-1) var(--ease-out); }
+  .scroller:not(.selecting) :is(.row, .card):is(:hover, :focus-within, .sel) :is(.check-cell > *, .more, .quick, .card-check), .list-head:is(:hover, :focus-within) > .hit { opacity: 1; }
   .card-foot { position: relative; }
   .card-foot > .more { position: absolute; right: 0; top: 50%; translate: 0 -50%; }
   .scroller:not(.selecting) .card:is(:hover, :focus-within, .sel) .card-name, .scroller.selecting .card-name { mask-image: linear-gradient(to left, transparent 32px, #000 52px); }

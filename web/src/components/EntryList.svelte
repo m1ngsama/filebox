@@ -4,6 +4,8 @@
 </script>
 
 <script lang="ts">
+  import Link from '@lucide/svelte/icons/link'
+  import Star from '@lucide/svelte/icons/star'
   import { icon } from '../lib/icon'
   import { tick, untrack, type Snippet } from 'svelte'
   import { SvelteSet, SvelteMap } from 'svelte/reactivity'
@@ -52,6 +54,8 @@
     meta,
     title,
     collapsed = $bindable(false),
+    marks,
+    quick,
   }: {
     entries: Entry[]
     grid: boolean
@@ -81,6 +85,8 @@
     dnd?: { carry: (e: Entry) => Carried; target: (e: Entry) => Target }
     title?: string
     collapsed?: boolean
+    marks?: (e: Entry) => { starred?: boolean; shared?: boolean }
+    quick?: (e: Entry) => Action[]
   } = $props()
 
   const draggable = $derived(!!dnd && !narrow.current)
@@ -446,6 +452,12 @@
   {/if}
 {/snippet}
 
+{#snippet badges(e: Entry)}
+  {@const m = marks?.(e)}
+  {#if m?.starred}<Star size={13} class="badge star" aria-label={t.starredBadge} />{/if}
+  {#if m?.shared}<Link size={13} class="badge shared" aria-label={t.sharedBadge} />{/if}
+{/snippet}
+
 {#snippet label(n: string)}
   {@const [a, b] = ends(n)}
   <bdi class="mid"><span>{a}</span>{#if b}<span>{b}</span>{/if}</bdi>
@@ -605,14 +617,17 @@
                   <FileIcon name={e.name} dir={e.dir} />{#if s}<img src={s} alt="" draggable="false" loading="lazy" decoding="async" onload={shown} onerror={() => miss(e)} {@attach cancel} />{/if}
                 </span>
                 <span class="cell name-cell" role="gridcell">
-                  <button class="name" tabindex="-1" onclick={() => tap(n)} title={e.name} aria-label={named(e)} aria-expanded={expanded?.(e)}>{@render label(e.name)}{#if tag?.(e)}<span class="tag">{tag(e)}</span>{/if}</button>
+                  <button class="name" tabindex="-1" onclick={() => tap(n)} title={e.name} aria-label={named(e)} aria-expanded={expanded?.(e)}>{@render label(e.name)}{#if tag?.(e)}<span class="tag">{tag(e)}</span>{/if}{@render badges(e)}</button>
                   {#if narrow.current}
                     <span class="hint sub">{#if gone}{@render trail(e)} · {gone}{:else}{amount(e) ? `${amount(e)} · ` : ''}{ago(e.mtime)}{#if loc}{' · '}{@render trail(e)}{/if}{/if}</span>
                   {:else if loc}
                     <span class="hint sub">{@render trail(e)}{gone ? ` · ${gone}` : ''}</span>
                   {/if}
                 </span>
-                <span class="cell" role="gridcell">{@render more(e)}</span>
+                <span class="cell acts" role="gridcell">
+                  {#if !narrow.current}{#each quick?.(e) ?? [] as a (a.id)}<button class="icon-btn quick" tabindex="-1" aria-label={a.label} title={a.label} onclick={(ev) => (ev.stopPropagation(), onaction(a.id, e))}><a.icon size={icon.sm} /></button>{/each}{/if}
+                  {@render more(e)}
+                </span>
                 <span class="num size" role="gridcell">{gone ? '' : amount(e)}</span>
                 <span class="num mtime" role="gridcell" title={gone ? undefined : date(e.mtime)}>{gone ? '' : ago(e.mtime)}</span>
               </div>

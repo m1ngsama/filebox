@@ -199,6 +199,8 @@ const zh = {
   showRendered: '显示排版效果',
   showTable: '显示表格',
   copyAll: '复制全文',
+  starredBadge: '已收藏',
+  sharedBadge: '已分享',
   edit: '编辑',
   discard: '放弃修改',
   done: '完成',
