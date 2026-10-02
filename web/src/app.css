@@ -248,7 +248,7 @@ p.error::before { content: ''; flex: none; width: 1em; height: 1lh; background: 
 .ficon.sheet, [data-look='sheet'] { --k: light-dark(#23803c, #6fcf85); }
 [data-look='dir'] { --k: var(--accent); }
 .row .name { justify-self: start; max-width: 100%; border: 0; background: none; padding: var(--space-1) var(--space-1-5); min-width: 0; display: block; text-align: left; }
-.row .name:has(.tag, .badge) { display: flex; align-items: center; gap: var(--space-1-5); }
+.row .name:has(.tag, .badge, .tag-chip) { display: flex; align-items: center; gap: var(--space-1-5); }
 .mid { display: flex; min-width: 0; overflow: hidden; white-space: pre; }
 .mid > :first-child { overflow: hidden; text-overflow: ellipsis; }
 .mid > :nth-child(2) { flex: none; }
@@ -688,3 +688,16 @@ button.busy::before { content: ''; width: 14px; height: 14px; border: 2px solid 
 .rows.activity .names { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 24em; }
 .rows.activity a.tag { text-decoration: none; }
 .activity-more { padding: var(--space-3) 0; }
+[data-color] { --tag: var(--muted); }
+[data-color='red'] { --tag: light-dark(#d93036, #ff6369); }
+[data-color='orange'] { --tag: light-dark(#d9620b, #ff8b3e); }
+[data-color='yellow'] { --tag: light-dark(#b88700, #f5c451); }
+[data-color='green'] { --tag: light-dark(#2f8a3b, #4cc38a); }
+[data-color='teal'] { --tag: light-dark(#0b8a83, #3dd3c4); }
+[data-color='blue'] { --tag: light-dark(#1f6feb, #5b9dff); }
+[data-color='purple'] { --tag: light-dark(#7c4ddb, #b392f0); }
+[data-color='pink'] { --tag: light-dark(#c9367a, #f778ba); }
+[data-color='gray'] { --tag: light-dark(#6e7781, #9ba4ae); }
+.tag-dot { flex: none; width: 10px; height: 10px; border-radius: 50%; background: var(--tag); }
+.tag-chip { display: inline-flex; align-items: center; gap: var(--space-1); flex: none; max-width: 10em; padding: 0 var(--space-2); border-radius: var(--radius-full); background: color-mix(in srgb, var(--tag) 14%, transparent); color: color-mix(in srgb, var(--tag) 80%, var(--fg)); font-size: var(--text-xs); line-height: 20px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tag-chips { display: flex; flex-wrap: wrap; gap: var(--space-1); }

@@ -143,6 +143,18 @@ var migrations = []string{
 	`ALTER TABLE events ADD COLUMN vol TEXT NOT NULL DEFAULT '';
 	ALTER TABLE events ADD COLUMN path TEXT NOT NULL DEFAULT '';
 	CREATE INDEX events_path ON events(vol, path);`,
+	`CREATE TABLE tags (
+		id INTEGER PRIMARY KEY,
+		name TEXT NOT NULL UNIQUE COLLATE NOCASE,
+		color TEXT NOT NULL DEFAULT ''
+	);
+	CREATE TABLE tagged (
+		vol TEXT NOT NULL,
+		path TEXT NOT NULL,
+		tag INTEGER NOT NULL REFERENCES tags(id) ON DELETE CASCADE,
+		PRIMARY KEY (vol, path, tag)
+	) WITHOUT ROWID;
+	CREATE INDEX tagged_tag ON tagged(tag);`,
 }
 
 type DB struct {

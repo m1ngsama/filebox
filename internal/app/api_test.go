@@ -537,3 +537,49 @@ func TestFileActivityFollowsTheItem(t *testing.T) {
 		t.Fatalf("unknown volume %d", w.Code)
 	}
 }
+
+func TestTagsFollowItems(t *testing.T) {
+	f := newTestApp(t)
+	f.write(t, "docs/plan.txt", "x")
+	f.write(t, "docs/notes.txt", "y")
+	w := f.do("POST", "/api/tags", body(`{"name":"  Work   stuff ","color":"blue"}`))
+	tag := decode[struct {
+		ID   int64
+		Name string
+	}](t, w)
+	if w.Code != 201 || tag.Name != "Work stuff" {
+		t.Fatalf("new tag %d %+v", w.Code, tag)
+	}
+	if again := decode[struct{ ID int64 }](t, f.do("POST", "/api/tags", body(`{"name":"work STUFF"}`))); again.ID != tag.ID {
+		t.Fatalf("same name made a second tag %d", again.ID)
+	}
+	if w := f.do("POST", "/api/tags", body(`{"name":"x","color":"chartreuse"}`)); w.Code != 400 {
+		t.Fatalf("bad color %d", w.Code)
+	}
+	id := strconv.FormatInt(tag.ID, 10)
+	if w := f.do("POST", "/api/tags/"+id+"/items", body(`{"vol":"v","paths":["docs/plan.txt"],"on":true}`)); w.Code != 204 {
+		t.Fatalf("tag %d %s", w.Code, w.Body)
+	}
+	if b := f.do("GET", "/api/ls?vol=v&path=docs", nil).Body.String(); !strings.Contains(b, `"name":"plan.txt","dir":false,"size":1`) || !strings.Contains(b, `"tags":[`+id+`]`) || strings.Count(b, `"tags"`) != 1 {
+		t.Fatalf("ls %s", b)
+	}
+	f.do("POST", "/api/mv", body(`{"src":{"vol":"v","path":"docs"},"dst":{"vol":"v","path":"work"}}`))
+	items := decode[struct{ Entries []struct{ Path string } }](t, f.do("GET", "/api/tags/"+id+"/items", nil)).Entries
+	if len(items) != 1 || items[0].Path != "work/plan.txt" {
+		t.Fatalf("tagged after move %+v", items)
+	}
+	f.App.Index.Scan(f.App.Vols)
+	if b := f.do("GET", "/api/search?tag="+id, nil).Body.String(); !strings.Contains(b, "work/plan.txt") || strings.Contains(b, "notes.txt") {
+		t.Fatalf("search by tag %s", b)
+	}
+	f.do("POST", "/api/rm", body(`{"vol":"v","paths":["work/plan.txt"]}`))
+	if b := f.do("GET", "/api/tags", nil).Body.String(); !strings.Contains(b, `"count":0`) {
+		t.Fatalf("trashed item kept its tag %s", b)
+	}
+	if w := f.do("DELETE", "/api/tags/"+id, nil); w.Code != 204 {
+		t.Fatalf("delete tag %d", w.Code)
+	}
+	if w := f.do("POST", "/api/tags/"+id+"/items", body(`{"vol":"v","paths":["work/notes.txt"],"on":true}`)); w.Code != 404 {
+		t.Fatalf("tag a deleted tag %d", w.Code)
+	}
+}

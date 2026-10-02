@@ -11,7 +11,8 @@ export class HttpError extends Error {
   }
 }
 
-export type Entry = { name: string; dir: boolean; size: number; mtime: number; items?: number; bytes?: number }
+export type Entry = { name: string; dir: boolean; size: number; mtime: number; items?: number; bytes?: number; tags?: number[] }
+export type Tag = { id: number; name: string; color: string; count: number }
 export type Me = { name: string; vols: string[]; origins?: string[] }
 export type RecentFile = Entry & Loc
 export type Favorite = RecentFile & { missing: boolean }
@@ -176,6 +177,12 @@ export const api = {
   size: (vol: string, path: string) => req<{ size: number; files: number; scanning: boolean }>('GET', `/api/size?${q({ vol, path })}`),
   favorites: () => req<{ entries: Favorite[] }>('GET', '/api/favorites'),
   star: (vol: string, paths: string[], star: boolean) => req<void>('POST', '/api/favorites', { vol, paths, star }),
+  tags: () => req<{ tags: Tag[] }>('GET', '/api/tags'),
+  newTag: (name: string, color = '') => req<Tag>('POST', '/api/tags', { name, color }),
+  editTag: (id: number, name: string, color: string) => req<void>('PATCH', `/api/tags/${id}`, { name, color }),
+  deleteTag: (id: number) => req<void>('DELETE', `/api/tags/${id}`),
+  tagged: (id: number) => req<{ entries: Favorite[] }>('GET', `/api/tags/${id}/items`),
+  applyTag: (id: number, vol: string, paths: string[], on: boolean) => req<void>('POST', `/api/tags/${id}/items`, { vol, paths, on }),
   recent: (signal?: AbortSignal) => req<{ entries: (Omit<RecentFile, 'dir'> & { run?: number })[]; runs: Run[]; scanning: boolean }>('GET', `/api/recent?tz=${new Date().getTimezoneOffset()}`, undefined, signal),
   mkdir: (vol: string, path: string, signal?: AbortSignal) => req<Entry>('POST', '/api/mkdir', { vol, path }, signal),
   touch: (vol: string, path: string) => req<Entry>('POST', '/api/touch', { vol, path }),

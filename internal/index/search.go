@@ -21,6 +21,7 @@ type Query struct {
 	Limit            int
 	Kind             string
 	After, MinSize   int64
+	Tag              int64
 }
 
 // Kinds are the type filters search offers, by file extension; "dir" means folders.
@@ -32,7 +33,7 @@ var Kinds = map[string][]string{
 	"doc":   {"pdf", "epub", "cbz", "txt", "md", "doc", "docx", "xls", "xlsx", "ppt", "pptx", "odt", "ods", "odp", "csv", "rtf", "pages", "numbers", "key"},
 }
 
-func (q Query) Filtered() bool { return q.Kind != "" || q.After > 0 || q.MinSize > 0 }
+func (q Query) Filtered() bool { return q.Kind != "" || q.After > 0 || q.MinSize > 0 || q.Tag > 0 }
 
 // Admits applies the filters to a content hit, which comes from a separate index.
 func (q Query) Admits(f File) bool {
@@ -71,6 +72,10 @@ func scoped(q Query) (string, []any) {
 	if q.MinSize > 0 {
 		scope += ` AND f.dir = 0 AND f.size >= ?`
 		where = append(where, q.MinSize)
+	}
+	if q.Tag > 0 {
+		scope += ` AND EXISTS (SELECT 1 FROM tagged t WHERE t.vol = f.vol AND t.path = f.path AND t.tag = ?)`
+		where = append(where, q.Tag)
 	}
 	if exts, ok := Kinds[q.Kind]; ok && q.Kind == "dir" {
 		scope += ` AND f.dir = 1`
@@ -222,7 +227,16 @@ func (x *Index) SearchContent(ctx context.Context, q Query) ([]ContentHit, error
 	if err != nil && ctx.Err() == nil {
 		x.failed(c, err)
 	}
-	return slices.DeleteFunc(out, func(h ContentHit) bool { return !q.Admits(h.File) }), err
+	in := map[[2]string]bool{}
+	if q.Tag > 0 {
+		fs, _ := x.Tagged(q.Tag)
+		for _, f := range fs {
+			in[[2]string{f.Vol, f.Path}] = true
+		}
+	}
+	return slices.DeleteFunc(out, func(h ContentHit) bool {
+		return !q.Admits(h.File) || q.Tag > 0 && !in[[2]string{h.Vol, h.Path}]
+	}), err
 }
 
 func (x *Index) searchContent(ctx context.Context, c *content, q Query) ([]ContentHit, error) {

@@ -22,6 +22,7 @@
   import { t } from '../lib/i18n'
   import { narrow } from '../lib/shell.svelte'
   import { carry, drop, target, type Carried, type Target } from '../lib/dnd'
+  import { tagOf } from '../lib/tags.svelte'
 
   const inert: Target = { accepts: () => false, drop: () => {} }
 
@@ -456,6 +457,8 @@
   {@const m = marks?.(e)}
   {#if m?.starred}<Star size={13} class="badge star" aria-label={t.starredBadge} />{/if}
   {#if m?.shared}<Link size={13} class="badge shared" aria-label={t.sharedBadge} />{/if}
+  {#each (e.tags ?? []).slice(0, 3) as id (id)}{@const x = tagOf(id)}{#if x}<span class="tag-chip" data-color={x.color}>{x.name}</span>{/if}{/each}
+  {#if (e.tags?.length ?? 0) > 3}<span class="tag-chip">+{e.tags!.length - 3}</span>{/if}
 {/snippet}
 
 {#snippet label(n: string)}

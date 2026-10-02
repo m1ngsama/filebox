@@ -43,6 +43,7 @@
   import FolderInput from '@lucide/svelte/icons/folder-input'
   import Link from '@lucide/svelte/icons/link'
   import Star from '@lucide/svelte/icons/star'
+  import TagIcon from '@lucide/svelte/icons/tag'
   import StarOff from '@lucide/svelte/icons/star-off'
   import Info from '@lucide/svelte/icons/info'
   import Trash from '@lucide/svelte/icons/trash'
@@ -72,6 +73,7 @@
   import { enqueue, type Replaced } from '../lib/uploads.svelte'
   import { loadStars, starred, star } from '../lib/favorites.svelte'
   import { folderAction, downloadAction, actOn, saveZip } from '../lib/located'
+  import { tags, loadTags } from '../lib/tags.svelte'
   import { kind, searchKind, size, thumbable, rawThumb, arrange, parent, base, child, flip, sorts, place, prefersGrid, mostlyMedia, dated, days, sidecars, subtitleRename, stem, type Sort } from '../lib/format'
   import { t } from '../lib/i18n'
   import { load, save, viewOf, keepView, type View } from '../lib/storage'
@@ -85,7 +87,7 @@
 
   let { vol, path, vols }: { vol: string; path: string; vols: string[] } = $props()
 
-  type Dialog = { kind: 'mkdir' } | { kind: 'touch' } | { kind: 'rename'; e: Entry } | { kind: 'renameMany'; names: string[] } | { kind: 'move'; names: string[] }
+  type Dialog = { kind: 'mkdir' } | { kind: 'touch' } | { kind: 'rename'; e: Entry } | { kind: 'renameMany'; names: string[] } | { kind: 'move'; names: string[] } | { kind: 'tags'; names: string[] }
 
   let collapsed = $state(false)
   let entries = $state.raw<Entry[]>([])
@@ -100,11 +102,12 @@
   let kindF = $state('')
   let whenF = $state('')
   let sizeF = $state('')
-  const filtering = $derived(scope === 'all' && !!(kindF || whenF || sizeF))
+  let tagF = $state('')
+  const filtering = $derived(scope === 'all' && !!(kindF || whenF || sizeF || tagF))
 
   $effect(() => {
     here
-    untrack(() => scope === 'here' && (kindF = whenF = sizeF = ''))
+    untrack(() => scope === 'here' && (kindF = whenF = sizeF = tagF = ''))
   })
 
   function since(w: string) {
@@ -158,8 +161,8 @@
   const side = $derived(at === here ? sidecars(entries) : new Map<string, string[]>())
   const hidden = $derived(new Set(subs ? [] : [...side.values()].flat()))
   const visible = $derived(hidden.size ? entries.filter((e) => !hidden.has(e.name)) : entries)
-  const local = $derived(scope === 'here' && !!(kindF || whenF || sizeF))
-  const passes = (e: Entry) => (!kindF || searchKind(e) === kindF) && (!whenF || e.mtime >= Number(since(whenF))) && (!sizeF || (!e.dir && e.size >= Number(sizeF)))
+  const local = $derived(scope === 'here' && !!(kindF || whenF || sizeF || tagF))
+  const passes = (e: Entry) => (!kindF || searchKind(e) === kindF) && (!whenF || e.mtime >= Number(since(whenF))) && (!sizeF || (!e.dir && e.size >= Number(sizeF))) && (!tagF || !!e.tags?.includes(Number(tagF)))
   const shown = $derived(at !== here ? [] : streaming ? visible : arrange(local ? visible.filter(passes) : visible, query, sort, desc))
   let frozen = $state<boolean>()
   const auto = $derived(frozen ?? (at === here && (!streaming || entries.length >= 200) ? prefersGrid(visible) : undefined))
@@ -333,6 +336,7 @@
     if (kindF) filters.kind = kindF
     if (whenF) filters.after = since(whenF)
     if (sizeF) filters.min = sizeF
+    if (tagF) filters.tag = tagF
     if (scope !== 'all' || (!(filtering && !q) && [...q].length < 2 && !/^([\u30fc\uff70]|(?=[\p{L}\p{Nl}])[\p{sc=Han}\p{sc=Hiragana}\p{sc=Katakana}\p{sc=Hangul}])$/u.test(q))) {
       hits = null
       finding = false
@@ -501,7 +505,7 @@
 
   async function endSearch() {
     searching = false
-    filter = kindF = whenF = sizeF = ''
+    filter = kindF = whenF = sizeF = tagF = ''
     scope = 'here'
     await tick()
     if (narrow.current) opener?.focus()
@@ -516,6 +520,7 @@
     share: { id: 'share', label: t.copyLink, icon: Link },
     star: { id: 'star', label: t.star, icon: Star },
     unstar: { id: 'unstar', label: t.unstar, icon: StarOff },
+    tags: { id: 'tags', label: t.tagsAction, icon: TagIcon },
     details: { id: 'details', label: t.details, icon: Info },
     remove: { id: 'remove', label: t.remove, icon: Trash, danger: true },
     mkdir: { id: 'mkdir', label: t.newFolder, icon: FolderPlus },
@@ -528,7 +533,7 @@
 
   const actions = (e: Entry | null): Action[] =>
     !e ? (error ? [] : [act.mkdir, act.touch, act.upload, ...(board.items ? [act.paste] : [])])
-    : [...(narrow.current ? [act.select] : []), act.open, act.download, act.rename, act.duplicate, ...(!e.dir && /\.zip$/i.test(e.name) ? [act.unzip] : []), act.move, act.share, starred(vol, join(e.name)) ? act.unstar : act.star, act.details, act.remove]
+    : [...(narrow.current ? [act.select] : []), act.open, act.download, act.rename, act.duplicate, ...(!e.dir && /\.zip$/i.test(e.name) ? [act.unzip] : []), act.move, act.share, starred(vol, join(e.name)) ? act.unstar : act.star, act.tags, act.details, act.remove]
 
   function onaction(id: string, e: Entry | null) {
     if (id === 'mkdir') dialog = { kind: 'mkdir' }
@@ -546,6 +551,7 @@
     else if (id === 'duplicate') duplicate(selected.has(e.name) ? [...selected] : [e.name])
     else if (id === 'star' || id === 'unstar') toggleStar([e.name], id === 'star')
     else if (id === 'share') quickShare(e)
+    else if (id === 'tags') dialog = { kind: 'tags', names: selected.has(e.name) ? [...selected] : [e.name] }
     else details = e
   }
 
@@ -559,6 +565,8 @@
   }
 
   $effect(() => void loadStars())
+  $effect(() => void loadTags())
+  const reload = () => refresh().then(() => (details = details && (entries.find((e) => e.name === details!.name) ?? details)))
 
   let sharedPaths = $state(new Set<string>())
   const loadShares = () =>
@@ -957,6 +965,7 @@
   </button>
   <button class="ghost" onclick={() => (dialog = { kind: 'move', names: [...selected] })}><FolderInput size={icon.sm} />{t.moveOrCopy}</button>
   {#if selected.size > 1}<button class="ghost" onclick={() => (dialog = { kind: 'renameMany', names: shown.filter((x) => selected.has(x.name)).map((x) => x.name) })}><Pencil size={icon.sm} />{t.rename}</button>{/if}
+  <button class="ghost" onclick={() => (dialog = { kind: 'tags', names: [...selected] })}><TagIcon size={icon.sm} />{t.tags}</button>
   <button class="ghost" onclick={() => toggleStar([...selected], !allStarred)}>
     {#if allStarred}<StarOff size={icon.sm} />{t.unstar}{:else}<Star size={icon.sm} />{t.star}{/if}
   </button>
@@ -1082,7 +1091,7 @@
 
     {#if scope === 'all' || !narrow.current}
       <div class="filters" role="group" aria-label={t.searchFilters}>
-        {#each [{ label: t.filterKind, get: () => kindF, set: (v: string) => (kindF = v), options: t.kinds }, { label: t.filterWhen, get: () => whenF, set: (v: string) => (whenF = v), options: t.whens }, { label: t.filterSize, get: () => sizeF, set: (v: string) => (sizeF = v), options: t.sizes }] as f (f.label)}
+        {#each [{ label: t.filterKind, get: () => kindF, set: (v: string) => (kindF = v), options: t.kinds }, { label: t.filterWhen, get: () => whenF, set: (v: string) => (whenF = v), options: t.whens }, { label: t.filterSize, get: () => sizeF, set: (v: string) => (sizeF = v), options: t.sizes }, ...(tags.list.length ? [{ label: t.filterTag, get: () => tagF, set: (v: string) => (tagF = v), options: Object.fromEntries(tags.list.map((x) => [String(x.id), x.name])) as Record<string, string> }] : [])] as f (f.label)}
           <label class="chip-select" class:on={!!f.get()}>
             <span>{f.get() ? f.options[f.get()] : f.label}</span>
             <ChevronDown size={icon.sm} aria-hidden="true" />
@@ -1092,7 +1101,7 @@
             </select>
           </label>
         {/each}
-        {#if filtering || local}<button class="ghost clear-filters" onclick={() => (kindF = whenF = sizeF = '')}>{t.clearFilters}</button>{/if}
+        {#if filtering || local}<button class="ghost clear-filters" onclick={() => (kindF = whenF = sizeF = tagF = '')}>{t.clearFilters}</button>{/if}
       </div>
     {/if}
     {#if streaming && at === here}<p class="loading-count" aria-hidden="true">{t.loadingItems(entries.length)}</p>{/if}
@@ -1158,7 +1167,7 @@
         {#snippet empty()}
           {#if query || local}
             <EmptyState icon={SearchX} title={t.noMatch} hint={t.noMatchHint}>
-              <button onclick={() => ((filter = ''), (kindF = whenF = sizeF = ''))}>{t.clearFilter}</button>
+              <button onclick={() => ((filter = ''), (kindF = whenF = sizeF = tagF = ''))}>{t.clearFilter}</button>
             </EmptyState>
           {:else if error && !vols.includes(vol)}
             <EmptyState icon={HardDrive} as="h2" title={t.volMissing(vol)} hint={t.volMissingHint}>
@@ -1204,7 +1213,8 @@
           entry={details}
           thumbs={[thumb(details), raw(details)]}
           onclose={closeDetails}
-          onchange={() => refresh().then(() => (details = entries.find((e) => e.name === details?.name) ?? details))}
+          onchange={reload}
+          ontags={() => details && (dialog = { kind: 'tags', names: [details.name] })}
         />
       {/key}
     {/await}
@@ -1248,6 +1258,7 @@
         ? creators
         : [
             { ...mark, run: () => toggleStar(names, mark === act.star) },
+            { ...act.tags, run: () => (dialog = { kind: 'tags', names }) },
             ...(one ? [act.rename, act.details].map((a) => ({ ...a, run: () => pass(a.id) })) : [{ ...act.rename, run: () => (dialog = { kind: 'renameMany', names: shown.filter((x) => selected.has(x.name)).map((x) => x.name) }) }]),
             { ...act.duplicate, run: () => duplicate(shown.filter((x) => selected.has(x.name)).map((x) => x.name)) },
           ]}
@@ -1314,6 +1325,10 @@
     {:else if dialog?.kind === 'renameMany'}
       {#await import('../components/BatchRename.svelte') then { default: BatchRename }}
         <BatchRename names={dialog.names} taken={new Set(entries.map((x) => x.name))} onsave={renameMany} onclose={() => (dialog = null)} />
+      {/await}
+    {:else if dialog?.kind === 'tags'}
+      {#await import('../components/TagPicker.svelte') then { default: TagPicker }}
+        <TagPicker {vol} items={dialog.names.map((n) => ({ path: join(n), tags: entries.find((x) => x.name === n)?.tags }))} onchange={reload} onclose={() => (dialog = null)} />
       {/await}
     {:else if dialog?.kind === 'move'}
       <MoveDialog

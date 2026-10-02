@@ -54,14 +54,14 @@ func (x *Index) Star(v string, paths []string, on bool) error {
 	return tx.Commit()
 }
 
-// Carry follows a cross-volume move with the item's favorites and activity.
+// Carry follows a cross-volume move with the item's favorites, tags and activity.
 func (x *Index) Carry(src *vol.Volume, srel string, dst *vol.Volume, drel string) {
 	if x == nil {
 		return
 	}
 	x.db.Flush()
 	expr, args := moved(srel, drel)
-	for _, t := range []string{"favorites", "events"} {
+	for _, t := range []string{"favorites", "tagged", "events"} {
 		err := x.exec(x.db, `UPDATE OR REPLACE `+t+` SET vol = ?, path = `+expr+` WHERE `+subtree,
 			append(append([]any{dst.Name}, args...), under(src.Name, srel)...)...)
 		if err != nil {

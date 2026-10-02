@@ -24,12 +24,13 @@ import (
 )
 
 type Entry struct {
-	Name  string `json:"name"`
-	Dir   bool   `json:"dir"`
-	Size  int64  `json:"size"`
-	Mtime int64  `json:"mtime"`
-	Items *int   `json:"items,omitempty"`
-	Bytes *int64 `json:"bytes,omitempty"`
+	Name  string  `json:"name"`
+	Dir   bool    `json:"dir"`
+	Size  int64   `json:"size"`
+	Mtime int64   `json:"mtime"`
+	Items *int    `json:"items,omitempty"`
+	Bytes *int64  `json:"bytes,omitempty"`
+	Tags  []int64 `json:"tags,omitempty"`
 }
 
 type Loc struct {
@@ -80,6 +81,12 @@ func (a *API) Register(mux *http.ServeMux) {
 	h("GET /api/size", a.size)
 	h("GET /api/favorites", a.favorites)
 	h("POST /api/favorites", a.star)
+	h("GET /api/tags", a.tags)
+	h("POST /api/tags", a.tagNew)
+	h("PATCH /api/tags/{id}", a.tagEdit)
+	h("DELETE /api/tags/{id}", a.tagDel)
+	h("GET /api/tags/{id}/items", a.tagItems)
+	h("POST /api/tags/{id}/items", a.tagApply)
 	h("PUT /api/file", a.save)
 	h("POST /api/mkdir", a.mkdir)
 	h("POST /api/touch", a.touch)
@@ -177,11 +184,11 @@ func (a *API) ls(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	WriteList(w, r, v.Root, rel, func(es []Entry) {
-		if !a.Index.Ready() {
-			return
-		}
+		tags, _ := a.Index.TagsIn(v.Name, rel)
+		ready := a.Index.Ready()
 		for i, e := range es {
-			if e.Dir {
+			es[i].Tags = tags[e.Name]
+			if e.Dir && ready {
 				if sz, err := a.Index.Size(v.Name, path.Join(rel, e.Name)); err == nil {
 					es[i].Bytes = &sz.Size
 				}
@@ -443,6 +450,7 @@ func (a *API) search(w http.ResponseWriter, r *http.Request) {
 	in := index.Query{Text: strings.TrimSpace(q.Get("q")), Limit: 200, Kind: q.Get("kind")}
 	in.After, _ = strconv.ParseInt(q.Get("after"), 10, 64)
 	in.MinSize, _ = strconv.ParseInt(q.Get("min"), 10, 64)
+	in.Tag, _ = strconv.ParseInt(q.Get("tag"), 10, 64)
 	if _, ok := index.Kinds[in.Kind]; in.Kind != "" && !ok {
 		httpx.Fail(w, 400, "bad kind")
 		return
@@ -546,6 +554,10 @@ func (a *API) favorites(w http.ResponseWriter, r *http.Request) {
 		httpx.Error(w, err)
 		return
 	}
+	httpx.JSON(w, 200, map[string]any{"entries": a.located(fs)})
+}
+
+func (a *API) located(fs []index.Favorite) []favorite {
 	out := []favorite{}
 	for _, f := range fs {
 		it := favorite{Entry: Entry{Name: path.Base(f.Path)}, Vol: f.Vol, Path: f.Path, Missing: true}
@@ -556,7 +568,7 @@ func (a *API) favorites(w http.ResponseWriter, r *http.Request) {
 		}
 		out = append(out, it)
 	}
-	httpx.JSON(w, 200, map[string]any{"entries": out})
+	return out
 }
 
 func (a *API) star(w http.ResponseWriter, r *http.Request) {

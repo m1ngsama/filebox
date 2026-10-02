@@ -16,6 +16,7 @@
   import { size, date, fallback, parent, place, visual, metaRows, type Meta } from '../lib/format'
   import { t } from '../lib/i18n'
   import { starred, star } from '../lib/favorites.svelte'
+  import { tagOf } from '../lib/tags.svelte'
   import { fail } from '../lib/toast.svelte'
 
   let {
@@ -25,7 +26,8 @@
     thumbs,
     onclose,
     onchange = () => {},
-  }: { vol: string; path: string; entry: Entry; thumbs: (string | null)[]; onclose: () => void; onchange?: () => void } = $props()
+    ontags,
+  }: { vol: string; path: string; entry: Entry; thumbs: (string | null)[]; onclose: () => void; onchange?: () => void; ontags?: () => void } = $props()
   let tries = $state(0)
   const src = $derived(fallback(thumbs, tries))
   const on = $derived(starred(vol, path))
@@ -75,6 +77,13 @@
       {#if total !== null}<dt>{t.size}</dt><dd class="size">{entry.dir ? total || '…' : size(entry.size)}</dd>{/if}
       <dt>{t.mtime}</dt><dd>{date(entry.mtime)}</dd>
       {#each meta as [k, v] (k)}<dt>{k}</dt><dd>{#if k === t.meta.gps}<a href={map(v)} target="_blank" rel="noopener noreferrer">{v}</a>{:else}{v}{/if}</dd>{/each}
+      {#if ontags}
+        <dt>{t.tags}</dt>
+        <dd class="tag-chips">
+          {#each entry.tags ?? [] as id (id)}{@const x = tagOf(id)}{#if x}<span class="tag-chip" data-color={x.color}>{x.name}</span>{/if}{/each}
+          <button class="link" onclick={ontags}>{entry.tags?.length ? t.editTag : t.addTags}</button>
+        </dd>
+      {/if}
       <dt>{t.path}</dt><dd class="path">{place(vol, parent(path))}</dd>
       {#if versions.length}<dt>{t.versions}</dt><dd><button class="link" onclick={() => (tab = 'versions')}>{t.versionCount(versions.length)}</button></dd>{/if}
     </dl>
