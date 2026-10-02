@@ -77,7 +77,10 @@ func (x *Index) DateAll(ctx context.Context, vols *vol.Set) (int, error) {
 		}
 		rows.Close()
 		if len(batch) == 0 {
-			return total, rows.Err()
+			if err := rows.Err(); err != nil {
+				return total, err
+			}
+			return total, x.hide()
 		}
 		for i := range batch {
 			batch[i].Taken = taken(vols, batch[i].File)
@@ -103,6 +106,40 @@ func taken(vols *vol.Set, f File) int64 {
 	return f.Mtime
 }
 
+// hide keeps folders holding a .nomedia file, and everything below them, out of the timeline, as on Android.
+func (x *Index) hide() error {
+	rows, err := x.db.Query(`SELECT vol, path FROM files WHERE dir = 0 AND (path = '.nomedia' OR path LIKE '%/.nomedia')`)
+	if err != nil {
+		return err
+	}
+	var marks [][2]string
+	for rows.Next() {
+		var m [2]string
+		if err := rows.Scan(&m[0], &m[1]); err != nil {
+			rows.Close()
+			return err
+		}
+		marks = append(marks, m)
+	}
+	rows.Close()
+	x.w.Lock()
+	defer x.w.Unlock()
+	tx, err := x.db.Begin()
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+	if _, err := tx.Exec(`UPDATE taken SET hidden = 0 WHERE hidden != 0`); err != nil {
+		return err
+	}
+	for _, m := range marks {
+		if _, err := tx.Exec(`UPDATE taken SET hidden = 1 WHERE `+subtree, under(m[0], path.Dir(m[1]))...); err != nil {
+			return err
+		}
+	}
+	return tx.Commit()
+}
+
 func (x *Index) saveTaken(batch []Photo) error {
 	x.w.Lock()
 	defer x.w.Unlock()
@@ -124,10 +161,10 @@ func (x *Index) saveTaken(batch []Photo) error {
 // Photos pages through every photo and video, newest capture first; pass the last one seen to continue.
 func (x *Index) Photos(ctx context.Context, after *Photo, limit int) ([]Photo, error) {
 	q := `SELECT t.id, f.vol, f.path, f.name, f.size, f.mtime, t.at FROM taken t
-		JOIN files f ON f.vol = t.vol AND f.path = t.path`
+		JOIN files f ON f.vol = t.vol AND f.path = t.path WHERE t.hidden = 0`
 	args := []any{}
 	if after != nil {
-		q += ` WHERE (t.at, t.id) < (?, ?)`
+		q += ` AND (t.at, t.id) < (?, ?)`
 		args = append(args, after.Taken, after.ID)
 	}
 	q += ` ORDER BY t.at DESC, t.id DESC LIMIT ?`

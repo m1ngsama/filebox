@@ -52,6 +52,7 @@ export default (locale: string) => {
     photos: 'Photos',
     photosEmpty: 'No photos or videos yet',
     photosEmptyHint: 'Photos and videos from every volume line up here by when they were taken.',
+    photosHide: 'To keep a folder out of here, put an empty file named .nomedia in it.',
     tagsAction: 'Tags…',
     tagsOf: (n: string) => `Tags for “${n}”`,
     tagsOfMany: (k: number) => `Tags for ${count(k, 'item')}`,

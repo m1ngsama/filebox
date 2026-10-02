@@ -165,6 +165,9 @@ var migrations = []string{
 		UNIQUE (vol, path)
 	);
 	CREATE INDEX taken_at ON taken(at DESC, id DESC);`,
+	`ALTER TABLE taken ADD COLUMN hidden INTEGER NOT NULL DEFAULT 0;
+	DROP INDEX taken_at;
+	CREATE INDEX taken_shown ON taken(at DESC, id DESC) WHERE hidden = 0;`,
 }
 
 type DB struct {

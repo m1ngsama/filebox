@@ -621,6 +621,12 @@ func TestPhotosTimelineByCaptureDate(t *testing.T) {
 	if ps, _ := get(""); len(ps) != 3 || ps[2].Path != "z/old.png" {
 		t.Fatalf("after rename %+v", ps)
 	}
+	f.write(t, "b/.nomedia", "")
+	f.App.Index.Scan(f.App.Vols)
+	f.App.Index.DateAll(context.Background(), f.App.Vols)
+	if ps, _ := get(""); len(ps) != 2 || ps[0].Path != "c/odd.JPG" {
+		t.Fatalf(".nomedia folder still shown %+v", ps)
+	}
 	if w := f.do("GET", "/api/photos?after=x", nil); w.Code != 400 {
 		t.Fatalf("bad cursor %d", w.Code)
 	}

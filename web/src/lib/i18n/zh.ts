@@ -53,6 +53,7 @@ const zh = {
   photos: '照片',
   photosEmpty: '还没有照片和视频',
   photosEmptyHint: '所有存储卷里的照片和视频会按拍摄时间排在这里。',
+  photosHide: '不想让某个文件夹出现在这里，就在里面放一个名为 .nomedia 的空文件。',
   tagsAction: '标签…',
   tagsOf: (n: string) => `“${n}”的标签`,
   tagsOfMany: (k: number) => `${k} 项的标签`,

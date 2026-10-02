@@ -77,7 +77,7 @@
         {/each}
       </ul>
     {/each}
-    <div bind:this={end} class="timeline-end">{#if busy}<span class="hint">{t.loading}</span>{/if}</div>
+    <div bind:this={end} class="timeline-end">{#if busy}<span class="hint">{t.loading}</span>{:else if !more}<span class="hint">{t.photosHide}</span>{/if}</div>
   </section>
 {/if}
 
