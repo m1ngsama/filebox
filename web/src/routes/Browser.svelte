@@ -72,7 +72,7 @@
   import { enqueue, type Replaced } from '../lib/uploads.svelte'
   import { loadStars, starred, star } from '../lib/favorites.svelte'
   import { folderAction, downloadAction, actOn, saveZip } from '../lib/located'
-  import { kind, thumbable, rawThumb, arrange, parent, base, child, flip, sorts, place, prefersGrid, mostlyMedia, dated, days, sidecars, subtitleRename, stem, type Sort } from '../lib/format'
+  import { kind, searchKind, size, thumbable, rawThumb, arrange, parent, base, child, flip, sorts, place, prefersGrid, mostlyMedia, dated, days, sidecars, subtitleRename, stem, type Sort } from '../lib/format'
   import { t } from '../lib/i18n'
   import { load, save, viewOf, keepView, type View } from '../lib/storage'
   import NavToggle from '../components/NavToggle.svelte'
@@ -101,6 +101,11 @@
   let whenF = $state('')
   let sizeF = $state('')
   const filtering = $derived(scope === 'all' && !!(kindF || whenF || sizeF))
+
+  $effect(() => {
+    here
+    untrack(() => scope === 'here' && (kindF = whenF = sizeF = ''))
+  })
 
   function since(w: string) {
     const d = new Date()
@@ -153,7 +158,9 @@
   const side = $derived(at === here ? sidecars(entries) : new Map<string, string[]>())
   const hidden = $derived(new Set(subs ? [] : [...side.values()].flat()))
   const visible = $derived(hidden.size ? entries.filter((e) => !hidden.has(e.name)) : entries)
-  const shown = $derived(at !== here ? [] : streaming ? visible : arrange(visible, query, sort, desc))
+  const local = $derived(scope === 'here' && !!(kindF || whenF || sizeF))
+  const passes = (e: Entry) => (!kindF || searchKind(e) === kindF) && (!whenF || e.mtime >= Number(since(whenF))) && (!sizeF || (!e.dir && e.size >= Number(sizeF)))
+  const shown = $derived(at !== here ? [] : streaming ? visible : arrange(local ? visible.filter(passes) : visible, query, sort, desc))
   let frozen = $state<boolean>()
   const auto = $derived(frozen ?? (at === here && (!streaming || entries.length >= 200) ? prefersGrid(visible) : undefined))
   const grid = $derived(chosen ? chosen === 'grid' : !!auto)
@@ -902,7 +909,7 @@
     const target = one ?? focused()
     if (e.key === 'Escape') {
       if (details) closeDetails()
-      else if (searching || filter || filtering) endSearch()
+      else if (searching || filter || filtering || local) endSearch()
       else selected.clear()
     } else if (typing || (e.altKey && !(mod && e.code === 'KeyV'))) return
     else if (mod && !e.shiftKey && !e.repeat && k === 'z' && runLatest(t.undo)) e.preventDefault()
@@ -1069,7 +1076,7 @@
       </DropdownMenu.Root>
     </header>
 
-    {#if scope === 'all'}
+    {#if scope === 'all' || !narrow.current}
       <div class="filters" role="group" aria-label={t.searchFilters}>
         {#each [{ label: t.filterKind, get: () => kindF, set: (v: string) => (kindF = v), options: t.kinds }, { label: t.filterWhen, get: () => whenF, set: (v: string) => (whenF = v), options: t.whens }, { label: t.filterSize, get: () => sizeF, set: (v: string) => (sizeF = v), options: t.sizes }] as f (f.label)}
           <label class="chip-select" class:on={!!f.get()}>
@@ -1081,7 +1088,7 @@
             </select>
           </label>
         {/each}
-        {#if filtering}<button class="ghost clear-filters" onclick={() => (kindF = whenF = sizeF = '')}>{t.clearFilters}</button>{/if}
+        {#if filtering || local}<button class="ghost clear-filters" onclick={() => (kindF = whenF = sizeF = '')}>{t.clearFilters}</button>{/if}
       </div>
     {/if}
     {#if streaming && at === here}<p class="loading-count" aria-hidden="true">{t.loadingItems(entries.length)}</p>{/if}
@@ -1138,10 +1145,16 @@
         group={sort === 'mtime' && !query && !streaming ? byDay : undefined}
         bind:collapsed
       >
+        {#snippet footer()}
+          {#if shown.length && at === here && !streaming}
+            {@const dirs = shown.filter((e) => e.dir)}
+            <p class="list-summary">{t.folderSummary(dirs.length, shown.length - dirs.length, size(shown.reduce((n, e) => n + (e.dir ? (e.bytes ?? 0) : e.size), 0)))}</p>
+          {/if}
+        {/snippet}
         {#snippet empty()}
-          {#if query}
+          {#if query || local}
             <EmptyState icon={SearchX} title={t.noMatch} hint={t.noMatchHint}>
-              <button onclick={() => (filter = '')}>{t.clearFilter}</button>
+              <button onclick={() => ((filter = ''), (kindF = whenF = sizeF = ''))}>{t.clearFilter}</button>
             </EmptyState>
           {:else if error && !vols.includes(vol)}
             <EmptyState icon={HardDrive} as="h2" title={t.volMissing(vol)} hint={t.volMissingHint}>

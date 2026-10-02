@@ -111,6 +111,13 @@ const groups: Record<string, string> = {
 }
 const kinds = new Map(Object.entries(groups).flatMap(([k, v]) => v.split(' ').map((e) => [e, k] as const)))
 
+const docs = new Set('pdf epub cbz txt md doc docx xls xlsx ppt pptx odt ods odp csv rtf pages numbers key'.split(' '))
+// searchKind sorts an entry into the search filter's kinds, the same buckets the server uses.
+export const searchKind = (e: { name: string; dir: boolean }) => {
+  if (e.dir) return 'dir'
+  const k = kind(e.name)
+  return k === 'image' || k === 'video' || k === 'audio' ? k : docs.has(ext(e.name)) ? 'doc' : ''
+}
 export const kind = (n: string) => (kinds.get(ext(n)) ?? '') as 'image' | 'video' | 'audio' | 'pdf' | 'book' | 'comic' | 'text' | ''
 
 const looks: Record<string, string> = {

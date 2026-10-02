@@ -674,3 +674,11 @@ button.busy::before { content: ''; width: 14px; height: 14px; border: 2px solid 
   .row.pressing, .card.pressing { animation: none; background: var(--sel); }
 }
 
+.list-summary {
+  margin: 0;
+  padding: var(--space-4) var(--space-3) var(--space-5);
+  text-align: center;
+  color: var(--muted);
+  font-size: var(--text-sm);
+  font-variant-numeric: tabular-nums;
+}
