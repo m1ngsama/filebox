@@ -6,6 +6,7 @@ import (
 	"path"
 
 	"github.com/m1ngsama/filebox/internal/auth"
+	"github.com/m1ngsama/filebox/internal/db"
 	"github.com/m1ngsama/filebox/internal/httpx"
 	"github.com/m1ngsama/filebox/internal/serve"
 	"github.com/m1ngsama/filebox/internal/version"
@@ -72,6 +73,7 @@ func (a *API) versionRestore(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	a.Index.Touch(v, dst)
+	a.did(r, db.Event{Kind: db.EventRevert, Vol: v.Name, Path: dst})
 	httpx.JSON(w, 200, map[string]string{"path": dst, "prev": prev})
 }
 

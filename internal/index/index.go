@@ -199,6 +199,8 @@ func (x *Index) rename(vol, from, to string) error {
 	if to == "." {
 		return fmt.Errorf("rename %q onto the volume root", from)
 	}
+	// Queued activity still names the old path; write it first so the update below catches it.
+	x.db.Flush()
 	x.w.Lock()
 	defer x.w.Unlock()
 	tx, err := x.db.Begin()
@@ -206,8 +208,8 @@ func (x *Index) rename(vol, from, to string) error {
 		return err
 	}
 	defer tx.Rollback()
-	for _, t := range []string{"files", "dav_props", "favorites", "shares", "versions"} {
-		if t != "versions" {
+	for _, t := range []string{"files", "dav_props", "favorites", "shares", "versions", "events"} {
+		if t != "versions" && t != "events" {
 			if _, err := tx.Exec(`DELETE FROM `+t+` WHERE `+subtree, under(vol, to)...); err != nil {
 				return err
 			}

@@ -303,7 +303,7 @@ func TestJobDestinationConflict(t *testing.T) {
 		t.Fatal(err)
 	}
 	jobs := api.NewJobs(nil)
-	id := jobs.Start(v, v, "tree", "copy", false)
+	id := jobs.Start(v, v, "tree", "copy", false, func() {})
 	st := waitJobStatus(t, jobs, id)
 	if st.State != "error" {
 		t.Fatalf("state = %s", st.State)
@@ -322,11 +322,11 @@ func TestJobErrorCode(t *testing.T) {
 	f.write(t, "b.txt", "b")
 	v, _ := f.App.Vols.Get("v")
 	jobs := api.NewJobs(nil)
-	st := waitJobStatus(t, jobs, jobs.Start(v, v, "a.txt", "b.txt", false))
+	st := waitJobStatus(t, jobs, jobs.Start(v, v, "a.txt", "b.txt", false, func() {}))
 	if st.State != "error" || st.Code != "exists" {
 		t.Fatalf("status = %+v, want error with code exists", st)
 	}
-	st = waitJobStatus(t, jobs, jobs.Start(v, v, "gone.txt", "c.txt", false))
+	st = waitJobStatus(t, jobs, jobs.Start(v, v, "gone.txt", "c.txt", false, func() {}))
 	if st.Code != "notfound" {
 		t.Fatalf("status = %+v, want code notfound", st)
 	}
@@ -349,7 +349,7 @@ func TestJobCopyCleansUpOnFailure(t *testing.T) {
 		t.Fatal("volume v missing")
 	}
 	jobs := api.NewJobs(nil)
-	id := jobs.Start(v, v, "bad", "bad-copy", false)
+	id := jobs.Start(v, v, "bad", "bad-copy", false, func() {})
 	st := waitJobStatus(t, jobs, id)
 	if st.State != "error" {
 		t.Fatalf("state = %s", st.State)
@@ -368,7 +368,7 @@ func TestJobCopyNeverExposesPartialDestination(t *testing.T) {
 	v, _ := f.App.Vols.Get("v")
 	w, _ := f.App.Vols.Get("w")
 	jobs := api.NewJobs(nil)
-	id := jobs.Start(v, w, "big", "big", false)
+	id := jobs.Start(v, w, "big", "big", false, func() {})
 	for {
 		ents, err := os.ReadDir(filepath.Join(f.Dir2, "big"))
 		st, _ := jobs.Get(id)
@@ -397,7 +397,7 @@ func TestJobPlacementIsExclusive(t *testing.T) {
 	os.Mkdir(filepath.Join(f.Dir2, "tree"), 0o755)
 	jobs := api.NewJobs(nil)
 	for _, p := range []string{"a.txt", "tree"} {
-		st := waitJobStatus(t, jobs, jobs.Start(v, w, p, p, true))
+		st := waitJobStatus(t, jobs, jobs.Start(v, w, p, p, true, func() {}))
 		if st.State != "error" || st.Code != "exists" {
 			t.Fatalf("%s: %+v", p, st)
 		}
@@ -420,7 +420,7 @@ func TestJobMoveRefusesSymlinks(t *testing.T) {
 	v, _ := f.App.Vols.Get("v")
 	w, _ := f.App.Vols.Get("w")
 	jobs := api.NewJobs(nil)
-	st := waitJobStatus(t, jobs, jobs.Start(v, w, "tree", "tree", true))
+	st := waitJobStatus(t, jobs, jobs.Start(v, w, "tree", "tree", true, func() {}))
 	if st.State != "error" || st.Code != "internal" {
 		t.Fatalf("status %+v", st)
 	}
@@ -430,7 +430,7 @@ func TestJobMoveRefusesSymlinks(t *testing.T) {
 	if _, err := os.Stat(filepath.Join(f.Dir2, "tree")); !os.IsNotExist(err) {
 		t.Fatalf("destination created: %v", err)
 	}
-	st = waitJobStatus(t, jobs, jobs.Start(v, w, "tree", "copy", false))
+	st = waitJobStatus(t, jobs, jobs.Start(v, w, "tree", "copy", false, func() {}))
 	if st.State != "done" {
 		t.Fatalf("copy with symlink %+v", st)
 	}
@@ -504,5 +504,36 @@ func TestTrashRestoreBatch(t *testing.T) {
 	}
 	if b, _ := os.ReadFile(filepath.Join(f.Dir, "c.txt")); string(b) != "new" {
 		t.Fatalf("c.txt overwritten %q", b)
+	}
+}
+
+func TestFileActivityFollowsTheItem(t *testing.T) {
+	f := newTestApp(t)
+	f.do("POST", "/api/mkdir", body(`{"vol":"v","path":"docs"}`))
+	f.do("POST", "/api/touch", body(`{"vol":"v","path":"docs/a.txt"}`))
+	f.do("POST", "/api/mv", body(`{"src":{"vol":"v","path":"docs/a.txt"},"dst":{"vol":"v","path":"docs/b.txt"}}`))
+	f.do("POST", "/api/touch", body(`{"vol":"v","path":"other.txt"}`))
+	f.App.DB.Flush()
+	f.do("POST", "/api/mv", body(`{"src":{"vol":"v","path":"docs"},"dst":{"vol":"v","path":"papers"}}`))
+	f.App.DB.Flush()
+	type ev struct{ Kind, Name, Vol, Path string }
+	list := func(q string) []string {
+		var out []string
+		for _, e := range decode[struct{ Events []ev }](t, f.do("GET", "/api/activity?"+q, nil)).Events {
+			out = append(out, e.Kind+" "+e.Vol+":"+e.Path+" "+e.Name)
+		}
+		return out
+	}
+	if got := strings.Join(list("vol=v&path=papers/b.txt"), "|"); got != "rename v:papers/b.txt docs/a.txt|create v:papers/b.txt " {
+		t.Fatalf("file history %q", got)
+	}
+	if got := list("vol=v&path=papers"); len(got) != 4 || got[0] != "rename v:papers docs" {
+		t.Fatalf("folder history %q", got)
+	}
+	if got := list("kind=files"); len(got) != 5 {
+		t.Fatalf("all file events %q", got)
+	}
+	if w := f.do("GET", "/api/activity?vol=nope&path=x", nil); w.Code != 404 {
+		t.Fatalf("unknown volume %d", w.Code)
 	}
 }

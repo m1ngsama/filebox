@@ -23,8 +23,8 @@ var ErrUnsafeArchive = errors.New("archive is unsafe or unreadable")
 // unzipReserve keeps this much of the volume free after an archive is unpacked.
 const unzipReserve = 1 << 30
 
-func (j *Jobs) Unzip(v *vol.Volume, rel, drel string) string {
-	return j.launch(func(id string, x *job) error { return unzip(j.ix, v, rel, drel, id, x) })
+func (j *Jobs) Unzip(v *vol.Volume, rel, drel string, then func()) string {
+	return j.launch(func(id string, x *job) error { return unzip(j.ix, v, rel, drel, id, x) }, then)
 }
 
 // entryName turns an archive path into a safe relative path, or "" for entries to skip.

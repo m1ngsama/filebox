@@ -11,6 +11,7 @@ import (
 	"sync"
 
 	"github.com/m1ngsama/filebox/internal/auth"
+	"github.com/m1ngsama/filebox/internal/db"
 	"github.com/m1ngsama/filebox/internal/httpx"
 	"github.com/m1ngsama/filebox/internal/version"
 	"github.com/m1ngsama/filebox/internal/vol"
@@ -94,6 +95,7 @@ func (a *API) save(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	a.Index.Touch(v, rel)
+	a.did(r, db.Event{Kind: db.EventEdit, Vol: v.Name, Path: rel, Size: n})
 	if fi, err = v.Root.Stat(rel); err != nil {
 		httpx.Error(w, err)
 		return

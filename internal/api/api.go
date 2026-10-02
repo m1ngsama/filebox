@@ -107,6 +107,12 @@ func (a *API) Register(mux *http.ServeMux) {
 	mux.HandleFunc("/api/", func(w http.ResponseWriter, r *http.Request) { httpx.Fail(w, 404, "not found") })
 }
 
+func (a *API) did(r *http.Request, e db.Event) {
+	p, _ := auth.From(r.Context())
+	e.At, e.UserID = time.Now().Unix(), p.UserID
+	a.DB.Log(e)
+}
+
 func (a *API) resolve(l Loc) (*vol.Volume, string, error) { return a.Vols.Resolve(l.Vol, l.Path) }
 
 func (a *API) query(r *http.Request) (*vol.Volume, string, error) {
@@ -240,6 +246,7 @@ func (a *API) mkdir(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	a.Index.Touch(v, rel)
+	a.did(r, db.Event{Kind: db.EventCreate, Vol: v.Name, Path: rel})
 	e, err := Stat(v.Root, rel)
 	if err != nil {
 		e = Entry{Name: path.Base(rel), Dir: true, Mtime: time.Now().UnixMilli()}
@@ -268,6 +275,7 @@ func (a *API) touch(w http.ResponseWriter, r *http.Request) {
 	}
 	f.Close()
 	a.Index.Touch(v, rel)
+	a.did(r, db.Event{Kind: db.EventCreate, Vol: v.Name, Path: rel})
 	e, err := Stat(v.Root, rel)
 	if err != nil {
 		e = Entry{Name: path.Base(rel), Mtime: time.Now().UnixMilli()}
@@ -298,7 +306,9 @@ func (a *API) unzip(w http.ResponseWriter, r *http.Request) {
 		}
 		name = fmt.Sprintf("%s %d", base, i)
 	}
-	httpx.JSON(w, 202, map[string]string{"job": a.Jobs.Unzip(v, rel, path.Join(dir, name)), "name": name})
+	drel := path.Join(dir, name)
+	done := func() { a.did(r, db.Event{Kind: db.EventCreate, Vol: v.Name, Path: drel, Name: path.Base(rel)}) }
+	httpx.JSON(w, 202, map[string]string{"job": a.Jobs.Unzip(v, rel, drel, done), "name": name})
 }
 
 type transfer struct {
@@ -350,10 +360,18 @@ func (a *API) mv(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		a.Index.Rename(src, srel, drel)
+		kind := db.EventMove
+		if path.Dir(srel) == path.Dir(drel) {
+			kind = db.EventRename
+		}
+		a.did(r, db.Event{Kind: kind, Vol: dst.Name, Path: drel, Name: srel})
 		w.WriteHeader(204)
 		return
 	}
-	httpx.JSON(w, 202, map[string]string{"job": a.Jobs.Start(src, dst, srel, drel, true)})
+	done := func() {
+		a.did(r, db.Event{Kind: db.EventMove, Vol: dst.Name, Path: drel, Name: srel, Target: src.Name})
+	}
+	httpx.JSON(w, 202, map[string]string{"job": a.Jobs.Start(src, dst, srel, drel, true, done)})
 }
 
 func (a *API) cp(w http.ResponseWriter, r *http.Request) {
@@ -361,7 +379,12 @@ func (a *API) cp(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	httpx.JSON(w, 202, map[string]string{"job": a.Jobs.Start(src, dst, srel, drel, false)})
+	from := ""
+	if src != dst {
+		from = src.Name
+	}
+	done := func() { a.did(r, db.Event{Kind: db.EventCopy, Vol: dst.Name, Path: drel, Name: srel, Target: from}) }
+	httpx.JSON(w, 202, map[string]string{"job": a.Jobs.Start(src, dst, srel, drel, false, done)})
 }
 
 func (a *API) rm(w http.ResponseWriter, r *http.Request) {
@@ -396,6 +419,7 @@ func (a *API) rm(w http.ResponseWriter, r *http.Request) {
 		}
 		done = append(done, trashed{p, id})
 		a.Index.Touch(v, rel)
+		a.did(r, db.Event{Kind: db.EventTrash, Vol: v.Name, Path: rel})
 	}
 	httpx.JSON(w, 200, map[string]any{"trashed": done, "failed": failed})
 }
@@ -700,6 +724,7 @@ var activityKinds = map[string][]string{
 	"login": {db.EventLogin, db.EventLoginFailed, db.EventPassword},
 	"share": {db.EventShareCreate, db.EventShareEdit, db.EventShareDelete},
 	"token": {db.EventTokenCreate, db.EventTokenRevoke},
+	"files": {db.EventUpload, db.EventCreate, db.EventEdit, db.EventRevert, db.EventRename, db.EventMove, db.EventCopy, db.EventTrash, db.EventRestore},
 }
 
 func (a *API) activity(w http.ResponseWriter, r *http.Request) {
@@ -711,6 +736,14 @@ func (a *API) activity(w http.ResponseWriter, r *http.Request) {
 	if q.Get("kind") != "" && f.Kinds == nil {
 		httpx.Fail(w, 400, "bad kind")
 		return
+	}
+	if q.Has("vol") {
+		v, rel, err := a.query(r)
+		if err != nil {
+			httpx.Error(w, err)
+			return
+		}
+		f.Vol, f.Path = v.Name, rel
 	}
 	es, err := a.DB.Events(f)
 	if err != nil {
@@ -724,7 +757,7 @@ func (a *API) activity(w http.ResponseWriter, r *http.Request) {
 	out := []map[string]any{}
 	for _, e := range es {
 		out = append(out, map[string]any{"id": e.ID, "at": e.At, "kind": e.Kind, "share_id": e.ShareID, "target": e.Target,
-			"visitor": e.Visitor, "name": e.Name, "size": e.Size})
+			"visitor": e.Visitor, "name": e.Name, "size": e.Size, "vol": e.Vol, "path": e.Path})
 	}
 	httpx.JSON(w, 200, map[string]any{"events": out, "more": more})
 }

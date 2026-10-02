@@ -27,6 +27,14 @@ const (
 	EventShareDelete = "share_delete"
 	EventTokenCreate = "token_create"
 	EventTokenRevoke = "token_revoke"
+	EventCreate      = "create"
+	EventEdit        = "edit"
+	EventRevert      = "revert"
+	EventRename      = "rename"
+	EventMove        = "move"
+	EventCopy        = "copy"
+	EventTrash       = "trash"
+	EventRestore     = "restore"
 
 	MaxEvents     = 500_000
 	maxSeen       = 1 << 16
@@ -40,6 +48,7 @@ type Event struct {
 	ID, At, UserID, ShareID     int64
 	Kind, Visitor, Name, Target string
 	Size                        int64
+	Vol, Path                   string
 }
 
 type visitorKey struct {
@@ -88,9 +97,11 @@ type item struct {
 	done chan struct{}
 }
 
-var anonymous = map[string]bool{EventDownload: true, EventUpload: true, EventLoginFailed: true}
+// bulk events may be dropped under load and are capped by count, unlike the audit trail.
+var bulk = map[string]bool{EventDownload: true, EventUpload: true, EventLoginFailed: true,
+	EventCreate: true, EventEdit: true, EventRevert: true, EventRename: true, EventMove: true, EventCopy: true, EventTrash: true, EventRestore: true}
 
-const anonymousKinds = `('download', 'upload', 'login_failed')`
+const bulkKinds = `('download', 'upload', 'login_failed', 'create', 'edit', 'revert', 'rename', 'move', 'copy', 'trash', 'restore')`
 
 type writer struct {
 	d       *DB
@@ -202,9 +213,9 @@ func (w *writer) insert(batch []item) error {
 				return err
 			}
 		default:
-			if _, err := tx.Exec(`INSERT OR IGNORE INTO events (at, user_id, kind, share_id, visitor, name, target, size)
-				VALUES (?1, iif(?2 = 0, coalesce((SELECT user_id FROM shares WHERE id = ?4), 0), ?2), ?3, ?4, ?5, ?6, ?7, ?8)`,
-				e.At, e.UserID, e.Kind, e.ShareID, e.Visitor, e.Name, e.Target, e.Size); err != nil {
+			if _, err := tx.Exec(`INSERT OR IGNORE INTO events (at, user_id, kind, share_id, visitor, name, target, size, vol, path)
+				VALUES (?1, iif(?2 = 0, coalesce((SELECT user_id FROM shares WHERE id = ?4), 0), ?2), ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)`,
+				e.At, e.UserID, e.Kind, e.ShareID, e.Visitor, e.Name, e.Target, e.Size, e.Vol, e.Path); err != nil {
 				return err
 			}
 		}
@@ -220,7 +231,7 @@ func (w *writer) stop() {
 }
 
 func (d *DB) Log(e Event) {
-	if anonymous[e.Kind] {
+	if bulk[e.Kind] {
 		d.events.send(item{ev: e})
 		return
 	}
@@ -272,15 +283,26 @@ type EventFilter struct {
 	UserID, ShareID, Before int64
 	Kinds                   []string
 	Limit                   int
+	// Vol and Path narrow to one item and everything under it, including its shares' events.
+	Vol, Path string
 }
 
 func (d *DB) Events(f EventFilter) ([]Event, error) {
-	q := `SELECT id, at, user_id, share_id, kind, visitor, name, target, size FROM events
+	q := `SELECT id, at, user_id, share_id, kind, visitor, name, target, size, vol, path FROM events
 		WHERE (user_id = ?1 OR (user_id = 0 AND ?1 = (SELECT min(id) FROM users)))`
 	args := []any{f.UserID}
 	if f.ShareID != 0 {
 		q += ` AND share_id = ?`
 		args = append(args, f.ShareID)
+	}
+	if f.Vol != "" {
+		lo, hi := f.Path+"/", f.Path+"0"
+		if f.Path == "." {
+			lo, hi = "", "\xff"
+		}
+		q += ` AND ((vol = ? AND (path = ? OR (path > ? AND path < ?)))
+			OR share_id IN (SELECT id FROM shares WHERE vol = ? AND (path = ? OR (path > ? AND path < ?))))`
+		args = append(args, f.Vol, f.Path, lo, hi, f.Vol, f.Path, lo, hi)
 	}
 	if len(f.Kinds) > 0 {
 		q += ` AND kind IN (?` + strings.Repeat(`, ?`, len(f.Kinds)-1) + `)`
@@ -302,7 +324,7 @@ func (d *DB) Events(f EventFilter) ([]Event, error) {
 	var out []Event
 	for rows.Next() {
 		var e Event
-		if err := rows.Scan(&e.ID, &e.At, &e.UserID, &e.ShareID, &e.Kind, &e.Visitor, &e.Name, &e.Target, &e.Size); err != nil {
+		if err := rows.Scan(&e.ID, &e.At, &e.UserID, &e.ShareID, &e.Kind, &e.Visitor, &e.Name, &e.Target, &e.Size, &e.Vol, &e.Path); err != nil {
 			return nil, err
 		}
 		out = append(out, e)
@@ -328,11 +350,11 @@ func (d *DB) PruneEvents(before int64, keep int) (int64, error) {
 		return total, err
 	}
 	var n int64
-	if err := d.QueryRow(`SELECT count(*) FROM events WHERE kind IN ` + anonymousKinds).Scan(&n); err != nil {
+	if err := d.QueryRow(`SELECT count(*) FROM events WHERE kind IN ` + bulkKinds).Scan(&n); err != nil {
 		return total, err
 	}
 	for over := n - int64(keep); over > 0; over -= pruneBatch {
-		m, err := affected(d.Exec(`DELETE FROM events WHERE id IN (SELECT id FROM events WHERE kind IN `+anonymousKinds+` ORDER BY id LIMIT ?)`, min(over, pruneBatch)))
+		m, err := affected(d.Exec(`DELETE FROM events WHERE id IN (SELECT id FROM events WHERE kind IN `+bulkKinds+` ORDER BY id LIMIT ?)`, min(over, pruneBatch)))
 		total += m
 		if err != nil {
 			return total, err

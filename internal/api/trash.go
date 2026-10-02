@@ -11,6 +11,7 @@ import (
 	"sort"
 	"time"
 
+	"github.com/m1ngsama/filebox/internal/db"
 	"github.com/m1ngsama/filebox/internal/httpx"
 	"github.com/m1ngsama/filebox/internal/vol"
 )
@@ -122,7 +123,7 @@ func (a *API) trashRestore(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if in.IDs == nil {
-		if err := a.restore(v, in.ID); err != nil {
+		if err := a.restore(r, v, in.ID); err != nil {
 			httpx.Error(w, err)
 			return
 		}
@@ -136,7 +137,7 @@ func (a *API) trashRestore(w http.ResponseWriter, r *http.Request) {
 	}
 	failed := []failure{}
 	for _, id := range in.IDs {
-		if err := a.restore(v, id); err != nil {
+		if err := a.restore(r, v, id); err != nil {
 			code, msg := httpx.Status(err)
 			failed = append(failed, failure{id, code, msg})
 		}
@@ -144,7 +145,7 @@ func (a *API) trashRestore(w http.ResponseWriter, r *http.Request) {
 	httpx.JSON(w, 200, map[string]any{"failed": failed})
 }
 
-func (a *API) restore(v *vol.Volume, id string) error {
+func (a *API) restore(r *http.Request, v *vol.Volume, id string) error {
 	it, err := trashItem(v, id)
 	if err != nil {
 		return err
@@ -165,6 +166,7 @@ func (a *API) restore(v *vol.Volume, id string) error {
 	}
 	v.Root.RemoveAll(dir)
 	a.Index.Touch(v, dst)
+	a.did(r, db.Event{Kind: db.EventRestore, Vol: v.Name, Path: dst})
 	return nil
 }
 

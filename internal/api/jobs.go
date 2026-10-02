@@ -67,11 +67,11 @@ func Transfer(ix *index.Index, src, dst *vol.Volume, srel, drel string, move boo
 	return run(ix, src, dst, srel, drel, newID(), move, &job{})
 }
 
-func (j *Jobs) Start(src, dst *vol.Volume, srel, drel string, move bool) string {
-	return j.launch(func(id string, x *job) error { return run(j.ix, src, dst, srel, drel, id, move, x) })
+func (j *Jobs) Start(src, dst *vol.Volume, srel, drel string, move bool, then func()) string {
+	return j.launch(func(id string, x *job) error { return run(j.ix, src, dst, srel, drel, id, move, x) }, then)
 }
 
-func (j *Jobs) launch(fn func(id string, x *job) error) string {
+func (j *Jobs) launch(fn func(id string, x *job) error, then func()) string {
 	id := newID()
 	x := &job{state: "running"}
 	j.mu.Lock()
@@ -95,6 +95,9 @@ func (j *Jobs) launch(fn func(id string, x *job) error) string {
 			slog.Error("job failed", "id", id, "err", err)
 		}
 		x.mu.Unlock()
+		if err == nil {
+			then()
+		}
 	}()
 	return id
 }
@@ -165,7 +168,7 @@ func run(ix *index.Index, src, dst *vol.Volume, srel, drel, id string, move bool
 	}
 	ix.CopyProps(src, srel, dst, drel, true)
 	if move {
-		ix.CarryFavorites(src, srel, dst, drel)
+		ix.Carry(src, srel, dst, drel)
 		if err := src.Root.RemoveAll(srel); err != nil {
 			return fmt.Errorf("%w: %w", ErrSourceLeft, err)
 		}

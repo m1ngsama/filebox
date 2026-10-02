@@ -140,6 +140,9 @@ var migrations = []string{
 	) WITHOUT ROWID;
 	CREATE INDEX versions_path ON versions(vol, path, created);`,
 	`ALTER TABLE versions ADD COLUMN orphaned INTEGER NOT NULL DEFAULT 0;`,
+	`ALTER TABLE events ADD COLUMN vol TEXT NOT NULL DEFAULT '';
+	ALTER TABLE events ADD COLUMN path TEXT NOT NULL DEFAULT '';
+	CREATE INDEX events_path ON events(vol, path);`,
 }
 
 type DB struct {

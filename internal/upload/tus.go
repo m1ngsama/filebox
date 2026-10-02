@@ -131,7 +131,7 @@ var (
 type Server struct {
 	Now      func() time.Time
 	Index    *index.Index
-	Received func(owner, rel string, size int64)
+	Received func(owner string, v *vol.Volume, rel string, size int64)
 	Allow    func(owner string, size int64) error
 	Versions *version.Store
 
@@ -437,7 +437,7 @@ func (s *Server) finish(u *volume, info handler.FileInfo) (string, error) {
 	u.v.Root.Remove(path.Join(vol.UploadsDir, info.ID+".info"))
 	s.Index.Touch(u.v, dst)
 	if s.Received != nil {
-		s.Received(info.MetaData[keyOwner], dst, info.Size)
+		s.Received(info.MetaData[keyOwner], u.v, dst, info.Size)
 	}
 	return kept, nil
 }

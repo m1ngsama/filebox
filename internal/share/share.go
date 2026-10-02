@@ -79,17 +79,27 @@ func label(sh db.Share) string {
 }
 
 func (s *Service) log(r *http.Request, sh db.Share, kind, name string, size int64) {
-	e := db.Event{At: time.Now().Unix(), UserID: sh.UserID, ShareID: sh.ID, Kind: kind, Name: name, Target: label(sh), Size: size}
+	s.record(r, db.Event{UserID: sh.UserID, ShareID: sh.ID, Kind: kind, Name: name, Target: label(sh), Size: size})
+}
+
+func (s *Service) record(r *http.Request, e db.Event) {
+	e.At = time.Now().Unix()
 	if r != nil {
 		e.Visitor = s.DB.Visitor(auth.ClientIP(r), e.At)
 	}
 	s.DB.Log(e)
 }
 
-func (s *Service) received(owner string, rel string, size int64) {
+func (s *Service) received(owner string, v *vol.Volume, rel string, size int64) {
+	e := db.Event{Kind: db.EventUpload, Name: path.Base(rel), Size: size, Vol: v.Name, Path: rel}
 	if sh, ok := s.owner(owner); ok {
-		s.log(nil, sh, db.EventUpload, path.Base(rel), size)
+		e.UserID, e.ShareID, e.Target = sh.UserID, sh.ID, label(sh)
+	} else if id, err := strconv.ParseInt(strings.TrimPrefix(owner, "user:"), 10, 64); err == nil {
+		e.UserID = id
+	} else {
+		return
 	}
+	s.record(nil, e)
 }
 
 func (s *Service) owner(owner string) (db.Share, bool) {

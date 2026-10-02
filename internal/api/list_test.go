@@ -28,7 +28,7 @@ func TestListHidesJunk(t *testing.T) {
 	root, _ := os.OpenRoot(dir)
 	defer root.Close()
 	w := httptest.NewRecorder()
-	WriteList(w, httptest.NewRequest("GET", "/", nil), root, ".")
+	WriteList(w, httptest.NewRequest("GET", "/", nil), root, ".", nil)
 	var got struct{ Entries []Entry }
 	json.Unmarshal(w.Body.Bytes(), &got)
 	var names []string
