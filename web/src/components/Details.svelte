@@ -1,4 +1,9 @@
+<script lang="ts" module>
+  let remembered = 'share'
+</script>
+
 <script lang="ts">
+  import { untrack } from 'svelte'
   import { icon } from '../lib/icon'
   import { Tabs } from 'bits-ui'
   import X from '@lucide/svelte/icons/x'
@@ -6,6 +11,7 @@
   import FileIcon from './FileIcon.svelte'
   import SharePanel from './SharePanel.svelte'
   import VersionsPanel from './VersionsPanel.svelte'
+  import Activity from './Activity.svelte'
   import { api, fileURL, type Entry, type Version } from '../lib/api'
   import { size, date, fallback, parent, place, visual, metaRows, type Meta } from '../lib/format'
   import { t } from '../lib/i18n'
@@ -40,7 +46,12 @@
       .then((m: Meta) => (meta = metaRows(m)), () => {})
     return () => stop.abort()
   })
-  let tab = $state('share')
+  let tab = $state(untrack(() => (remembered === 'versions' && entry.dir ? 'share' : remembered)))
+  $effect(() => void (remembered = tab))
+  const map = (gps: string) => {
+    const [lat, lon] = gps.split(',').map((s) => s.trim())
+    return `https://www.openstreetmap.org/?mlat=${lat}&mlon=${lon}#map=15/${lat}/${lon}`
+  }
   let versions = $state<Version[]>([])
   const loadVersions = () => api.versions(vol, path).then((r) => (versions = r.versions), () => {})
   $effect(() => {
@@ -63,7 +74,7 @@
     <dl>
       {#if total !== null}<dt>{t.size}</dt><dd class="size">{entry.dir ? total || '…' : size(entry.size)}</dd>{/if}
       <dt>{t.mtime}</dt><dd>{date(entry.mtime)}</dd>
-      {#each meta as [k, v] (k)}<dt>{k}</dt><dd>{v}</dd>{/each}
+      {#each meta as [k, v] (k)}<dt>{k}</dt><dd>{#if k === t.meta.gps}<a href={map(v)} target="_blank" rel="noopener noreferrer">{v}</a>{:else}{v}{/if}</dd>{/each}
       <dt>{t.path}</dt><dd class="path">{place(vol, parent(path))}</dd>
       {#if versions.length}<dt>{t.versions}</dt><dd><button class="link" onclick={() => (tab = 'versions')}>{t.versionCount(versions.length)}</button></dd>{/if}
     </dl>
@@ -72,9 +83,13 @@
     <Tabs.List class="tab-list">
       <Tabs.Trigger value="share" class="tab">{t.share}</Tabs.Trigger>
       {#if !entry.dir}<Tabs.Trigger value="versions" class="tab">{t.versions}</Tabs.Trigger>{/if}
+      <Tabs.Trigger value="activity" class="tab">{t.activity}</Tabs.Trigger>
     </Tabs.List>
     <Tabs.Content value="share" class="tab-body">
       <SharePanel {vol} {path} dir={entry.dir} />
+    </Tabs.Content>
+    <Tabs.Content value="activity" class="tab-body">
+      <Activity {vol} {path} />
     </Tabs.Content>
     {#if !entry.dir}
       <Tabs.Content value="versions" class="tab-body">

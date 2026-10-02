@@ -23,7 +23,7 @@ export type Progress = { done: number; total: number }
 export type Move = { from: Loc; to: Loc }
 export type Share = { id: number; token: string; vol: string; path: string; mode: 'read' | 'upload' | 'drop'; has_password: boolean; expires: number; created: number; hits: number; views: number; note: string; max_upload: number; dir: boolean }
 export type ShareEdit = Partial<{ mode: Share['mode']; password: string; expires_in: number; note: string; max_upload: number }>
-export type Activity = { id: number; at: number; kind: string; share_id: number; target: string; visitor: string; name: string; size: number }
+export type Activity = { id: number; at: number; kind: string; share_id: number; target: string; visitor: string; name: string; size: number; vol: string; path: string }
 export type Token = { id: number; label: string; readonly: boolean; created: number; last_used: number }
 export type Session = { id: number; user_agent: string; ip: string; created: number; last_used: number; current: boolean }
 export type Passkey = { id: number; name: string; created: number; last_used: number }
@@ -251,7 +251,7 @@ export const api = {
     req<{ id: number; token: string; existing?: boolean }>('POST', '/api/shares', s),
   editShare: (id: number, s: ShareEdit) => req<void>('PATCH', `/api/shares/${id}`, s),
   delShare: (id: number) => req<void>('DELETE', `/api/shares/${id}`),
-  activity: (o: { kind: string; share: string; before: string }) =>
+  activity: (o: { kind?: string; share?: string; before?: string; vol?: string; path?: string }) =>
     req<{ events: Activity[]; more: boolean }>('GET', `/api/activity?${q(Object.fromEntries(Object.entries(o).filter(([, v]) => v)))}`),
   shareInfo: (tok: string) => req<ShareInfo>('GET', `${shareURL(tok)}/info`),
   unlock: (tok: string, password: string) => req<void>('POST', `${shareURL(tok)}/unlock`, { password }),

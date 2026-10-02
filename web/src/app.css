@@ -682,3 +682,9 @@ button.busy::before { content: ''; width: 14px; height: 14px; border: 2px solid 
   font-size: var(--text-sm);
   font-variant-numeric: tabular-nums;
 }
+.page-hint { margin: 0 0 var(--space-3); max-width: 960px; }
+.rows.activity li.day { min-height: 0; padding: var(--space-4) var(--space-2) var(--space-1); border: 0; color: var(--muted); font-size: var(--text-sm); font-weight: 600; }
+.rows.activity a.row-title { color: inherit; text-decoration: none; }
+.rows.activity .names { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 24em; }
+.rows.activity a.tag { text-decoration: none; }
+.activity-more { padding: var(--space-3) 0; }

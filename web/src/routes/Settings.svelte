@@ -7,7 +7,6 @@
   import LogOut from '@lucide/svelte/icons/log-out'
   import type { Snippet } from 'svelte'
   import RowList from '../components/RowList.svelte'
-  import Activity from '../components/Activity.svelte'
   import EmptyState from '../components/EmptyState.svelte'
   import CopyButton from '../components/CopyButton.svelte'
   import ConfirmDialog from '../components/ConfirmDialog.svelte'
@@ -73,7 +72,6 @@
     ['sessions', t.sessions],
     ...(passkeysOn ? [['passkeys', t.passkeys]] : []),
     ['tokens', t.appPasswords],
-    ['activity', t.activity],
   ])
 
   function jump(e: MouseEvent, id: string) {
@@ -299,10 +297,6 @@
       </RowList>
     </section>
 
-    <section class="card-section" id="activity" aria-labelledby="activity-title">
-      {@render head('activity', t.activity, t.activityHint)}
-      <Activity />
-    </section>
   </div>
 </div>
 

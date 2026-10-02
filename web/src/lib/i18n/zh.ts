@@ -1,7 +1,8 @@
 const wait = (s: number) => (s < 60 ? `${s} 秒` : `${Math.ceil(s / 60)} 分钟`)
 
 type Expiry = [seconds: number, label: string]
-type ActivityKind = '' | 'download' | 'upload' | 'login' | 'share' | 'token'
+type ActivityKind = '' | 'files' | 'download' | 'upload' | 'login' | 'share' | 'token'
+type FileKind = 'upload' | 'create' | 'edit' | 'revert' | 'rename' | 'move' | 'copy' | 'trash' | 'restore'
 type EventKind = 'download' | 'upload' | 'login' | 'login_failed' | 'password' | 'share_create' | 'share_edit' | 'share_delete' | 'token_create' | 'token_revoke'
 type Status = 400 | 401 | 403 | 404 | 409 | 410 | 413 | 429 | 507
 
@@ -392,13 +393,38 @@ const zh = {
   deleteVersionMessage: '这个版本会被永久删除，无法恢复。',
   versionDeleted: '版本已删除',
   activity: '动态',
-  activityHint: '分享链接的下载和收到的文件，以及登录和设置变更。只保留最近 90 天，访问次数显示在各个分享上。',
-  activityKinds: { '': '全部类型', download: '下载', upload: '收到文件', login: '登录', share: '分享设置', token: '应用密码' } satisfies Record<ActivityKind, string>,
+  activityHint: '文件的增删改、分享链接的下载和收到的文件，以及登录和设置变更。只保留最近 90 天。',
+  activityKinds: { '': '全部类型', files: '文件变动', download: '下载', upload: '收到文件', login: '登录', share: '分享设置', token: '应用密码' } satisfies Record<ActivityKind, string>,
   allShares: '全部分享',
   noActivity: '还没有动态',
   loadMore: '加载更多',
   visitor: (v: string) => `访客 ${v.slice(0, 6)}`,
   source: (v: string) => `来源 ${v.slice(0, 6)}`,
+  fileEvents: {
+    upload: (n: string) => `上传了“${n}”`,
+    create: (n: string, from: string) => (from ? `解压“${from}”得到“${n}”` : `新建了“${n}”`),
+    edit: (n: string) => `编辑了“${n}”`,
+    revert: (n: string) => `把“${n}”恢复到旧版本`,
+    rename: (n: string, from: string) => `把“${from}”重命名为“${n}”`,
+    move: (n: string) => `移动了“${n}”`,
+    copy: (n: string) => `复制了“${n}”`,
+    trash: (n: string) => `删除了“${n}”`,
+    restore: (n: string) => `从回收站恢复了“${n}”`,
+  } satisfies Record<FileKind, (name: string, from: string) => string>,
+  fileEventsMany: {
+    upload: (k: number) => `上传了 ${k} 个文件`,
+    create: (k: number) => `新建了 ${k} 项`,
+    edit: (k: number) => `编辑了 ${k} 次`,
+    revert: (k: number) => `恢复了 ${k} 次旧版本`,
+    rename: (k: number) => `重命名了 ${k} 项`,
+    move: (k: number) => `移动了 ${k} 项`,
+    copy: (k: number) => `复制了 ${k} 项`,
+    trash: (k: number) => `删除了 ${k} 项`,
+    restore: (k: number) => `从回收站恢复了 ${k} 项`,
+  } satisfies Record<FileKind, (count: number) => string>,
+  receivedMany: (k: number) => `收到 ${k} 个文件`,
+  cameFrom: (where: string) => `来自 ${where}`,
+  andOthers: (names: string[], k: number) => `${names.join('、')}${k > names.length ? ` 等 ${k} 项` : ''}`,
   events: {
     download: (n: string) => `下载了“${n}”`,
     upload: (n: string) => `收到文件“${n}”`,
@@ -506,6 +532,6 @@ const zh = {
   dependsFailed: '前一步改动没有成功，这一步已取消',
 }
 
-export type { Expiry, ActivityKind, EventKind, Status }
+export type { Expiry, ActivityKind, EventKind, FileKind, Status }
 export type Table = typeof zh
 export default zh

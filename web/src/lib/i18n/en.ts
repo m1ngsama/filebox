@@ -1,4 +1,4 @@
-import type { ActivityKind, EventKind, Expiry, Status, Table } from './zh'
+import type { ActivityKind, EventKind, Expiry, FileKind, Status, Table } from './zh'
 
 const count = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? one : many}`
 const wait = (s: number) => (s < 60 ? count(s, 'second') : count(Math.ceil(s / 60), 'minute'))
@@ -392,13 +392,38 @@ export default (locale: string) => {
     deleteVersionMessage: 'This version will be deleted for good.',
     versionDeleted: 'Version deleted',
     activity: 'Activity',
-    activityHint: 'Downloads and received files on share links, plus sign-ins and settings changes. Kept for 90 days. Visit counts appear on each share.',
-    activityKinds: { '': 'All types', download: 'Downloads', upload: 'Received files', login: 'Sign-ins', share: 'Share settings', token: 'App passwords' } satisfies Record<ActivityKind, string>,
+    activityHint: 'File changes, downloads and received files on share links, plus sign-ins and settings changes. Kept for 90 days.',
+    activityKinds: { '': 'All types', files: 'File changes', download: 'Downloads', upload: 'Received files', login: 'Sign-ins', share: 'Share settings', token: 'App passwords' } satisfies Record<ActivityKind, string>,
     allShares: 'All shares',
     noActivity: 'No activity yet',
     loadMore: 'Load more',
     visitor: (v: string) => `Visitor ${v.slice(0, 6)}`,
     source: (v: string) => `Source ${v.slice(0, 6)}`,
+    fileEvents: {
+      upload: (n: string) => `Uploaded “${n}”`,
+      create: (n: string, from: string) => (from ? `Extracted “${n}” from “${from}”` : `Created “${n}”`),
+      edit: (n: string) => `Edited “${n}”`,
+      revert: (n: string) => `Restored an earlier version of “${n}”`,
+      rename: (n: string, from: string) => `Renamed “${from}” to “${n}”`,
+      move: (n: string) => `Moved “${n}”`,
+      copy: (n: string) => `Copied “${n}”`,
+      trash: (n: string) => `Deleted “${n}”`,
+      restore: (n: string) => `Restored “${n}” from the trash`,
+    } satisfies Record<FileKind, (name: string, from: string) => string>,
+    fileEventsMany: {
+      upload: (k: number) => `Uploaded ${count(k, 'file')}`,
+      create: (k: number) => `Created ${count(k, 'item')}`,
+      edit: (k: number) => `Edited ${count(k, 'time')}`,
+      revert: (k: number) => `Restored earlier versions ${count(k, 'time')}`,
+      rename: (k: number) => `Renamed ${count(k, 'item')}`,
+      move: (k: number) => `Moved ${count(k, 'item')}`,
+      copy: (k: number) => `Copied ${count(k, 'item')}`,
+      trash: (k: number) => `Deleted ${count(k, 'item')}`,
+      restore: (k: number) => `Restored ${count(k, 'item')} from the trash`,
+    } satisfies Record<FileKind, (count: number) => string>,
+    receivedMany: (k: number) => `Received ${count(k, 'file')}`,
+    cameFrom: (where: string) => `From ${where}`,
+    andOthers: (names: string[], k: number) => `${names.join(', ')}${k > names.length ? ` and ${k - names.length} more` : ''}`,
     events: {
       download: (n: string) => `Downloaded “${n}”`,
       upload: (n: string) => `Received “${n}”`,

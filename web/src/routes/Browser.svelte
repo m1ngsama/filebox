@@ -178,6 +178,10 @@
     keepView(here, chosen)
   }
   const one = $derived(selected.size === 1 ? entries.find((e) => selected.has(e.name)) : undefined)
+  $effect(() => {
+    const e = one
+    if (e && untrack(() => details && details.name !== e.name)) details = e
+  })
   const thumb = (e: Entry) => (e.dir || thumbable(e.name) ? thumbURL(vol, join(e.name)) : null)
   const raw = (e: Entry) => (rawThumb(e) ? rawURL(vol, join(e.name)) : null)
 

@@ -2,6 +2,7 @@
   import { icon } from '../lib/icon'
   import Clock from '@lucide/svelte/icons/clock'
   import Star from '@lucide/svelte/icons/star'
+  import ActivityIcon from '@lucide/svelte/icons/activity'
   import HardDrive from '@lucide/svelte/icons/hard-drive'
   import Share2 from '@lucide/svelte/icons/share-2'
   import Trash from '@lucide/svelte/icons/trash'
@@ -72,6 +73,9 @@
       </li>
       <li>
         <a href="/favorites" onclick={go} aria-current={parts[0] === 'favorites' ? 'page' : undefined}><Star size={icon.md} /><span>{t.favorites}</span></a>
+      </li>
+      <li>
+        <a href="/activity" onclick={go} aria-current={parts[0] === 'activity' ? 'page' : undefined}><ActivityIcon size={icon.md} /><span>{t.activity}</span></a>
       </li>
     {/if}
     {#each vols as v}
