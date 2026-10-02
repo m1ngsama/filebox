@@ -1,7 +1,7 @@
 LDFLAGS := -s -w
 GOBUILD := CGO_ENABLED=0 go build -trimpath -ldflags "$(LDFLAGS)"
 
-.PHONY: web size build linux test e2e deploy
+.PHONY: web size build linux test e2e check deploy
 
 web:
 	! git grep --untracked -nP '[\x{3000}-\x{303f}\x{4e00}-\x{9fff}\x{ff00}-\x{ffef}\x{2018}\x{2019}\x{201c}\x{201d}]' -- web/src ':!web/src/lib/i18n'
@@ -25,6 +25,8 @@ test:
 
 e2e: build
 	cd e2e && bun install --frozen-lockfile && bunx playwright test
+
+check: test e2e
 
 deploy: linux
 	scp bin/filebox-linux-amd64 greenarch:/tmp/filebox

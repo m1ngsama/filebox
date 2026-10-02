@@ -10,9 +10,35 @@ concurrency:
   group: ci-${{ github.ref }}
   cancel-in-progress: true
 jobs:
-  test:
+  web:
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+      - uses: actions/cache@v4
+        with:
+          path: ~/.bun/install/cache
+          key: bun-${{ hashFiles('web/bun.lock') }}
+      - run: make size
+
+  go:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - run: sudo apt-get install -y --no-install-recommends ffmpeg poppler-utils || (sudo apt-get update && sudo apt-get install -y --no-install-recommends ffmpeg poppler-utils)
+      - run: go vet ./...
+      - run: make test
+
+  # Pushes to main are checked locally with the full suite first; the browser run guards pull requests.
+  e2e:
+    if: github.event_name != 'push'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-go@v5
@@ -24,9 +50,7 @@ jobs:
           path: |
             ~/.bun/install/cache
             ~/.cache/ms-playwright
-          key: ${{ runner.os }}-bun-pw-${{ hashFiles('web/bun.lock', 'e2e/bun.lock') }}
-      - run: sudo apt-get update && sudo apt-get install -y --no-install-recommends ffmpeg poppler-utils
-      - run: make size
-      - run: make test
-      - run: cd e2e && bun install --frozen-lockfile && bunx playwright install --with-deps chromium webkit
+          key: bun-pw-${{ hashFiles('web/bun.lock', 'e2e/bun.lock') }}
+      - run: sudo apt-get install -y --no-install-recommends ffmpeg || (sudo apt-get update && sudo apt-get install -y --no-install-recommends ffmpeg)
+      - run: cd e2e && bun install --frozen-lockfile && bunx playwright install --with-deps --only-shell chromium
       - run: make e2e
