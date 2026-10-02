@@ -3885,6 +3885,20 @@ test('photos from every folder line up by date, newest first, and open in the li
   await expect(page.getByRole('dialog', { name: 'spring.png' })).toBeVisible()
 })
 
+test('an Office document opens as a converted PDF, or offers a download when the server cannot convert it', async ({ page, server }) => {
+  writeFileSync(join(server.vol, 'docs', 'report.docx'), 'PK')
+  await login(page)
+  await row(page, 'docs').locator('button.name').click()
+  const asked = page.waitForResponse((r) => new URL(r.url()).pathname === '/api/office')
+  await row(page, 'report.docx').locator('button.name').click()
+  const r = await asked
+  const viewer = page.getByRole('dialog', { name: 'report.docx' })
+  if (r.status() === 200) return await expect(viewer.locator('.pdfViewer .page').first()).toBeVisible()
+  expect(r.status()).toBe(501)
+  await expect(viewer.getByRole('alert')).toContainText(t.previewFailed)
+  await expect(viewer.getByRole('alert').getByRole('link', { name: t.download })).toHaveAttribute('href', /report\.docx/)
+})
+
 test('the app installs as a PWA whose service worker caches only the shell', async ({ page }) => {
   const manifest = await (await page.request.get('/manifest.webmanifest')).json()
   expect(manifest.share_target).toMatchObject({ action: '/share-target', method: 'POST', enctype: 'multipart/form-data' })

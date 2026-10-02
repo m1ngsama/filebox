@@ -23,7 +23,8 @@ ProtectKernelTunables=yes
 ProtectKernelModules=yes
 ProtectControlGroups=yes
 RestrictSUIDSGID=yes
-RestrictNamespaces=yes
+# Office previews run LibreOffice in its own user and network namespace.
+RestrictNamespaces=user net
 LockPersonality=yes
 SystemCallArchitectures=native
 

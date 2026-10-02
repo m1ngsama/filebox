@@ -105,6 +105,7 @@ const groups: Record<string, string> = {
   video: 'mp4 m4v webm mov mkv ogv',
   audio: 'mp3 m4a aac flac wav ogg opus',
   pdf: 'pdf',
+  office: 'doc docx odt rtf xls xlsx ods ppt pptx odp',
   book: 'epub',
   comic: 'cbz',
   text: 'txt md markdown log json yaml yml toml ini conf cfg csv tsv go js ts py rs c h cpp java kt sh fish zsh srt ass vtt xml html css sql',
@@ -118,16 +119,17 @@ export const searchKind = (e: { name: string; dir: boolean }) => {
   const k = kind(e.name)
   return k === 'image' || k === 'video' || k === 'audio' ? k : docs.has(ext(e.name)) ? 'doc' : ''
 }
-export const kind = (n: string) => (kinds.get(ext(n)) ?? '') as 'image' | 'video' | 'audio' | 'pdf' | 'book' | 'comic' | 'text' | ''
+export const kind = (n: string) => (kinds.get(ext(n)) ?? '') as 'image' | 'video' | 'audio' | 'pdf' | 'office' | 'book' | 'comic' | 'text' | ''
 
 const looks: Record<string, string> = {
   code: 'go js ts py rs c h cpp java kt sh fish zsh sql html css json yaml yml toml xml',
   archive: 'zip tar gz tgz bz2 xz zst 7z rar',
   sheet: 'csv tsv xls xlsx ods numbers',
+  slides: 'ppt pptx odp key',
 }
 const icons = new Map(Object.entries(looks).flatMap(([k, v]) => v.split(' ').map((e) => [e, k] as const)))
 
-export type Look = ReturnType<typeof kind> | 'code' | 'archive' | 'sheet'
+export type Look = ReturnType<typeof kind> | 'code' | 'archive' | 'sheet' | 'slides'
 export const look = (n: string) => (icons.get(ext(n)) ?? kind(n)) as Look
 
 export const visual = (n: string) => /^(image|video)$/.test(kind(n))

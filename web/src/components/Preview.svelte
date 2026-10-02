@@ -149,7 +149,7 @@
 
   function touchstart(e: TouchEvent) {
     const media = e.target instanceof HTMLMediaElement || (e.target as Element).closest?.('input') !== null
-    const one = e.touches.length === 1 && k !== 'text' && k !== 'pdf' && k !== 'book' && !media && !zoomed && !inline
+    const one = e.touches.length === 1 && k !== 'text' && k !== 'pdf' && k !== 'office' && k !== 'book' && !media && !zoomed && !inline
     start = one ? { x: e.touches[0].clientX, y: e.touches[0].clientY } : null
     off = { x: 0, y: 0 }
   }
@@ -270,9 +270,9 @@
       {/await}
     {:else if k === 'audio'}
       {#await import('./AudioPlayer.svelte') then { default: AudioPlayer }}<AudioPlayer onfail={failed} />{/await}
-    {:else if k === 'pdf'}
+    {:else if k === 'pdf' || k === 'office'}
       {#await import('./PdfView.svelte') then { default: PdfView }}
-        {#key src}<PdfView {src} onready={ready} onfail={failed} />{/key}
+        {#key src}<PdfView src={k === 'office' ? url(entry, 'office') : src} onready={ready} onfail={failed} />{/key}
       {/await}
     {:else if k === 'book'}
       <iframe class="book" src={reader} title={entry.name} bind:this={frame} onerror={failed}></iframe>

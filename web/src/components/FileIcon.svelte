@@ -9,12 +9,13 @@
   import FileCode from '@lucide/svelte/icons/file-code'
   import FileArchive from '@lucide/svelte/icons/file-archive'
   import FileSpreadsheet from '@lucide/svelte/icons/file-spreadsheet'
+  import Presentation from '@lucide/svelte/icons/presentation'
   import BookOpen from '@lucide/svelte/icons/book-open'
   import BookImage from '@lucide/svelte/icons/book-image'
   import { look } from '../lib/format'
 
   let { name, dir, size = icon.lg }: { name: string; dir: boolean; size?: number } = $props()
-  const icons = { image: FileImage, video: FileVideo, audio: FileMusic, pdf: FileText, text: FileText, code: FileCode, archive: FileArchive, sheet: FileSpreadsheet, book: BookOpen, comic: BookImage, '': File }
+  const icons = { image: FileImage, video: FileVideo, audio: FileMusic, pdf: FileText, office: FileText, slides: Presentation, text: FileText, code: FileCode, archive: FileArchive, sheet: FileSpreadsheet, book: BookOpen, comic: BookImage, '': File }
   const k = $derived(dir ? 'dir' : look(name))
   const Icon = $derived(k === 'dir' ? Folder : icons[k])
 </script>

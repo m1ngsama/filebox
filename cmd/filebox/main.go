@@ -22,6 +22,7 @@ import (
 	"github.com/m1ngsama/filebox/internal/db"
 	"github.com/m1ngsama/filebox/internal/extract"
 	"github.com/m1ngsama/filebox/internal/index"
+	"github.com/m1ngsama/filebox/internal/office"
 	"github.com/m1ngsama/filebox/internal/passkey"
 	"github.com/m1ngsama/filebox/internal/render"
 	"github.com/m1ngsama/filebox/internal/stream"
@@ -154,7 +155,7 @@ func serveCmd(args []string) error {
 	ix.Wrote = thumbs.Warm
 	streams := stream.New(*ffmpeg, filepath.Join(*data, "stream"))
 	streams.Probe(context.Background())
-	a := &app.App{Vols: set, DB: d, Auth: au, Web: webFS, Uploads: up, Thumbs: thumbs, Stream: streams, Passkeys: pk, Index: ix, Versions: vs}
+	a := &app.App{Vols: set, DB: d, Auth: au, Web: webFS, Uploads: up, Thumbs: thumbs, Stream: streams, Passkeys: pk, Index: ix, Versions: vs, Office: office.New(filepath.Join(*data, "office"))}
 	for _, o := range origins {
 		a.Origins = append(a.Origins, strings.TrimSuffix(o, "/"))
 	}

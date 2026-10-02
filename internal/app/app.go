@@ -23,6 +23,7 @@ import (
 	"github.com/m1ngsama/filebox/internal/db"
 	"github.com/m1ngsama/filebox/internal/httpx"
 	"github.com/m1ngsama/filebox/internal/index"
+	"github.com/m1ngsama/filebox/internal/office"
 	"github.com/m1ngsama/filebox/internal/passkey"
 	"github.com/m1ngsama/filebox/internal/render"
 	"github.com/m1ngsama/filebox/internal/serve"
@@ -50,6 +51,7 @@ type App struct {
 	Thumbs   *thumb.Service
 	Stream   *stream.Service
 	Passkeys *passkey.Service
+	Office   *office.Converter
 	Index    *index.Index
 	Versions *version.Store
 	Origins  []string
@@ -61,6 +63,7 @@ func (a *App) Handler() http.Handler {
 	mux.Handle("GET /thumb/{vol}/{path...}", a.Auth.RequireAny(http.HandlerFunc(a.thumb)))
 	mux.Handle("GET /api/render", a.Auth.RequireAny(http.HandlerFunc(a.render)))
 	mux.Handle("GET /api/meta", a.Auth.RequireAny(http.HandlerFunc(a.meta)))
+	mux.Handle("GET /api/office", a.Auth.RequireAny(http.HandlerFunc(a.office)))
 	mux.Handle("GET /api/stream/index.m3u8", a.Auth.RequireAny(a.located(a.Stream.Playlist)))
 	mux.Handle("GET /api/stream/seg", a.Auth.RequireAny(a.located(a.Stream.Segment)))
 	(&api.API{Vols: a.Vols, DB: a.DB, Auth: a.Auth, Jobs: api.NewJobs(a.Index), Index: a.Index, Versions: a.Versions, Origins: a.Origins}).Register(mux)
@@ -69,7 +72,7 @@ func (a *App) Handler() http.Handler {
 	mux.Handle("/dav", d)
 	mux.Handle("/dav/", d)
 	mux.Handle("/upload/", a.Uploads.Handler("/upload/", a.userUploads()))
-	shares := &share.Service{DB: a.DB, Vols: a.Vols, Auth: a.Auth, Uploads: a.Uploads, Thumbs: a.Thumbs, Stream: a.Stream}
+	shares := &share.Service{DB: a.DB, Vols: a.Vols, Auth: a.Auth, Uploads: a.Uploads, Thumbs: a.Thumbs, Stream: a.Stream, Office: a.Office}
 	shares.Register(mux)
 	mux.HandleFunc("POST /share-target", func(w http.ResponseWriter, r *http.Request) {
 		http.Redirect(w, r, "/?share-target", http.StatusSeeOther)
@@ -155,6 +158,16 @@ func (a *App) meta(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	a.Thumbs.ServeMeta(w, r, v.Root, rel)
+}
+
+func (a *App) office(w http.ResponseWriter, r *http.Request) {
+	q := r.URL.Query()
+	v, rel, err := a.Vols.Resolve(q.Get("vol"), q.Get("p"))
+	if err != nil {
+		httpx.Error(w, err)
+		return
+	}
+	a.Office.Serve(w, r, v.Root, rel)
 }
 
 func (a *App) thumb(w http.ResponseWriter, r *http.Request) {

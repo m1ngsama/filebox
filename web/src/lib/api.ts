@@ -136,7 +136,7 @@ export const shareRawURL = (tok: string, path: string, dl = false) => `${shareUR
 export const shareThumbURL = (tok: string, path: string) => `${shareURL(tok)}/thumb/${enc(path)}`
 const q = (o: Record<string, string>) => new URLSearchParams(o).toString()
 const lsURL = (vol: string, path: string) => `/api/ls?${q({ vol, path })}`
-export type As = 'dl' | 'thumb' | 'large' | 'stream' | 'render' | 'meta' | 'zip-entries' | 'zip-entry'
+export type As = 'dl' | 'thumb' | 'large' | 'stream' | 'render' | 'meta' | 'office' | 'zip-entries' | 'zip-entry'
 export type Src = (e: Entry, as?: As) => string
 export const fileURL = (vol: string, p: string, as?: As) =>
   as === 'thumb' ? thumbURL(vol, p) : as === 'large' ? `${thumbURL(vol, p)}?large` : as === 'stream' ? `/api/stream/index.m3u8?${q({ vol, p })}` : as && as !== 'dl' ? `/api/${as}?${q({ vol, p })}` : rawURL(vol, p, as === 'dl')
