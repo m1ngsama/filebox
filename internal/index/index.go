@@ -71,12 +71,15 @@ type Index struct {
 	stop    context.CancelFunc
 	workers sync.WaitGroup
 	wake    chan struct{}
+	dates   chan struct{}
 	Moved   func(v *vol.Volume, to string)
 	Wrote   func(v *vol.Volume, rel string)
 	seen    map[string]time.Time
 }
 
-func New(d *db.DB) *Index { return &Index{db: d, wake: make(chan struct{}, 1)} }
+func New(d *db.DB) *Index {
+	return &Index{db: d, wake: make(chan struct{}, 1), dates: make(chan struct{}, 1)}
+}
 
 func (x *Index) Ready() bool { return x.ready.Load() }
 
@@ -208,7 +211,7 @@ func (x *Index) rename(vol, from, to string) error {
 		return err
 	}
 	defer tx.Rollback()
-	for _, t := range []string{"files", "dav_props", "favorites", "tagged", "shares", "versions", "events"} {
+	for _, t := range []string{"files", "dav_props", "favorites", "tagged", "taken", "shares", "versions", "events"} {
 		if t != "versions" && t != "events" {
 			if _, err := tx.Exec(`DELETE FROM `+t+` WHERE `+subtree, under(vol, to)...); err != nil {
 				return err
@@ -379,7 +382,7 @@ func (x *Index) scan(vols *vol.Set) (int, error) {
 func (x *Index) sync(v *vol.Volume, rel string) error {
 	fi, err := v.Root.Lstat(rel)
 	if errors.Is(err, fs.ErrNotExist) {
-		for _, t := range []string{"dav_props", "favorites", "tagged", "shares"} {
+		for _, t := range []string{"dav_props", "favorites", "tagged", "taken", "shares"} {
 			if err := x.exec(x.db, `DELETE FROM `+t+` WHERE `+subtree, under(v.Name, rel)...); err != nil {
 				return err
 			}

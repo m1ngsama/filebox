@@ -13,6 +13,7 @@ export class HttpError extends Error {
 
 export type Entry = { name: string; dir: boolean; size: number; mtime: number; items?: number; bytes?: number; tags?: number[] }
 export type Tag = { id: number; name: string; color: string; count: number }
+export type Photo = { id: number; vol: string; path: string; name: string; size: number; mtime: number; taken: number }
 export type Me = { name: string; vols: string[]; origins?: string[] }
 export type RecentFile = Entry & Loc
 export type Favorite = RecentFile & { missing: boolean }
@@ -177,6 +178,7 @@ export const api = {
   size: (vol: string, path: string) => req<{ size: number; files: number; scanning: boolean }>('GET', `/api/size?${q({ vol, path })}`),
   favorites: () => req<{ entries: Favorite[] }>('GET', '/api/favorites'),
   star: (vol: string, paths: string[], star: boolean) => req<void>('POST', '/api/favorites', { vol, paths, star }),
+  photos: (after = '') => req<{ photos: Photo[]; more: boolean; scanning: boolean }>('GET', `/api/photos${after ? `?after=${after}` : ''}`),
   tags: () => req<{ tags: Tag[] }>('GET', '/api/tags'),
   newTag: (name: string, color = '') => req<Tag>('POST', '/api/tags', { name, color }),
   editTag: (id: number, name: string, color: string) => req<void>('PATCH', `/api/tags/${id}`, { name, color }),

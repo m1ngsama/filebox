@@ -1,7 +1,9 @@
 package app
 
 import (
+	"context"
 	"encoding/json"
+	"fmt"
 	"net/http/httptest"
 	"os"
 	"path/filepath"
@@ -581,5 +583,45 @@ func TestTagsFollowItems(t *testing.T) {
 	}
 	if w := f.do("POST", "/api/tags/"+id+"/items", body(`{"vol":"v","paths":["work/notes.txt"],"on":true}`)); w.Code != 404 {
 		t.Fatalf("tag a deleted tag %d", w.Code)
+	}
+}
+
+func TestPhotosTimelineByCaptureDate(t *testing.T) {
+	f := newTestApp(t)
+	f.write(t, "a/old.png", "x")
+	f.write(t, "b/new.mp4", "x")
+	f.write(t, "b/notes.txt", "x")
+	f.write(t, "c/odd.JPG", "not really a jpeg")
+	old := time.Date(2001, 1, 1, 0, 0, 0, 0, time.UTC)
+	os.Chtimes(filepath.Join(f.Dir, "a/old.png"), old, old)
+	os.Chtimes(filepath.Join(f.Dir, "c/odd.JPG"), old.Add(time.Hour), old.Add(time.Hour))
+	f.App.Index.Scan(f.App.Vols)
+	if _, err := f.App.Index.DateAll(context.Background(), f.App.Vols); err != nil {
+		t.Fatal(err)
+	}
+	type photo struct {
+		Path, Vol string
+		Taken, ID int64
+	}
+	get := func(q string) ([]photo, bool) {
+		r := decode[struct {
+			Photos []photo
+			More   bool
+		}](t, f.do("GET", "/api/photos"+q, nil))
+		return r.Photos, r.More
+	}
+	ps, more := get("")
+	if len(ps) != 3 || more || ps[0].Path != "b/new.mp4" || ps[1].Path != "c/odd.JPG" || ps[2].Path != "a/old.png" || ps[2].Taken != old.UnixMilli() {
+		t.Fatalf("timeline %+v", ps)
+	}
+	if rest, _ := get(fmt.Sprintf("?after=%d.%d", ps[0].Taken, ps[0].ID)); len(rest) != 2 || rest[0].Path != "c/odd.JPG" {
+		t.Fatalf("second page %+v", rest)
+	}
+	f.do("POST", "/api/mv", body(`{"src":{"vol":"v","path":"a"},"dst":{"vol":"v","path":"z"}}`))
+	if ps, _ := get(""); len(ps) != 3 || ps[2].Path != "z/old.png" {
+		t.Fatalf("after rename %+v", ps)
+	}
+	if w := f.do("GET", "/api/photos?after=x", nil); w.Code != 400 {
+		t.Fatalf("bad cursor %d", w.Code)
 	}
 }

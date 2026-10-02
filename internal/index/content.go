@@ -164,9 +164,11 @@ func openContent(p string) (*content, error) {
 }
 
 func (x *Index) poke() {
-	select {
-	case x.wake <- struct{}{}:
-	default:
+	for _, c := range []chan struct{}{x.wake, x.dates} {
+		select {
+		case c <- struct{}{}:
+		default:
+		}
 	}
 }
 

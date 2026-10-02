@@ -133,6 +133,7 @@ func serveCmd(args []string) error {
 			go func() { ix.Extract(ctx, set, extract.New(ctx)) }()
 		}
 	}
+	go ix.Date(ctx, set)
 	go func() {
 		for {
 			up.Sweep(24 * time.Hour)

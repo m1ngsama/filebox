@@ -76,6 +76,7 @@ func (a *API) Register(mux *http.ServeMux) {
 	mux.Handle("GET /api/zip-entries", a.Auth.RequireAny(http.HandlerFunc(a.zipEntries)))
 	mux.Handle("GET /api/zip-entry", a.Auth.RequireAny(http.HandlerFunc(a.zipEntry)))
 	h("GET /api/recent", a.recent)
+	h("GET /api/photos", a.photos)
 	h("GET /api/search", a.search)
 	h("GET /api/vols", a.vols)
 	h("GET /api/size", a.size)
@@ -443,6 +444,30 @@ func (a *API) recent(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	httpx.JSON(w, 200, map[string]any{"entries": out, "runs": runs, "scanning": !a.Index.Ready()})
+}
+
+func (a *API) photos(w http.ResponseWriter, r *http.Request) {
+	var after *index.Photo
+	if c := r.URL.Query().Get("after"); c != "" {
+		at, id, _ := strings.Cut(c, ".")
+		p := &index.Photo{}
+		var e1, e2 error
+		p.Taken, e1 = strconv.ParseInt(at, 10, 64)
+		p.ID, e2 = strconv.ParseInt(id, 10, 64)
+		if e1 != nil || e2 != nil {
+			httpx.Fail(w, 400, "bad cursor")
+			return
+		}
+		after = p
+	}
+	const page = 300
+	ps, err := a.Index.Photos(r.Context(), after, page+1)
+	if err != nil {
+		httpx.Error(w, err)
+		return
+	}
+	more := len(ps) > page
+	httpx.JSON(w, 200, map[string]any{"photos": ps[:min(len(ps), page)], "more": more, "scanning": !a.Index.Ready()})
 }
 
 func (a *API) search(w http.ResponseWriter, r *http.Request) {

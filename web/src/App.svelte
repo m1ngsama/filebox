@@ -20,7 +20,7 @@
   let error = $state('')
   let shared = $state(new URLSearchParams(location.search).get('share-target'))
   const parts = $derived(route.path.split('/').filter(Boolean).map(decodeURIComponent))
-  const titles: Record<string, string> = { recent: t.recent, favorites: t.favorites, activity: t.activity, tags: t.tags, shares: t.myShares, trash: t.trash, settings: t.settings }
+  const titles: Record<string, string> = { recent: t.recent, favorites: t.favorites, activity: t.activity, tags: t.tags, photos: t.photos, shares: t.myShares, trash: t.trash, settings: t.settings }
   const heading = $derived(needLogin ? t.login : parts[0] === 'files' ? parts.slice(1).at(-1) : titles[parts[0]])
 
   session.lost = () => {
@@ -94,6 +94,8 @@
           <Lazy load={() => import('./routes/Recent.svelte')} />
         {:else if me.vols.length && parts[0] === 'favorites'}
           <Lazy load={() => import('./routes/Favorites.svelte')} />
+        {:else if me.vols.length && parts[0] === 'photos'}
+          <Lazy load={() => import('./routes/Photos.svelte')} />
         {:else if me.vols.length && parts[0] === 'tags'}
           <Lazy load={() => import('./routes/Tags.svelte')} id={parts[1] ? Number(parts[1]) : undefined} />
         {:else}

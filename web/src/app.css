@@ -701,3 +701,11 @@ button.busy::before { content: ''; width: 14px; height: 14px; border: 2px solid 
 .tag-dot { flex: none; width: 10px; height: 10px; border-radius: 50%; background: var(--tag); }
 .tag-chip { display: inline-flex; align-items: center; gap: var(--space-1); flex: none; max-width: 10em; padding: 0 var(--space-2); border-radius: var(--radius-full); background: color-mix(in srgb, var(--tag) 14%, transparent); color: color-mix(in srgb, var(--tag) 80%, var(--fg)); font-size: var(--text-xs); line-height: 20px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .tag-chips { display: flex; flex-wrap: wrap; gap: var(--space-1); }
+.timeline { padding: 0 var(--space-4) var(--space-6); }
+.timeline-day { position: sticky; top: 0; z-index: 1; margin: 0; padding: var(--space-4) 0 var(--space-2); background: var(--bg); font-size: var(--text-md); font-weight: 600; }
+.timeline-grid { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(132px, 1fr)); gap: 3px; }
+.timeline-tile { position: relative; display: block; width: 100%; aspect-ratio: 1; padding: 0; border: 0; border-radius: var(--radius-xs); overflow: hidden; background: var(--nav); }
+.timeline-tile img { width: 100%; height: 100%; object-fit: cover; }
+.timeline-tile .card-badge { position: absolute; right: var(--space-1-5); bottom: var(--space-1-5); }
+.timeline-end { min-height: 48px; display: grid; place-items: center; }
+@media (max-width: 640px) { .timeline { padding-inline: 0; } .timeline-day { padding-inline: var(--space-3); } .timeline-grid { grid-template-columns: repeat(auto-fill, minmax(96px, 1fr)); gap: 2px; } .timeline-tile { border-radius: 0; } }

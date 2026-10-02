@@ -155,6 +155,16 @@ var migrations = []string{
 		PRIMARY KEY (vol, path, tag)
 	) WITHOUT ROWID;
 	CREATE INDEX tagged_tag ON tagged(tag);`,
+	`CREATE TABLE taken (
+		id INTEGER PRIMARY KEY,
+		vol TEXT NOT NULL,
+		path TEXT NOT NULL,
+		size INTEGER NOT NULL,
+		mtime INTEGER NOT NULL,
+		at INTEGER NOT NULL,
+		UNIQUE (vol, path)
+	);
+	CREATE INDEX taken_at ON taken(at DESC, id DESC);`,
 }
 
 type DB struct {

@@ -3864,6 +3864,27 @@ test('tags: create one from a file, see it in the list, filter by it, browse it,
   await expect(page.getByRole('link', { name: /Finance/ })).toContainText(t.tagCount(1))
 })
 
+test('photos from every folder line up by date, newest first, and open in the lightbox', async ({ page, server }) => {
+  mkdirSync(join(server.vol, 'pics', 'old'), { recursive: true })
+  writeFileSync(join(server.vol, 'pics', 'today.png'), png(8, 8))
+  writeFileSync(join(server.vol, 'pics', 'old', 'spring.png'), png(8, 8))
+  const spring = new Date(2020, 2, 14, 12).getTime() / 1000
+  utimesSync(join(server.vol, 'pics', 'old', 'spring.png'), spring, spring)
+  await login(page)
+  for (const p of ['pics', 'pics/old']) await page.request.get(`/api/ls?vol=v&path=${encodeURIComponent(p)}`)
+  const tiles = page.locator('.timeline-tile')
+  await expect(async () => {
+    await page.goto('/photos')
+    await expect(page.locator('.timeline-tile[title^="spring.png"]')).toBeVisible({ timeout: 1000 })
+  }).toPass({ timeout: 30_000 })
+  const names = await tiles.evaluateAll((ts) => ts.map((x) => x.getAttribute('title')!.split('\n')[0]))
+  expect(names.indexOf('today.png')).toBeLessThan(names.indexOf('spring.png'))
+  const day = page.locator('.timeline-day', { hasText: '2020' })
+  await expect(day).toHaveCount(1)
+  await page.locator('.timeline-tile[title^="spring.png"]').click()
+  await expect(page.getByRole('dialog', { name: 'spring.png' })).toBeVisible()
+})
+
 test('the app installs as a PWA whose service worker caches only the shell', async ({ page }) => {
   const manifest = await (await page.request.get('/manifest.webmanifest')).json()
   expect(manifest.share_target).toMatchObject({ action: '/share-target', method: 'POST', enctype: 'multipart/form-data' })
