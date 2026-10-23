@@ -1,0 +1,13 @@
+.git
+.github
+bin
+data
+deploy
+test-results
+node_modules
+**/node_modules
+web/dist
+e2e
+*.db
+*.md
+!README.md

@@ -11,6 +11,7 @@ import (
 	"os"
 	"os/signal"
 	"path/filepath"
+	"runtime/debug"
 	"strconv"
 	"strings"
 	"syscall"
@@ -39,10 +40,28 @@ const usage = `usage:
   filebox passwd  -data DIR [-user NAME]      (reads the password from stdin)
   filebox token   -data DIR [-user NAME] new LABEL [-ro] | ls | rm ID
   filebox passkey -data DIR [-user NAME] ls | rm ID
+  filebox version
   filebox user    -data DIR ls | role NAME admin|member | access NAME VOLUME none|r|rw | rm NAME
 
 -user may be omitted when the database has exactly one user; passwd creates "admin" in an empty one.
 The first user is an admin; others made with passwd are members who reach no volume until user access gives them one.`
+
+// buildTag is set at build time with -ldflags -X main.buildTag=...
+var buildTag = "dev"
+
+func buildVersion() string {
+	v := buildTag
+	if info, ok := debug.ReadBuildInfo(); ok {
+		v += " (" + info.GoVersion
+		for _, s := range info.Settings {
+			if s.Key == "vcs.revision" && len(s.Value) >= 7 {
+				v += ", " + s.Value[:7]
+			}
+		}
+		v += ")"
+	}
+	return "filebox " + v
+}
 
 type multi []string
 
@@ -59,6 +78,8 @@ func main() {
 	switch os.Args[1] {
 	case "serve":
 		err = serveCmd(os.Args[2:])
+	case "version", "-version", "--version":
+		fmt.Println(buildVersion())
 	case "user":
 		err = userCmd(os.Args[2:])
 	case "passwd":

@@ -1,0 +1,87 @@
+name: release
+# Publishes downloadable builds when a version tag is pushed. Nothing here deploys anywhere:
+# updating a server is a manual step, see "Update" in the README.
+on:
+  push:
+    tags: ['v*']
+permissions: {}
+jobs:
+  binaries:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    permissions:
+      contents: write
+      id-token: write
+      attestations: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: The tag must be a commit on main
+        run: git merge-base --is-ancestor "$GITHUB_SHA" origin/main
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+      - run: make web
+      - name: Build
+        env:
+          TAG: ${{ github.ref_name }}
+        run: |
+          mkdir dist
+          for t in linux/amd64 linux/arm64 darwin/amd64 darwin/arm64; do
+            os=${t%/*}; arch=${t#*/}
+            d="filebox_${TAG}_${os}_${arch}"
+            mkdir "$d"
+            CGO_ENABLED=0 GOOS=$os GOARCH=$arch go build -trimpath -ldflags "-s -w -X main.buildTag=$TAG" -o "$d/filebox" ./cmd/filebox
+            cp LICENSE README.md "$d/"
+            tar czf "dist/$d.tar.gz" "$d"
+          done
+          (cd dist && sha256sum *.tar.gz > SHA256SUMS)
+      - uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
+        with:
+          subject-path: dist/*.tar.gz
+      - name: Publish the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          flags=""
+          case "$TAG" in *-*) flags="--prerelease" ;; esac
+          gh release create "$TAG" dist/* --verify-tag --generate-notes $flags
+
+  image:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+      - uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ github.token }}
+      - name: Tags
+        id: tags
+        env:
+          TAG: ${{ github.ref_name }}
+          REPO: ${{ github.repository }}
+        run: |
+          tags="ghcr.io/${REPO,,}:$TAG"
+          case "$TAG" in *-*) ;; *) tags="$tags,ghcr.io/${REPO,,}:latest" ;; esac
+          echo "list=$tags" >> "$GITHUB_OUTPUT"
+      - uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
+        with:
+          context: .
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: ${{ steps.tags.outputs.list }}
+          build-args: VERSION=${{ github.ref_name }}
+          provenance: true
+          sbom: true

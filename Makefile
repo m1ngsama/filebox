@@ -1,4 +1,5 @@
-LDFLAGS := -s -w
+VERSION ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo dev)
+LDFLAGS := -s -w -X main.buildTag=$(VERSION)
 GOBUILD := CGO_ENABLED=0 go build -trimpath -ldflags "$(LDFLAGS)"
 
 .PHONY: web size build linux test e2e check

@@ -12,9 +12,30 @@ A self-hosted file server in one binary. Browse, preview, upload and share files
 - Command palette on Ctrl/⌘+K, drag-to-select with the mouse, a storage page by type, folder and file, and a duplicate finder that compares content.
 - Webhook notifications to ntfy, Gotify, Slack or your own endpoint.
 
-## Build
+## Install
 
-Requires Go 1.26+ and [bun](https://bun.sh).
+**A release build** (Linux and macOS, amd64 and arm64): download the archive for your system from the [Releases](https://github.com/m1ngsama/filebox/releases) page, check it, and unpack it.
+
+```sh
+sha256sum -c SHA256SUMS --ignore-missing                    # on macOS: shasum -a 256 -c SHA256SUMS --ignore-missing
+gh attestation verify filebox_*_linux_amd64.tar.gz --repo m1ngsama/filebox   # proves GitHub Actions built it from this repository
+tar xzf filebox_*_linux_amd64.tar.gz && sudo install filebox_*/filebox /usr/local/bin/
+filebox version
+```
+
+**Docker**: `ghcr.io/m1ngsama/filebox` for amd64 and arm64. [deploy/docker-compose.yml](deploy/docker-compose.yml) is a starting point; the first account is made with `docker compose run --rm -T filebox passwd -data /data < password.txt`.
+
+**A service**: [deploy/filebox.service](deploy/filebox.service) is a hardened systemd unit, and [deploy/nginx.conf.example](deploy/nginx.conf.example) a reverse proxy that streams large uploads. Both use placeholder names and paths.
+
+`go install` cannot build filebox, because the web interface is built with bun and embedded in the binary; use a release, the image, or the steps below.
+
+## Update
+
+Updating is manual on purpose: nothing in this repository, and no workflow, ever connects to your server. To update, stop filebox, copy the data directory's `filebox.db` somewhere safe, put the new binary in place (or pull the new image) and start it again. Database changes apply on start and only go one way, so keep that copy until you trust the new version, and roll back with the old binary and the old copy together. `filebox version` shows which build is running.
+
+## Build from source
+
+Requires Go 1.26.10+ and [bun](https://bun.sh).
 
 ```sh
 make build        # bin/filebox

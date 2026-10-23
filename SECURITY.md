@@ -4,6 +4,10 @@ Report a vulnerability privately through [GitHub's private vulnerability reporti
 
 Include the filebox commit, how to reproduce it, and what an attacker gains. You will get a reply within a week, and a fix is released before the advisory is published.
 
+## Supported versions
+
+Fixes go into the latest release only. Releases are built by GitHub Actions from a commit on `main`, are listed with checksums, and carry a build attestation you can verify with `gh attestation verify`.
+
 ## Scope
 
 In scope:
