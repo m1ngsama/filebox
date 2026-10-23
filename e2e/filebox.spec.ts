@@ -4024,3 +4024,50 @@ test('logout works on a plain-HTTP origin without Cache Storage', async ({ brows
     rmSync(dir, { recursive: true, force: true })
   }
 })
+
+test('the command palette jumps to pages and files from the keyboard', async ({ page }) => {
+  await login(page)
+  await page.keyboard.press('Control+k')
+  const palette = page.locator('.dialog.palette')
+  const input = palette.getByRole('combobox')
+  await expect(input).toBeFocused()
+  await input.fill(t.trash)
+  await expect(palette.getByRole('option', { name: t.trash })).toHaveAttribute('aria-selected', 'true')
+  await page.keyboard.press('Enter')
+  await expect(page).toHaveURL(/\/trash/)
+  await expect(palette).toHaveCount(0)
+
+  await page.keyboard.press('Control+k')
+  await input.fill('readme')
+  const hit = palette.getByRole('option', { name: /readme\.txt/ })
+  await expect(hit).toBeVisible()
+  await hit.click()
+  await expect(page).toHaveURL(/\/files\/v\/docs\/(\?select=readme\.txt)?$/)
+  await expect(row(page, 'readme.txt')).toHaveClass(/sel/)
+  await expect(palette).toHaveCount(0)
+
+  await page.keyboard.press('Control+k')
+  await input.fill('zzzz-nothing')
+  await expect(palette).toContainText(t.paletteEmpty)
+  await page.keyboard.press('Escape')
+  await expect(palette).toHaveCount(0)
+})
+
+test('dragging over empty space with the mouse selects the rows it touches', async ({ page, server }) => {
+  for (const n of ['a', 'b', 'c', 'd']) writeFileSync(join(server.vol, `${n}.txt`), n)
+  await login(page)
+  await expect(page.locator('.row')).toHaveCount(5)
+  const box = (await page.locator('.scroller').boundingBox())!
+  const first = (await row(page, 'a.txt').boundingBox())!
+  await page.mouse.move(box.x + box.width - 40, box.y + box.height - 12)
+  await page.mouse.down()
+  await page.mouse.move(box.x + box.width - 40, first.y + first.height / 2, { steps: 8 })
+  await page.mouse.move(first.x + 300, first.y + first.height / 2, { steps: 4 })
+  await expect(page.locator('.band')).toBeVisible()
+  await page.mouse.up()
+  await expect(page.locator('.band')).toHaveCount(0)
+  await expect(page.locator('.row.sel')).toHaveCount(4)
+  await expect(row(page, 'a.txt')).toHaveClass(/sel/)
+  await expect(row(page, 'd.txt')).toHaveClass(/sel/)
+  await expect(row(page, 'docs')).not.toHaveClass(/sel/)
+})

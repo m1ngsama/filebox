@@ -254,6 +254,80 @@
     clearTimeout(seekTimer)
   })
 
+  let band = $state.raw<{ x: number; y: number; w: number; h: number } | null>(null)
+
+  $effect(() => {
+    const el = scroller
+    if (!el || !selected) return
+    const chosen = selected
+    const down = (ev: PointerEvent) => {
+      if (ev.pointerType !== 'mouse' || ev.button !== 0 || ev.defaultPrevented) return
+      const box = el.getBoundingClientRect()
+      if (ev.clientX - box.left > el.clientWidth || ev.clientY - box.top > el.clientHeight) return
+      if ((ev.target as Element).closest('.card, .row, .group-head, .large-title, button, a, input, select, textarea, label')) return
+      const point = (e: PointerEvent) => {
+        const r = el.getBoundingClientRect()
+        return [e.clientX - r.left + el.scrollLeft, e.clientY - r.top + el.scrollTop]
+      }
+      const [x0, y0] = point(ev)
+      const base = ev.ctrlKey || ev.metaKey || ev.shiftKey ? new Set(chosen) : new Set<string>()
+      const hit = new Map<string, boolean>()
+      let last = ev
+      let live = false
+      let frame = 0
+      const update = () => {
+        const [x1, y1] = point(last)
+        const x = Math.min(x0, x1)
+        const y = Math.min(y0, y1)
+        const w = Math.abs(x1 - x0)
+        const h = Math.abs(y1 - y0)
+        band = { x, y, w, h }
+        const r = el.getBoundingClientRect()
+        for (const n of el.querySelectorAll<HTMLElement>('[data-i]')) {
+          const e = entries[Number(n.dataset.i)]
+          if (!e) continue
+          const b = n.getBoundingClientRect()
+          const cx = b.left - r.left + el.scrollLeft
+          const cy = b.top - r.top + el.scrollTop
+          hit.set(id(e), cx < x + w && cx + b.width > x && cy < y + h && cy + b.height > y)
+        }
+        const want = new Set(base)
+        for (const [k, on] of hit) if (on) want.add(k)
+        for (const k of [...chosen]) if (!want.has(k)) chosen.delete(k)
+        for (const k of want) chosen.add(k)
+      }
+      const tick = () => {
+        const r = el.getBoundingClientRect()
+        el.scrollTop += last.clientY < r.top + 32 ? -16 : last.clientY > r.bottom - 32 ? 16 : 0
+        update()
+        frame = requestAnimationFrame(tick)
+      }
+      const move = (e: PointerEvent) => {
+        last = e
+        if (live) return
+        if (Math.hypot(e.clientX - ev.clientX, e.clientY - ev.clientY) < 4) return
+        live = true
+        el.classList.add('banding')
+        getSelection()?.removeAllRanges()
+        frame = requestAnimationFrame(tick)
+      }
+      const up = () => {
+        cancelAnimationFrame(frame)
+        removeEventListener('pointermove', move)
+        removeEventListener('pointerup', up)
+        removeEventListener('pointercancel', up)
+        el.classList.remove('banding')
+        band = null
+        if (live) addEventListener('click', (c) => c.stopPropagation(), { capture: true, once: true })
+      }
+      addEventListener('pointermove', move)
+      addEventListener('pointerup', up)
+      addEventListener('pointercancel', up)
+    }
+    el.addEventListener('pointerdown', down)
+    return () => el.removeEventListener('pointerdown', down)
+  })
+
   function release() {
     clearTimeout(timer)
     pressing = -1
@@ -637,6 +711,7 @@
             {/if}
           {/each}
         </div>
+        {#if band}<div class="band" aria-hidden="true" style:left={`${band.x}px`} style:top={`${band.y}px`} style:width={`${band.w}px`} style:height={`${band.h}px`}></div>{/if}
         {@render footer?.()}
       </div>
     {/snippet}

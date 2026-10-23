@@ -31,6 +31,7 @@
     [[[mod, 'D']], t.duplicate],
     [[[mod, 'Z']], k.undo],
     [[[apple ? '⌥' : 'Alt', k.drag]], k.dragCopy],
+    [[[mod, 'K']], k.palette],
     [[['?']], k.help],
   ]
 </script>

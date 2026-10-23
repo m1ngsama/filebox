@@ -18,6 +18,7 @@
   let me = $state<Me | null>(null)
   let needLogin = $state(false)
   let error = $state('')
+  let palette = $state(false)
   let shared = $state(new URLSearchParams(location.search).get('share-target'))
   const parts = $derived(route.path.split('/').filter(Boolean).map(decodeURIComponent))
   const titles: Record<string, string> = { recent: t.recent, favorites: t.favorites, activity: t.activity, tags: t.tags, photos: t.photos, shares: t.myShares, trash: t.trash, settings: t.settings }
@@ -67,6 +68,8 @@
       navigate(`/files/${encodeURIComponent(me.vols[0])}/`, true)
   })
 </script>
+
+<svelte:window onkeydown={(e) => me && (e.metaKey || e.ctrlKey) && !e.shiftKey && !e.altKey && e.key.toLowerCase() === 'k' && (e.preventDefault(), (palette = true))} />
 
 <svelte:head><title>{heading ? `${heading} — ${t.brand}` : t.brand}</title></svelte:head>
 
@@ -123,4 +126,5 @@
     <Lazy load={() => import('./components/ShareTarget.svelte')} vols={me.vols} status={shared} onclose={() => (shared = null)} />
   {/if}
 {/if}
+{#if palette && me}{#await import('./components/Palette.svelte') then { default: Palette }}<Palette vols={me.vols} onclose={() => (palette = false)} />{/await}{/if}
 <Toasts />
