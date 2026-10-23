@@ -148,6 +148,7 @@ func serveCmd(args []string) error {
 		for {
 			up.Sweep(24 * time.Hour)
 			d.PurgeTokens(time.Now().Unix())
+			d.PurgeInvites(time.Now().Unix())
 			if _, err := d.PruneEvents(time.Now().Add(-90*24*time.Hour).Unix(), db.MaxEvents); err != nil {
 				slog.Error("prune activity", "err", err)
 			}

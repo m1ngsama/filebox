@@ -210,6 +210,17 @@ var migrations = []string{
 	INSERT INTO favorites_new SELECT (SELECT min(id) FROM users), vol, path, created FROM favorites WHERE EXISTS (SELECT 1 FROM users);
 	DROP TABLE favorites;
 	ALTER TABLE favorites_new RENAME TO favorites;`,
+	`CREATE TABLE invites (
+		id INTEGER PRIMARY KEY AUTOINCREMENT,
+		hash TEXT NOT NULL UNIQUE,
+		kind TEXT NOT NULL,
+		user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+		role TEXT NOT NULL DEFAULT 'member',
+		grants TEXT NOT NULL DEFAULT '{}',
+		created_by INTEGER NOT NULL,
+		created_at INTEGER NOT NULL,
+		expires_at INTEGER NOT NULL
+	);`,
 }
 
 type DB struct {

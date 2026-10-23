@@ -160,6 +160,13 @@ func (d *DB) CreateUser(name, hash, role string, grants map[string]string) (int6
 		return 0, err
 	}
 	defer tx.Rollback()
+	var taken int
+	if err := tx.QueryRow(`SELECT count(*) FROM users WHERE name = ? COLLATE NOCASE`, name).Scan(&taken); err != nil {
+		return 0, err
+	}
+	if taken > 0 {
+		return 0, ErrConflict
+	}
 	var id int64
 	if err := tx.QueryRow(`INSERT INTO users (name, password_hash, role) VALUES (?, ?, ?) RETURNING id`, name, hash, role).Scan(&id); err != nil {
 		if strings.Contains(err.Error(), "UNIQUE") {

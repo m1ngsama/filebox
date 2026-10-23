@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"net/url"
 	"path/filepath"
+	"slices"
+	"strings"
 	"testing"
 )
 
@@ -96,7 +98,10 @@ func TestMigrationMakesExistingUsersAdmins(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	before := len(migrations) - 1
+	before := slices.IndexFunc(migrations, func(m string) bool { return strings.Contains(m, "volume_access") })
+	if before < 0 {
+		t.Fatal("no roles migration")
+	}
 	for i := 0; i < before; i++ {
 		if _, err := raw.Exec(migrations[i]); err != nil {
 			t.Fatalf("migration %d: %v", i+1, err)
