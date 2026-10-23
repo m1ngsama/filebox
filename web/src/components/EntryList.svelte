@@ -57,6 +57,7 @@
     collapsed = $bindable(false),
     marks,
     quick,
+    onrefresh,
   }: {
     entries: Entry[]
     grid: boolean
@@ -88,6 +89,7 @@
     collapsed?: boolean
     marks?: (e: Entry) => { starred?: boolean; shared?: boolean }
     quick?: (e: Entry) => Action[]
+    onrefresh?: () => Promise<unknown>
   } = $props()
 
   const draggable = $derived(!!dnd && !narrow.current)
@@ -220,6 +222,31 @@
     desc = flip(sort, desc, k)
     sort = k
   }
+
+  // On a touch screen, swiping a row right selects it and swiping it left opens its actions; pulling the list down reloads it.
+  $effect(() => {
+    const el = scroller
+    if (!el || !matchMedia('(pointer: coarse)').matches) return
+    let off: (() => void) | undefined
+    let gone = false
+    import('../lib/touch').then(({ attach }) => {
+      if (gone) return
+      off = attach({
+        scroller: el,
+        onswipe: (i, dir) => {
+          const e = entries[i]
+          if (!e) return
+          if (dir > 0 && selected) toggle(id(e))
+          else if (dir < 0) sheet = e
+        },
+        onpull: onrefresh,
+      })
+    })
+    return () => {
+      gone = true
+      off?.()
+    }
+  })
 
   function toggle(n: string) {
     if (!selected) return

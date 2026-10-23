@@ -1176,6 +1176,7 @@
         title={error ? undefined : crumbs.length ? crumbs[crumbs.length - 1] : vol}
         {marks}
         {quick}
+        onrefresh={refresh}
         group={sort === 'mtime' && !query && !streaming ? byDay : undefined}
         bind:collapsed
       >

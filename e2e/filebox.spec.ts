@@ -4311,3 +4311,60 @@ test('a preview keeps stepping through files when the folder reloads underneath 
   await page.keyboard.press('ArrowLeft')
   await expect(page.getByRole('dialog', { name: 'c.txt' })).toBeVisible()
 })
+
+test('on a phone, swiping a row opens its actions or selects it, and pulling the list down reloads it', async ({ browser, server }) => {
+  test.skip(browser.browserType().name() !== 'chromium', 'touch is driven through the Chrome DevTools Protocol')
+  writeFileSync(join(server.vol, 'docs', 'b.txt'), 'bee\n')
+  const ctx = await browser.newContext({ baseURL: server.url, hasTouch: true, isMobile: true, viewport: { width: 390, height: 780 }, locale: 'zh-CN' })
+  const page = await ctx.newPage()
+  await login(page)
+  await row(page, 'docs').locator('button.name').click()
+  await expect(row(page, 'b.txt')).toBeVisible()
+  expect(await page.evaluate(() => matchMedia('(pointer: coarse)').matches)).toBe(true)
+  const cdp = await ctx.newCDPSession(page)
+  const touch = async (from: { x: number; y: number }, to: { x: number; y: number }) => {
+    await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [from] })
+    for (let i = 1; i <= 8; i++) {
+      await cdp.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: [{ x: from.x + ((to.x - from.x) * i) / 8, y: from.y + ((to.y - from.y) * i) / 8 }] })
+    }
+    await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] })
+  }
+  await page.waitForTimeout(300)
+  const box = (await row(page, 'b.txt').boundingBox())!
+  const mid = { x: box.x + box.width / 2, y: box.y + box.height / 2 }
+
+  await touch(mid, { x: mid.x - 160, y: mid.y })
+  const sheet = page.getByRole('dialog', { name: 'b.txt' })
+  await expect(sheet).toBeVisible()
+  await page.keyboard.press('Escape')
+  await expect(sheet).toHaveCount(0)
+
+  // a swipe the system cancels does nothing
+  await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [mid] })
+  for (let i = 1; i <= 8; i++) await cdp.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: [{ x: mid.x + i * 20, y: mid.y }] })
+  await cdp.send('Input.dispatchTouchEvent', { type: 'touchCancel', touchPoints: [] })
+  await page.waitForTimeout(300)
+  expect(await row(page, 'b.txt').getAttribute('aria-selected')).toBe('false')
+
+  await touch(mid, { x: mid.x + 160, y: mid.y })
+  await expect(row(page, 'b.txt')).toHaveAttribute('aria-selected', 'true')
+  await touch(mid, { x: mid.x + 160, y: mid.y })
+  await expect(row(page, 'b.txt')).toHaveAttribute('aria-selected', 'false')
+
+  // a touch that barely moves is a tap: it opens the file and selects nothing
+  await touch(mid, { x: mid.x + 6, y: mid.y + 4 })
+  await expect(page.getByRole('dialog', { name: 'b.txt' })).toBeVisible()
+  await expect(row(page, 'b.txt')).toHaveAttribute('aria-selected', 'false')
+  await page.keyboard.press('Escape')
+  await expect(page.getByRole('dialog')).toHaveCount(0)
+
+  writeFileSync(join(server.vol, 'docs', 'arrived quietly.txt'), 'x')
+  await page.waitForTimeout(200)
+  await expect(row(page, 'arrived quietly.txt')).toHaveCount(0)
+  const top = (await row(page, 'b.txt').boundingBox())!
+  const listed = page.waitForRequest((r) => new URL(r.url()).pathname === '/api/ls', { timeout: 2000 })
+  await touch({ x: top.x + 60, y: top.y + top.height / 2 }, { x: top.x + 60, y: top.y + top.height / 2 + 260 })
+  await listed
+  await expect(row(page, 'arrived quietly.txt')).toBeVisible()
+  await ctx.close()
+})
