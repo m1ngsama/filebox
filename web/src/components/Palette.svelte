@@ -11,6 +11,7 @@
   import HardDrive from '@lucide/svelte/icons/hard-drive'
   import Share2 from '@lucide/svelte/icons/share-2'
   import Trash from '@lucide/svelte/icons/trash'
+  import ChartPie from '@lucide/svelte/icons/chart-pie'
   import Settings from '@lucide/svelte/icons/settings'
   import Sun from '@lucide/svelte/icons/sun'
   import File from '@lucide/svelte/icons/file'
@@ -35,6 +36,7 @@
     { id: 'photos', label: t.photos, icon: Images, run: go('/photos') },
     { id: 'tags', label: t.tags, icon: TagIcon, run: go('/tags') },
     { id: 'activity', label: t.activity, icon: ActivityIcon, run: go('/activity') },
+    { id: 'storage', label: t.storage, icon: ChartPie, run: go('/storage') },
     { id: 'shares', label: t.myShares, icon: Share2, run: go('/shares') },
     { id: 'trash', label: t.trash, icon: Trash, run: go('/trash') },
     { id: 'settings', label: t.settings, icon: Settings, run: go('/settings') },

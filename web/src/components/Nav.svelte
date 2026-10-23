@@ -9,6 +9,7 @@
   import Share2 from '@lucide/svelte/icons/share-2'
   import Trash from '@lucide/svelte/icons/trash'
   import Settings from '@lucide/svelte/icons/settings'
+  import ChartPie from '@lucide/svelte/icons/chart-pie'
   import LogOut from '@lucide/svelte/icons/log-out'
   import { link } from '../lib/router.svelte'
   import ChevronRight from '@lucide/svelte/icons/chevron-right'
@@ -113,6 +114,9 @@
   </ul>
   {#if vols.length}
     <ul class="nav-foot">
+      <li>
+        <a href="/storage" onclick={go} aria-current={parts[0] === 'storage' ? 'page' : undefined}><ChartPie size={icon.md} /><span>{t.storage}</span></a>
+      </li>
       <li>
         <a href="/shares" onclick={go} aria-current={parts[0] === 'shares' ? 'page' : undefined}><Share2 size={icon.md} /><span>{t.myShares}</span></a>
       </li>

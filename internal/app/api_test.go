@@ -631,3 +631,42 @@ func TestPhotosTimelineByCaptureDate(t *testing.T) {
 		t.Fatalf("bad cursor %d", w.Code)
 	}
 }
+
+func TestUsageBreakdown(t *testing.T) {
+	f := newTestApp(t)
+	f.write(t, "pics/a.png", strings.Repeat("x", 300))
+	f.write(t, "pics/b.JPG", strings.Repeat("x", 100))
+	f.write(t, "movies/m.mp4", strings.Repeat("x", 1000))
+	f.write(t, "notes.txt", "hello")
+	f.write(t, "misc/blob.bin", strings.Repeat("x", 50))
+	f.write(t, ".DS_Store", "junk")
+	f.App.Index.Scan(f.App.Vols)
+	type u struct {
+		Kinds []struct {
+			Kind        string
+			Size, Files int64
+		}
+		Folders []struct {
+			Path        string
+			Size, Files int64
+		}
+		Largest []struct {
+			Path string
+			Size int64
+		}
+	}
+	r := decode[u](t, f.do("GET", "/api/usage", nil))
+	kinds := map[string]int64{}
+	for _, k := range r.Kinds {
+		kinds[k.Kind] = k.Size
+	}
+	if kinds["video"] != 1000 || kinds["image"] != 400 || kinds["doc"] != 5 || kinds["other"] != 50 || len(kinds) != 4 || r.Kinds[0].Kind != "video" {
+		t.Fatalf("kinds %+v", r.Kinds)
+	}
+	if len(r.Folders) != 3 || r.Folders[0].Path != "movies" || r.Folders[1].Path != "pics" || r.Folders[1].Size != 400 || r.Folders[1].Files != 2 {
+		t.Fatalf("folders %+v", r.Folders)
+	}
+	if len(r.Largest) != 5 || r.Largest[0].Path != "movies/m.mp4" || r.Largest[1].Path != "pics/a.png" {
+		t.Fatalf("largest %+v", r.Largest)
+	}
+}

@@ -21,7 +21,7 @@
   let palette = $state(false)
   let shared = $state(new URLSearchParams(location.search).get('share-target'))
   const parts = $derived(route.path.split('/').filter(Boolean).map(decodeURIComponent))
-  const titles: Record<string, string> = { recent: t.recent, favorites: t.favorites, activity: t.activity, tags: t.tags, photos: t.photos, shares: t.myShares, trash: t.trash, settings: t.settings }
+  const titles: Record<string, string> = { recent: t.recent, favorites: t.favorites, activity: t.activity, tags: t.tags, photos: t.photos, storage: t.storage, shares: t.myShares, trash: t.trash, settings: t.settings }
   const heading = $derived(needLogin ? t.login : parts[0] === 'files' ? parts.slice(1).at(-1) : titles[parts[0]])
 
   session.lost = () => {
@@ -108,6 +108,9 @@
             {:else if parts[0] === 'activity'}
               <p class="hint page-hint">{t.activityHint}</p>
               <Lazy load={() => import('./components/Activity.svelte')} />
+            {:else if parts[0] === 'storage'}
+              <p class="hint page-hint">{t.storageHint}</p>
+              <Lazy load={() => import('./routes/Storage.svelte')} />
             {:else if parts[0] === 'shares'}
               <Lazy load={() => import('./routes/Shares.svelte')} />
             {:else if parts[0] === 'settings'}

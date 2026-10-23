@@ -80,6 +80,7 @@ func (a *API) Register(mux *http.ServeMux) {
 	h("GET /api/search", a.search)
 	h("GET /api/vols", a.vols)
 	h("GET /api/size", a.size)
+	h("GET /api/usage", a.usage)
 	h("GET /api/favorites", a.favorites)
 	h("POST /api/favorites", a.star)
 	h("GET /api/tags", a.tags)
@@ -564,6 +565,15 @@ func (a *API) size(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	httpx.JSON(w, 200, map[string]any{"size": s.Size, "files": s.Files, "scanning": !a.Index.Ready()})
+}
+
+func (a *API) usage(w http.ResponseWriter, r *http.Request) {
+	u, err := a.Index.Usage(r.Context(), 20, 50)
+	if err != nil {
+		httpx.Error(w, err)
+		return
+	}
+	httpx.JSON(w, 200, map[string]any{"kinds": u.Kinds, "folders": u.Folders, "largest": u.Largest, "scanning": !a.Index.Ready()})
 }
 
 type favorite struct {
