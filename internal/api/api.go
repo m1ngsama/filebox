@@ -1,6 +1,7 @@
 package api
 
 import (
+	"cmp"
 	"errors"
 	"fmt"
 	"io/fs"
@@ -81,6 +82,7 @@ func (a *API) Register(mux *http.ServeMux) {
 	h("GET /api/vols", a.vols)
 	h("GET /api/size", a.size)
 	h("GET /api/usage", a.usage)
+	h("GET /api/duplicates", a.duplicates)
 	h("GET /api/favorites", a.favorites)
 	h("POST /api/favorites", a.star)
 	h("GET /api/tags", a.tags)
@@ -574,6 +576,20 @@ func (a *API) usage(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	httpx.JSON(w, 200, map[string]any{"kinds": u.Kinds, "folders": u.Folders, "largest": u.Largest, "scanning": !a.Index.Ready()})
+}
+
+func (a *API) duplicates(w http.ResponseWriter, r *http.Request) {
+	min, err := strconv.ParseInt(cmp.Or(r.URL.Query().Get("min"), "1048576"), 10, 64)
+	if err != nil || min < 1 {
+		httpx.Fail(w, 400, "bad min")
+		return
+	}
+	d, err := a.Index.Duplicates(r.Context(), a.Vols, min, 8*time.Second)
+	if err != nil {
+		httpx.Error(w, err)
+		return
+	}
+	httpx.JSON(w, 200, map[string]any{"groups": d.Groups, "wasted": d.Wasted, "pending": d.Pending, "scanning": !a.Index.Ready()})
 }
 
 type favorite struct {

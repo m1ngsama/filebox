@@ -18,6 +18,7 @@ export type Me = { name: string; vols: string[]; origins?: string[] }
 export type RecentFile = Entry & Loc
 export type Favorite = RecentFile & { missing: boolean }
 export type UsageReport = { kinds: { kind: string; size: number; files: number }[]; folders: { vol: string; path: string; size: number; files: number }[]; largest: (Loc & { name: string; size: number; mtime: number })[]; scanning: boolean }
+export type DuplicateReport = { groups: { size: number; files: (Loc & { name: string; size: number; mtime: number })[] }[]; wasted: number; pending: number; scanning: boolean }
 export type Usage = { name: string; fs?: string; used: number; free: number; total: number }
 export type Loc = { vol: string; path: string }
 export type Run = { vol: string; dir: string; count: number; more?: boolean; size: number; mtime: number; oldest: number }
@@ -171,6 +172,7 @@ export const api = {
       signal,
     ),
   vols: () => req<{ vols: Usage[] }>('GET', '/api/vols'),
+  duplicates: (min: string, signal?: AbortSignal) => req<DuplicateReport>('GET', `/api/duplicates?min=${min}`, undefined, signal),
   usage: (signal?: AbortSignal) => req<UsageReport>('GET', '/api/usage', undefined, signal),
   exists: (vol: string, path: string) =>
     fetch(lsURL(vol, path)).then(

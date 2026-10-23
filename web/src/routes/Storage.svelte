@@ -2,6 +2,7 @@
   import { icon } from '../lib/icon'
   import CloudOff from '@lucide/svelte/icons/cloud-off'
   import ChartPie from '@lucide/svelte/icons/chart-pie'
+  import Copy from '@lucide/svelte/icons/copy'
   import FolderIcon from '@lucide/svelte/icons/folder'
   import EmptyState from '../components/EmptyState.svelte'
   import FileIcon from '../components/FileIcon.svelte'
@@ -42,6 +43,7 @@
 {:else if report}
   <div class="storage">
     {#if report.scanning}<p class="hint banner">{t.indexing}</p>{/if}
+    <a class="button" href="/duplicates" onclick={link}><Copy size={icon.sm} />{t.dupFind}</a>
     <section aria-labelledby="st-kind">
       <h2 id="st-kind">{t.storageByKind}</h2>
       <p class="st-total">{size(total)} · {t.storageOf(files)}</p>

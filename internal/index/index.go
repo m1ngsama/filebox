@@ -63,6 +63,7 @@ type Index struct {
 	db      *db.DB
 	w       sync.Mutex
 	mu      sync.Mutex
+	dup     sync.Mutex
 	touched map[pending]struct{}
 	ready   atomic.Bool
 	content atomic.Pointer[content]

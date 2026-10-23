@@ -670,3 +670,45 @@ func TestUsageBreakdown(t *testing.T) {
 		t.Fatalf("largest %+v", r.Largest)
 	}
 }
+
+func TestDuplicates(t *testing.T) {
+	f := newTestApp(t)
+	same := strings.Repeat("a", 2000)
+	f.write(t, "one/a.bin", same)
+	f.write(t, "two/copy.bin", same)
+	f.write(t, "three/also.bin", same)
+	f.write(t, "four/other.bin", strings.Repeat("b", 2000))
+	f.write(t, "five/tiny1.txt", "x")
+	f.write(t, "five/tiny2.txt", "x")
+	f.write(t, ".trash/gone.bin", same)
+	f.App.Index.Scan(f.App.Vols)
+	type dups struct {
+		Groups []struct {
+			Size  int64
+			Files []struct{ Vol, Path string }
+		}
+		Wasted  int64
+		Pending int
+	}
+	r := decode[dups](t, f.do("GET", "/api/duplicates?min=1000", nil))
+	if r.Pending != 0 || len(r.Groups) != 1 || r.Groups[0].Size != 2000 || len(r.Groups[0].Files) != 3 || r.Wasted != 4000 {
+		t.Fatalf("duplicates %+v", r)
+	}
+	f.write(t, "two/copy.bin", strings.Repeat("c", 2000))
+	later := time.Now().Add(time.Hour)
+	os.Chtimes(filepath.Join(f.Dir, "two/copy.bin"), later, later)
+	f.App.Index.Scan(f.App.Vols)
+	r = decode[dups](t, f.do("GET", "/api/duplicates?min=1000", nil))
+	if len(r.Groups) != 1 || len(r.Groups[0].Files) != 2 || r.Wasted != 2000 {
+		t.Fatalf("after change %+v", r)
+	}
+	if r = decode[dups](t, f.do("GET", "/api/duplicates?min=1", nil)); len(r.Groups) != 2 {
+		t.Fatalf("small files %+v", r)
+	}
+	if w := f.do("GET", "/api/duplicates?min=999999", nil); !strings.Contains(w.Body.String(), `"groups":[]`) {
+		t.Fatalf("no groups must be an empty list: %s", w.Body)
+	}
+	if w := f.do("GET", "/api/duplicates?min=0", nil); w.Code != 400 {
+		t.Fatalf("bad min %d", w.Code)
+	}
+}

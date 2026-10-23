@@ -168,6 +168,14 @@ var migrations = []string{
 	`ALTER TABLE taken ADD COLUMN hidden INTEGER NOT NULL DEFAULT 0;
 	DROP INDEX taken_at;
 	CREATE INDEX taken_shown ON taken(at DESC, id DESC) WHERE hidden = 0;`,
+	`CREATE TABLE hashes (
+		vol TEXT NOT NULL,
+		path TEXT NOT NULL,
+		size INTEGER NOT NULL,
+		mtime INTEGER NOT NULL,
+		sum BLOB NOT NULL,
+		PRIMARY KEY (vol, path)
+	) WITHOUT ROWID;`,
 }
 
 type DB struct {
