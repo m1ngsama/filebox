@@ -1,13 +1,17 @@
+# Dependabot opens pull requests for security advisories only. A limit of 0 turns off version updates,
+# and security updates, which are on for the repository, are not affected by it.
+# Dependencies are otherwise updated by hand, a release at a time, and never within two weeks of being published.
 version: 2
 updates:
   - package-ecosystem: gomod
     directory: /
     schedule: { interval: weekly }
-    cooldown: { default-days: 14 }
+    open-pull-requests-limit: 0
   - package-ecosystem: github-actions
     directory: /
     schedule: { interval: weekly }
-    cooldown: { default-days: 14 }
+    open-pull-requests-limit: 0
   - package-ecosystem: docker
     directory: /
     schedule: { interval: weekly }
+    open-pull-requests-limit: 0
