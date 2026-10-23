@@ -129,9 +129,9 @@ func (c *collapser) result(capped bool) ([]recentFile, []recentRun) {
 	return out, kept
 }
 
-func recentRuns(ctx context.Context, ix *index.Index, limit int, tz int64) ([]recentFile, []recentRun, error) {
+func recentRuns(ctx context.Context, ix *index.Index, vols []string, limit int, tz int64) ([]recentFile, []recentRun, error) {
 	c := newCollapser(limit, tz)
-	capped, err := ix.RecentScan(ctx, recentPage, recentCap, c.add)
+	capped, err := ix.RecentScan(ctx, vols, recentPage, recentCap, c.add)
 	if err != nil {
 		return nil, nil, err
 	}

@@ -101,14 +101,17 @@ func common(h http.Handler) http.Handler {
 func (a *App) userUploads() upload.Policy {
 	return upload.Policy{
 		Owner: func(r *http.Request) (string, bool) {
-			p, ok := a.Auth.Session(r)
-			if !ok {
-				p, ok = a.Auth.App(r)
-				ok = ok && !p.ReadOnly
-			}
+			p, ok := a.principal(r)
+			ok = ok && !p.ReadOnly
 			return "user:" + strconv.FormatInt(p.UserID, 10), ok
 		},
 		Resolve: func(r *http.Request, meta map[string]string) (upload.Target, error) {
+			if p, ok := a.principal(r); !ok || !p.Can(meta["vol"], true) {
+				if ok && p.Can(meta["vol"], false) {
+					return upload.Target{}, fs.ErrPermission
+				}
+				return upload.Target{}, fs.ErrNotExist
+			}
 			v, dir, err := a.Vols.Resolve(meta["vol"], meta["dir"])
 			if err != nil {
 				return upload.Target{}, err
@@ -120,8 +123,23 @@ func (a *App) userUploads() upload.Policy {
 	}
 }
 
+func (a *App) principal(r *http.Request) (auth.Principal, bool) {
+	if p, ok := a.Auth.Session(r); ok {
+		return p, true
+	}
+	return a.Auth.App(r)
+}
+
+// resolve finds a place the signed-in caller may read.
+func (a *App) resolve(r *http.Request, name, rel string) (*vol.Volume, string, error) {
+	if err := auth.Allow(r.Context(), name, false); err != nil {
+		return nil, "", err
+	}
+	return a.Vols.Resolve(name, rel)
+}
+
 func (a *App) raw(w http.ResponseWriter, r *http.Request) {
-	v, rel, err := a.Vols.Resolve(r.PathValue("vol"), r.PathValue("path"))
+	v, rel, err := a.resolve(r, r.PathValue("vol"), r.PathValue("path"))
 	if err != nil {
 		httpx.Error(w, err)
 		return
@@ -135,7 +153,7 @@ func (a *App) raw(w http.ResponseWriter, r *http.Request) {
 
 func (a *App) render(w http.ResponseWriter, r *http.Request) {
 	q := r.URL.Query()
-	v, rel, err := a.Vols.Resolve(q.Get("vol"), q.Get("p"))
+	v, rel, err := a.resolve(r, q.Get("vol"), q.Get("p"))
 	if err != nil {
 		httpx.Error(w, err)
 		return
@@ -146,7 +164,7 @@ func (a *App) render(w http.ResponseWriter, r *http.Request) {
 func (a *App) located(fn func(http.ResponseWriter, *http.Request, *os.Root, string)) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		q := r.URL.Query()
-		v, rel, err := a.Vols.Resolve(q.Get("vol"), q.Get("p"))
+		v, rel, err := a.resolve(r, q.Get("vol"), q.Get("p"))
 		if err != nil {
 			httpx.Error(w, err)
 			return
@@ -157,7 +175,7 @@ func (a *App) located(fn func(http.ResponseWriter, *http.Request, *os.Root, stri
 
 func (a *App) meta(w http.ResponseWriter, r *http.Request) {
 	q := r.URL.Query()
-	v, rel, err := a.Vols.Resolve(q.Get("vol"), q.Get("p"))
+	v, rel, err := a.resolve(r, q.Get("vol"), q.Get("p"))
 	if err != nil {
 		httpx.Error(w, err)
 		return
@@ -167,7 +185,7 @@ func (a *App) meta(w http.ResponseWriter, r *http.Request) {
 
 func (a *App) office(w http.ResponseWriter, r *http.Request) {
 	q := r.URL.Query()
-	v, rel, err := a.Vols.Resolve(q.Get("vol"), q.Get("p"))
+	v, rel, err := a.resolve(r, q.Get("vol"), q.Get("p"))
 	if err != nil {
 		httpx.Error(w, err)
 		return
@@ -176,7 +194,7 @@ func (a *App) office(w http.ResponseWriter, r *http.Request) {
 }
 
 func (a *App) thumb(w http.ResponseWriter, r *http.Request) {
-	v, rel, err := a.Vols.Resolve(r.PathValue("vol"), r.PathValue("path"))
+	v, rel, err := a.resolve(r, r.PathValue("vol"), r.PathValue("path"))
 	if err != nil {
 		httpx.Error(w, err)
 		return

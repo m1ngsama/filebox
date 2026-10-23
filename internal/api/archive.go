@@ -169,7 +169,7 @@ func match(header, tag string) bool {
 
 func (a *API) zipEntries(w http.ResponseWriter, r *http.Request) {
 	q := r.URL.Query()
-	v, rel, err := a.Vols.Resolve(q.Get("vol"), q.Get("p"))
+	v, rel, err := a.resolve(r, Loc{q.Get("vol"), q.Get("p")}, false)
 	if err != nil {
 		httpx.Error(w, err)
 		return
@@ -179,7 +179,7 @@ func (a *API) zipEntries(w http.ResponseWriter, r *http.Request) {
 
 func (a *API) zipEntry(w http.ResponseWriter, r *http.Request) {
 	q := r.URL.Query()
-	v, rel, err := a.Vols.Resolve(q.Get("vol"), q.Get("p"))
+	v, rel, err := a.resolve(r, Loc{q.Get("vol"), q.Get("p")}, false)
 	if err != nil {
 		httpx.Error(w, err)
 		return

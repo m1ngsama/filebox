@@ -159,10 +159,14 @@ func (x *Index) saveTaken(batch []Photo) error {
 }
 
 // Photos pages through every photo and video, newest capture first; pass the last one seen to continue.
-func (x *Index) Photos(ctx context.Context, after *Photo, limit int) ([]Photo, error) {
+func (x *Index) Photos(ctx context.Context, vols []string, after *Photo, limit int) ([]Photo, error) {
 	q := `SELECT t.id, f.vol, f.path, f.name, f.size, f.mtime, t.at FROM taken t
 		JOIN files f ON f.vol = t.vol AND f.path = t.path WHERE t.hidden = 0`
-	args := []any{}
+	only, args := onlyVols("f.vol", vols)
+	q += only
+	if args == nil {
+		args = []any{}
+	}
 	if after != nil {
 		q += ` AND (t.at, t.id) < (?, ?)`
 		args = append(args, after.Taken, after.ID)

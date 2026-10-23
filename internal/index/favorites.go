@@ -12,8 +12,10 @@ type Favorite struct {
 	Created   int64
 }
 
-func (x *Index) Favorites() ([]Favorite, error) {
-	rows, err := x.db.Query(`SELECT vol, path, created FROM favorites ORDER BY created DESC`)
+// Favorites lists one user's starred items on the volumes given, newest first; nil vols means every volume.
+func (x *Index) Favorites(userID int64, vols []string) ([]Favorite, error) {
+	only, args := onlyVols("vol", vols)
+	rows, err := x.db.Query(`SELECT vol, path, created FROM favorites WHERE user_id = ?`+only+` ORDER BY created DESC`, append([]any{userID}, args...)...)
 	if err != nil {
 		return nil, err
 	}
@@ -29,7 +31,7 @@ func (x *Index) Favorites() ([]Favorite, error) {
 	return out, rows.Err()
 }
 
-func (x *Index) Star(v string, paths []string, on bool) error {
+func (x *Index) Star(userID int64, v string, paths []string, on bool) error {
 	x.w.Lock()
 	defer x.w.Unlock()
 	tx, err := x.db.Begin()
@@ -37,13 +39,13 @@ func (x *Index) Star(v string, paths []string, on bool) error {
 		return err
 	}
 	defer tx.Rollback()
-	q := `DELETE FROM favorites WHERE vol = ? AND path = ?`
+	q := `DELETE FROM favorites WHERE user_id = ? AND vol = ? AND path = ?`
 	if on {
-		q = `INSERT OR IGNORE INTO favorites (vol, path, created) VALUES (?, ?, ?)`
+		q = `INSERT OR IGNORE INTO favorites (user_id, vol, path, created) VALUES (?, ?, ?, ?)`
 	}
 	now := time.Now().UnixMilli()
 	for _, p := range paths {
-		args := []any{v, p}
+		args := []any{userID, v, p}
 		if on {
 			args = append(args, now)
 		}

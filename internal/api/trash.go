@@ -85,9 +85,9 @@ func trashItem(v *vol.Volume, id string) (TrashItem, error) {
 }
 
 func (a *API) trashList(w http.ResponseWriter, r *http.Request) {
-	v, ok := a.Vols.Get(r.URL.Query().Get("vol"))
-	if !ok {
-		httpx.Error(w, fs.ErrNotExist)
+	v, err := a.volume(r, r.URL.Query().Get("vol"), false)
+	if err != nil {
+		httpx.Error(w, err)
 		return
 	}
 	items := []TrashItem{}
@@ -117,9 +117,9 @@ func (a *API) trashRestore(w http.ResponseWriter, r *http.Request) {
 		httpx.Fail(w, 400, "bad request")
 		return
 	}
-	v, ok := a.Vols.Get(in.Vol)
-	if !ok {
-		httpx.Error(w, fs.ErrNotExist)
+	v, err := a.volume(r, in.Vol, true)
+	if err != nil {
+		httpx.Error(w, err)
 		return
 	}
 	if in.IDs == nil {
@@ -179,9 +179,9 @@ func (a *API) trashDelete(w http.ResponseWriter, r *http.Request) {
 		httpx.Fail(w, 400, "bad request")
 		return
 	}
-	v, ok := a.Vols.Get(in.Vol)
-	if !ok {
-		httpx.Error(w, fs.ErrNotExist)
+	v, err := a.volume(r, in.Vol, true)
+	if err != nil {
+		httpx.Error(w, err)
 		return
 	}
 	for _, id := range in.IDs {
@@ -207,9 +207,9 @@ func (a *API) trashEmpty(w http.ResponseWriter, r *http.Request) {
 		httpx.Fail(w, 400, "bad request")
 		return
 	}
-	v, ok := a.Vols.Get(in.Vol)
-	if !ok {
-		httpx.Error(w, fs.ErrNotExist)
+	v, err := a.volume(r, in.Vol, true)
+	if err != nil {
+		httpx.Error(w, err)
 		return
 	}
 	f, err := v.Root.Open(vol.TrashDir)

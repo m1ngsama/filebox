@@ -270,14 +270,14 @@ func (x *Index) Size(vol, rel string) (Size, error) {
 
 func (x *Index) Recent(limit int) ([]File, error) {
 	out := []File{}
-	_, err := x.RecentScan(context.Background(), limit, limit, func(f File) bool {
+	_, err := x.RecentScan(context.Background(), nil, limit, limit, func(f File) bool {
 		out = append(out, f)
 		return true
 	})
 	return out, err
 }
 
-func (x *Index) RecentScan(ctx context.Context, page, limit int, each func(File) bool) (capped bool, err error) {
+func (x *Index) RecentScan(ctx context.Context, vols []string, page, limit int, each func(File) bool) (capped bool, err error) {
 	tx, err := x.db.BeginTx(ctx, &sql.TxOptions{ReadOnly: true})
 	if err != nil {
 		return false, err
@@ -285,8 +285,9 @@ func (x *Index) RecentScan(ctx context.Context, page, limit int, each func(File)
 	defer tx.Rollback()
 	mtime, id := int64(math.MaxInt64), int64(0)
 	for seen := 0; seen < limit; {
+		only, args := onlyVolsAt("vol", vols, "?4")
 		rows, err := tx.QueryContext(ctx, `SELECT id, vol, path, size, mtime FROM files INDEXED BY files_mtime
-			WHERE dir = 0 AND mtime <= ?1 AND NOT (mtime = ?1 AND id <= ?2) ORDER BY mtime DESC, id LIMIT ?3`, mtime, id, min(page, limit-seen))
+			WHERE dir = 0 AND mtime <= ?1 AND NOT (mtime = ?1 AND id <= ?2)`+only+` ORDER BY mtime DESC, id LIMIT ?3`, append([]any{mtime, id, min(page, limit-seen)}, args...)...)
 		if err != nil {
 			return false, err
 		}

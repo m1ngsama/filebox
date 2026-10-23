@@ -131,11 +131,40 @@ func (a *API) did(r *http.Request, e db.Event) {
 	a.DB.Log(e)
 }
 
-func (a *API) resolve(l Loc) (*vol.Volume, string, error) { return a.Vols.Resolve(l.Vol, l.Path) }
+// resolve finds a place on a volume the caller may read, or write when write is set.
+func (a *API) resolve(r *http.Request, l Loc, write bool) (*vol.Volume, string, error) {
+	if err := auth.Allow(r.Context(), l.Vol, write); err != nil {
+		return nil, "", err
+	}
+	return a.Vols.Resolve(l.Vol, l.Path)
+}
 
 func (a *API) query(r *http.Request) (*vol.Volume, string, error) {
 	q := r.URL.Query()
-	return a.Vols.Resolve(q.Get("vol"), q.Get("path"))
+	return a.resolve(r, Loc{q.Get("vol"), q.Get("path")}, false)
+}
+
+func (a *API) queryWrite(r *http.Request) (*vol.Volume, string, error) {
+	q := r.URL.Query()
+	return a.resolve(r, Loc{q.Get("vol"), q.Get("path")}, true)
+}
+
+// volume finds a volume the caller may read, or write when write is set.
+func (a *API) volume(r *http.Request, name string, write bool) (*vol.Volume, error) {
+	if err := auth.Allow(r.Context(), name, write); err != nil {
+		return nil, err
+	}
+	v, ok := a.Vols.Get(name)
+	if !ok {
+		return nil, fs.ErrNotExist
+	}
+	return v, nil
+}
+
+// readable lists the volumes the caller may read.
+func (a *API) readable(r *http.Request) []string {
+	p, _ := auth.From(r.Context())
+	return p.Volumes(a.Vols.Names())
 }
 
 func (a *API) login(w http.ResponseWriter, r *http.Request) {
@@ -185,7 +214,12 @@ func (a *API) me(w http.ResponseWriter, r *http.Request) {
 		httpx.Error(w, err)
 		return
 	}
-	httpx.JSON(w, 200, map[string]any{"name": u.Name, "vols": a.Vols.Names(), "origins": append([]string{}, a.Origins...)})
+	vols := p.Volumes(a.Vols.Names())
+	levels := map[string]string{}
+	for _, v := range vols {
+		levels[v] = p.Level(v)
+	}
+	httpx.JSON(w, 200, map[string]any{"name": u.Name, "admin": p.Admin, "vols": vols, "access": levels, "origins": append([]string{}, a.Origins...)})
 }
 
 func (a *API) ls(w http.ResponseWriter, r *http.Request) {
@@ -225,9 +259,9 @@ func (a *API) stat(w http.ResponseWriter, r *http.Request) {
 
 func (a *API) zip(w http.ResponseWriter, r *http.Request) {
 	q := r.URL.Query()
-	v, ok := a.Vols.Get(q.Get("vol"))
-	if !ok {
-		httpx.Error(w, fs.ErrNotExist)
+	v, err := a.volume(r, q.Get("vol"), false)
+	if err != nil {
+		httpx.Error(w, err)
 		return
 	}
 	var rels []string
@@ -252,7 +286,7 @@ func (a *API) mkdir(w http.ResponseWriter, r *http.Request) {
 		httpx.Fail(w, 400, "bad request")
 		return
 	}
-	v, rel, err := a.resolve(in)
+	v, rel, err := a.resolve(r, in, true)
 	if err == nil && rel == "." {
 		err = fs.ErrExist
 	}
@@ -279,7 +313,7 @@ func (a *API) touch(w http.ResponseWriter, r *http.Request) {
 		httpx.Fail(w, 400, "bad request")
 		return
 	}
-	v, rel, err := a.resolve(in)
+	v, rel, err := a.resolve(r, in, true)
 	if err == nil && (rel == "." || !vol.ValidName(path.Base(rel))) {
 		err = vol.ErrBadPath
 	}
@@ -308,7 +342,7 @@ func (a *API) unzip(w http.ResponseWriter, r *http.Request) {
 		httpx.Fail(w, 400, "bad request")
 		return
 	}
-	v, rel, err := a.resolve(in)
+	v, rel, err := a.resolve(r, in, true)
 	if err == nil && !strings.EqualFold(path.Ext(rel), ".zip") {
 		err = vol.ErrNotFile
 	}
@@ -334,15 +368,15 @@ type transfer struct {
 	Dst Loc `json:"dst"`
 }
 
-func (a *API) prepare(w http.ResponseWriter, r *http.Request) (src, dst *vol.Volume, srel, drel string, ok bool) {
+func (a *API) prepare(w http.ResponseWriter, r *http.Request, move bool) (src, dst *vol.Volume, srel, drel string, ok bool) {
 	var in transfer
 	if err := httpx.Read(r, &in); err != nil {
 		httpx.Fail(w, 400, "bad request")
 		return
 	}
-	src, srel, err := a.resolve(in.Src)
+	src, srel, err := a.resolve(r, in.Src, move)
 	if err == nil {
-		dst, drel, err = a.resolve(in.Dst)
+		dst, drel, err = a.resolve(r, in.Dst, true)
 	}
 	if err != nil {
 		httpx.Error(w, err)
@@ -368,7 +402,7 @@ func (a *API) prepare(w http.ResponseWriter, r *http.Request) (src, dst *vol.Vol
 }
 
 func (a *API) mv(w http.ResponseWriter, r *http.Request) {
-	src, dst, srel, drel, ok := a.prepare(w, r)
+	src, dst, srel, drel, ok := a.prepare(w, r, true)
 	if !ok {
 		return
 	}
@@ -393,7 +427,7 @@ func (a *API) mv(w http.ResponseWriter, r *http.Request) {
 }
 
 func (a *API) cp(w http.ResponseWriter, r *http.Request) {
-	src, dst, srel, drel, ok := a.prepare(w, r)
+	src, dst, srel, drel, ok := a.prepare(w, r, false)
 	if !ok {
 		return
 	}
@@ -424,6 +458,10 @@ func (a *API) rm(w http.ResponseWriter, r *http.Request) {
 		ID   string `json:"id"`
 	}
 	failed, done := []failure{}, []trashed{}
+	if err := auth.Allow(r.Context(), in.Vol, true); err != nil {
+		httpx.Error(w, err)
+		return
+	}
 	for _, p := range in.Paths {
 		v, rel, err := a.Vols.Resolve(in.Vol, p)
 		id := ""
@@ -448,7 +486,7 @@ func (a *API) recent(w http.ResponseWriter, r *http.Request) {
 		limit = 200
 	}
 	tz, _ := strconv.ParseInt(r.URL.Query().Get("tz"), 10, 64)
-	out, runs, err := recentRuns(r.Context(), a.Index, min(limit, 500), -tz*60*1000)
+	out, runs, err := recentRuns(r.Context(), a.Index, a.readable(r), min(limit, 500), -tz*60*1000)
 	if err != nil {
 		httpx.Error(w, err)
 		return
@@ -471,7 +509,7 @@ func (a *API) photos(w http.ResponseWriter, r *http.Request) {
 		after = p
 	}
 	const page = 300
-	ps, err := a.Index.Photos(r.Context(), after, page+1)
+	ps, err := a.Index.Photos(r.Context(), a.readable(r), after, page+1)
 	if err != nil {
 		httpx.Error(w, err)
 		return
@@ -505,8 +543,9 @@ func (a *API) search(w http.ResponseWriter, r *http.Request) {
 	if n, err := strconv.Atoi(q.Get("limit")); err == nil && n > 0 {
 		in.Limit = min(n, in.Limit)
 	}
+	in.Vols = a.readable(r)
 	if name := q.Get("vol"); name != "" {
-		v, rel, err := a.Vols.Resolve(name, q.Get("under"))
+		v, rel, err := a.resolve(r, Loc{name, q.Get("under")}, false)
 		if err != nil {
 			httpx.Error(w, err)
 			return
@@ -532,6 +571,8 @@ func (a *API) vols(w http.ResponseWriter, r *http.Request) {
 		vol.Usage
 	}
 	vs := a.Vols.All()
+	p, _ := auth.From(r.Context())
+	vs = slices.DeleteFunc(slices.Clone(vs), func(v *vol.Volume) bool { return !p.Can(v.Name, false) })
 	us, devs := make([]vol.Usage, len(vs)), make([]string, len(vs))
 	for i, v := range vs {
 		var err error
@@ -577,7 +618,7 @@ func (a *API) size(w http.ResponseWriter, r *http.Request) {
 }
 
 func (a *API) usage(w http.ResponseWriter, r *http.Request) {
-	u, err := a.Index.Usage(r.Context(), 20, 50)
+	u, err := a.Index.Usage(r.Context(), a.readable(r), 20, 50)
 	if err != nil {
 		httpx.Error(w, err)
 		return
@@ -591,7 +632,7 @@ func (a *API) duplicates(w http.ResponseWriter, r *http.Request) {
 		httpx.Fail(w, 400, "bad min")
 		return
 	}
-	d, err := a.Index.Duplicates(r.Context(), a.Vols, min, 8*time.Second)
+	d, err := a.Index.Duplicates(r.Context(), a.Vols, a.readable(r), min, 8*time.Second)
 	if err != nil {
 		httpx.Error(w, err)
 		return
@@ -607,7 +648,8 @@ type favorite struct {
 }
 
 func (a *API) favorites(w http.ResponseWriter, r *http.Request) {
-	fs, err := a.Index.Favorites()
+	p, _ := auth.From(r.Context())
+	fs, err := a.Index.Favorites(p.UserID, a.readable(r))
 	if err != nil {
 		httpx.Error(w, err)
 		return
@@ -646,10 +688,8 @@ func (a *API) star(w http.ResponseWriter, r *http.Request) {
 			err = vol.ErrBadPath
 		}
 		if err == nil && in.Star {
-			v, ok := a.Vols.Get(in.Vol)
-			if !ok {
-				err = fs.ErrNotExist
-			} else {
+			var v *vol.Volume
+			if v, err = a.volume(r, in.Vol, false); err == nil {
 				_, err = v.Root.Lstat(rel)
 			}
 		}
@@ -659,7 +699,12 @@ func (a *API) star(w http.ResponseWriter, r *http.Request) {
 		}
 		rels = append(rels, rel)
 	}
-	if err := a.Index.Star(in.Vol, rels, in.Star); err != nil {
+	p, _ := auth.From(r.Context())
+	if err := auth.Allow(r.Context(), in.Vol, false); err != nil {
+		httpx.Error(w, err)
+		return
+	}
+	if err := a.Index.Star(p.UserID, in.Vol, rels, in.Star); err != nil {
 		httpx.Error(w, err)
 		return
 	}

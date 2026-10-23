@@ -22,6 +22,8 @@ type Query struct {
 	Kind             string
 	After, MinSize   int64
 	Tag              int64
+	// Vols limits the search to these volumes; nil means every volume.
+	Vols []string
 }
 
 // Kinds are the type filters search offers, by file extension; "dir" means folders.
@@ -47,6 +49,18 @@ func (q Query) Admits(f File) bool {
 	return slices.Contains(Kinds[q.Kind], ext)
 }
 
+// onlyVols keeps a query on files to the volumes listed; nil lists none out.
+func onlyVols(col string, vols []string) (string, []any) { return onlyVolsAt(col, vols, "?") }
+
+// onlyVolsAt is onlyVols with the placeholder spelled out, for queries that number their parameters.
+func onlyVolsAt(col string, vols []string, placeholder string) (string, []any) {
+	if vols == nil {
+		return "", nil
+	}
+	list, _ := json.Marshal(vols)
+	return ` AND ` + col + ` IN (SELECT value FROM json_each(` + placeholder + `))`, []any{string(list)}
+}
+
 const visible = ` AND NOT (f.path = '.trash' OR f.path GLOB '.trash/*' OR f.path = '.filebox' OR f.path GLOB '.filebox/*' OR f.name GLOB '._*' OR f.name IN ('.DS_Store', 'Thumbs.db', 'desktop.ini'))`
 
 func likeEscape(s string) string {
@@ -57,6 +71,9 @@ const candidates = 5000
 
 func scoped(q Query) (string, []any) {
 	scope, where := visible, []any{}
+	if s, a := onlyVols("f.vol", q.Vols); s != "" {
+		scope, where = scope+s, append(where, a...)
+	}
 	if q.Vol != "" {
 		scope += ` AND f.vol = ?`
 		where = append(where, q.Vol)
@@ -229,7 +246,7 @@ func (x *Index) SearchContent(ctx context.Context, q Query) ([]ContentHit, error
 	}
 	in := map[[2]string]bool{}
 	if q.Tag > 0 {
-		fs, _ := x.Tagged(q.Tag)
+		fs, _ := x.Tagged(q.Tag, nil)
 		for _, f := range fs {
 			in[[2]string{f.Vol, f.Path}] = true
 		}

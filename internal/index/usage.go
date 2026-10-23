@@ -41,9 +41,10 @@ func kindCase() string {
 }
 
 // Usage totals what the files take by kind, which top-level folders hold the most and which single files are largest.
-func (x *Index) Usage(ctx context.Context, folders, largest int) (Usage, error) {
+func (x *Index) Usage(ctx context.Context, vols []string, folders, largest int) (Usage, error) {
 	u := Usage{Kinds: []KindUsage{}, Folders: []FolderUsage{}, Largest: []File{}}
-	rows, err := x.db.QueryContext(ctx, `SELECT `+kindCase()+` AS k, coalesce(sum(f.size), 0), count(*) FROM files f WHERE f.dir = 0`+visible+` GROUP BY k`)
+	only, args := onlyVols("f.vol", vols)
+	rows, err := x.db.QueryContext(ctx, `SELECT `+kindCase()+` AS k, coalesce(sum(f.size), 0), count(*) FROM files f WHERE f.dir = 0`+visible+only+` GROUP BY k`, args...)
 	if err != nil {
 		return u, err
 	}
@@ -62,7 +63,7 @@ func (x *Index) Usage(ctx context.Context, folders, largest int) (Usage, error) 
 	sort.Slice(u.Kinds, func(i, j int) bool { return u.Kinds[i].Size > u.Kinds[j].Size })
 
 	rows, err = x.db.QueryContext(ctx, `SELECT f.vol, substr(f.path, 1, instr(f.path, '/') - 1) AS top, coalesce(sum(f.size), 0) AS s, count(*)
-		FROM files f WHERE f.dir = 0 AND instr(f.path, '/') > 0`+visible+` GROUP BY f.vol, top ORDER BY s DESC LIMIT ?`, folders)
+		FROM files f WHERE f.dir = 0 AND instr(f.path, '/') > 0`+visible+only+` GROUP BY f.vol, top ORDER BY s DESC LIMIT ?`, append(args, folders)...)
 	if err != nil {
 		return u, err
 	}
@@ -79,7 +80,7 @@ func (x *Index) Usage(ctx context.Context, folders, largest int) (Usage, error) 
 		return u, err
 	}
 
-	rows, err = x.db.QueryContext(ctx, `SELECT f.vol, f.path, f.size, f.mtime FROM files f WHERE f.dir = 0`+visible+` ORDER BY f.size DESC, f.id LIMIT ?`, largest)
+	rows, err = x.db.QueryContext(ctx, `SELECT f.vol, f.path, f.size, f.mtime FROM files f WHERE f.dir = 0`+visible+only+` ORDER BY f.size DESC, f.id LIMIT ?`, append(args, largest)...)
 	if err != nil {
 		return u, err
 	}

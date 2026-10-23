@@ -39,8 +39,10 @@ const usage = `usage:
   filebox passwd  -data DIR [-user NAME]      (reads the password from stdin)
   filebox token   -data DIR [-user NAME] new LABEL [-ro] | ls | rm ID
   filebox passkey -data DIR [-user NAME] ls | rm ID
+  filebox user    -data DIR ls | role NAME admin|member | access NAME VOLUME none|r|rw | rm NAME
 
--user may be omitted when the database has exactly one user; passwd creates "admin" in an empty one.`
+-user may be omitted when the database has exactly one user; passwd creates "admin" in an empty one.
+The first user is an admin; others made with passwd are members who reach no volume until user access gives them one.`
 
 type multi []string
 
@@ -57,6 +59,8 @@ func main() {
 	switch os.Args[1] {
 	case "serve":
 		err = serveCmd(os.Args[2:])
+	case "user":
+		err = userCmd(os.Args[2:])
 	case "passwd":
 		err = passwdCmd(os.Args[2:])
 	case "token":

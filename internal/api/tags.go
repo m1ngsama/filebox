@@ -1,7 +1,6 @@
 package api
 
 import (
-	"io/fs"
 	"net/http"
 	"strconv"
 	"strings"
@@ -31,7 +30,7 @@ func tagID(r *http.Request) int64 {
 }
 
 func (a *API) tags(w http.ResponseWriter, r *http.Request) {
-	ts, err := a.Index.Tags()
+	ts, err := a.Index.Tags(a.readable(r))
 	if err != nil {
 		httpx.Error(w, err)
 		return
@@ -75,7 +74,7 @@ func (a *API) tagDel(w http.ResponseWriter, r *http.Request) {
 }
 
 func (a *API) tagItems(w http.ResponseWriter, r *http.Request) {
-	fs, err := a.Index.Tagged(tagID(r))
+	fs, err := a.Index.Tagged(tagID(r), a.readable(r))
 	if err != nil {
 		httpx.Error(w, err)
 		return
@@ -93,9 +92,9 @@ func (a *API) tagApply(w http.ResponseWriter, r *http.Request) {
 		httpx.Fail(w, 400, "bad request")
 		return
 	}
-	v, ok := a.Vols.Get(in.Vol)
-	if !ok {
-		httpx.Error(w, fs.ErrNotExist)
+	v, err := a.volume(r, in.Vol, true)
+	if err != nil {
+		httpx.Error(w, err)
 		return
 	}
 	rels := make([]string, 0, len(in.Paths))

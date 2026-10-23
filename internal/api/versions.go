@@ -1,7 +1,6 @@
 package api
 
 import (
-	"io/fs"
 	"net/http"
 	"path"
 
@@ -15,7 +14,7 @@ import (
 
 func (a *API) versions(w http.ResponseWriter, r *http.Request) {
 	q := r.URL.Query()
-	v, rel, err := a.Vols.Resolve(q.Get("vol"), q.Get("p"))
+	v, rel, err := a.resolve(r, Loc{q.Get("vol"), q.Get("p")}, false)
 	if err == nil && rel == "." {
 		err = vol.ErrBadPath
 	}
@@ -31,10 +30,10 @@ func (a *API) versions(w http.ResponseWriter, r *http.Request) {
 	httpx.JSON(w, 200, map[string]any{"versions": xs})
 }
 
-func (a *API) version(volName, id string) (*vol.Volume, version.Version, error) {
-	v, ok := a.Vols.Get(volName)
-	if !ok {
-		return nil, version.Version{}, fs.ErrNotExist
+func (a *API) version(r *http.Request, volName, id string, write bool) (*vol.Volume, version.Version, error) {
+	v, err := a.volume(r, volName, write)
+	if err != nil {
+		return nil, version.Version{}, err
 	}
 	x, err := a.Versions.Get(v.Name, id)
 	return v, x, err
@@ -42,7 +41,7 @@ func (a *API) version(volName, id string) (*vol.Volume, version.Version, error) 
 
 func (a *API) versionRaw(w http.ResponseWriter, r *http.Request) {
 	q := r.URL.Query()
-	v, x, err := a.version(q.Get("vol"), q.Get("id"))
+	v, x, err := a.version(r, q.Get("vol"), q.Get("id"), false)
 	if err != nil {
 		httpx.Error(w, err)
 		return
@@ -61,7 +60,7 @@ func (a *API) versionRestore(w http.ResponseWriter, r *http.Request) {
 		httpx.Fail(w, 400, "bad request")
 		return
 	}
-	v, x, err := a.version(in.Vol, in.ID)
+	v, x, err := a.version(r, in.Vol, in.ID, true)
 	if err != nil {
 		httpx.Error(w, err)
 		return
@@ -83,7 +82,7 @@ func (a *API) versionDelete(w http.ResponseWriter, r *http.Request) {
 		httpx.Fail(w, 400, "bad request")
 		return
 	}
-	v, x, err := a.version(in.Vol, in.ID)
+	v, x, err := a.version(r, in.Vol, in.ID, true)
 	if err == nil {
 		err = a.Versions.Delete(v, x.ID)
 	}

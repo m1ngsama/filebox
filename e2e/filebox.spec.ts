@@ -202,6 +202,7 @@ test('the login page stays quiet about passkeys until they are used', async ({ p
 
 test('with a second user the login asks for a name again', async ({ page, server }) => {
   execFileSync(BIN, ['passwd', '-data', join(server.vol, '../data'), '-user', 'bob'], { input: 'pw-bob-pw-bob\n', stdio: ['pipe', 'ignore', 'ignore'] })
+  execFileSync(BIN, ['user', '-data', join(server.vol, '../data'), 'access', 'bob', 'v', 'rw'], { stdio: 'ignore' })
   await page.goto('/')
   await expect(page.getByLabel(t.username)).toBeFocused()
   await expect(page.getByLabel(t.username)).not.toHaveAttribute('aria-hidden')

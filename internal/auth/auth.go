@@ -37,6 +37,8 @@ var (
 type Principal struct {
 	UserID, TokenID int64
 	ReadOnly        bool
+	Admin           bool
+	Vols            map[string]string
 }
 
 type ctxKey struct{}
@@ -50,6 +52,7 @@ type Auth struct {
 	DB                *db.DB
 	Now               func() time.Time
 	lim, share, basic *limiter
+	access            sync.Map
 }
 
 func New(d *db.DB) *Auth {
@@ -204,7 +207,7 @@ func (a *Auth) session(w http.ResponseWriter, r *http.Request) (Principal, bool)
 	if renewed && w != nil {
 		SetCookie(w, r, CookieName, c.Value, "/", SessionTTL)
 	}
-	return Principal{UserID: t.UserID, TokenID: t.ID}, ok
+	return a.grant(Principal{UserID: t.UserID, TokenID: t.ID}, ok)
 }
 
 func (a *Auth) App(r *http.Request) (Principal, bool) {
@@ -215,7 +218,7 @@ func (a *Auth) App(r *http.Request) (Principal, bool) {
 		tok = b
 	}
 	t, ok, _ := a.lookup(tok, "app")
-	return Principal{UserID: t.UserID, TokenID: t.ID, ReadOnly: t.Scope == "ro"}, ok
+	return a.grant(Principal{UserID: t.UserID, TokenID: t.ID, ReadOnly: t.Scope == "ro"}, ok)
 }
 
 func (a *Auth) ShareUnlocked(r *http.Request, shareID int64) bool {

@@ -103,10 +103,19 @@ func (n *Notifier) Event(e db.Event) {
 		if !slices.Contains(h.Kinds, e.Kind) || (e.UserID != 0 && h.UserID != e.UserID) || !n.allow(h.ID, e.At) {
 			continue
 		}
+		if (e.UserID == 0 || e.Kind == EventDiskLow) && !n.admin(h.UserID) {
+			continue
+		}
 		p := payload{Event: e.Kind, At: e.At, Text: Text(h.Lang, e), Name: e.Name, Size: e.Size, Vol: e.Vol, Path: e.Path, Share: e.Target}
 		body, _ := json.Marshal(p)
 		n.enqueue(job{hook: h, body: body, text: p.Text})
 	}
+}
+
+// admin is whether the user runs the server, who alone hears about what is not one person's own business, like a full disk.
+func (n *Notifier) admin(userID int64) bool {
+	role, _, err := n.DB.Access(userID)
+	return err == nil && role == db.RoleAdmin
 }
 
 func (n *Notifier) enqueue(j job) {

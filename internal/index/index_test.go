@@ -39,6 +39,9 @@ func setup(t testing.TB) *env {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { d.Close() })
+	if id, err := d.SetPassword("u", "x"); err != nil || id != 1 {
+		t.Fatal(id, err)
+	}
 	return &env{x: New(d), vols: vols, dir: dir, out: out}
 }
 
@@ -287,7 +290,7 @@ func TestConcurrentFlushes(t *testing.T) {
 				return
 			default:
 			}
-			if err := e.x.Star("v", []string{"x"}, on); err != nil {
+			if err := e.x.Star(1, "v", []string{"x"}, on); err != nil {
 				failed.Add(1)
 				t.Log(err)
 			}
@@ -313,14 +316,14 @@ func TestRenameKeepsRowsForRootOrSelf(t *testing.T) {
 	if err := b.flush(); err != nil {
 		t.Fatal(err)
 	}
-	e.x.Star("v", []string{"a/f", "b"}, true)
+	e.x.Star(1, "v", []string{"a/f", "b"}, true)
 	if err := e.x.rename("v", "a", "a"); err != nil {
 		t.Fatal(err)
 	}
 	if err := e.x.rename("v", "a", "."); err == nil {
 		t.Fatal("rename onto the root succeeded")
 	}
-	favs, _ := e.x.Favorites()
+	favs, _ := e.x.Favorites(1, nil)
 	if got := e.paths(t); !slices.Equal(got, []string{"a", "a/f", "b"}) || len(favs) != 2 {
 		t.Fatalf("rows %v, favorites %v", got, favs)
 	}

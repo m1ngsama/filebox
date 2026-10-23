@@ -13,8 +13,10 @@ type Tag struct {
 	Count int64  `json:"count"`
 }
 
-func (x *Index) Tags() ([]Tag, error) {
-	rows, err := x.db.Query(`SELECT id, name, color, (SELECT count(*) FROM tagged WHERE tag = tags.id) FROM tags ORDER BY name COLLATE NOCASE`)
+// Tags lists every tag with how many items on the given volumes carry it; nil vols means every volume.
+func (x *Index) Tags(vols []string) ([]Tag, error) {
+	only, args := onlyVols("vol", vols)
+	rows, err := x.db.Query(`SELECT id, name, color, (SELECT count(*) FROM tagged WHERE tag = tags.id`+only+`) FROM tags ORDER BY name COLLATE NOCASE`, args...)
 	if err != nil {
 		return nil, err
 	}
@@ -107,8 +109,9 @@ func (x *Index) TagsIn(vol, dir string) (map[string][]int64, error) {
 	return out, rows.Err()
 }
 
-func (x *Index) Tagged(tag int64) ([]Favorite, error) {
-	rows, err := x.db.Query(`SELECT vol, path FROM tagged WHERE tag = ? ORDER BY vol, path`, tag)
+func (x *Index) Tagged(tag int64, vols []string) ([]Favorite, error) {
+	only, args := onlyVols("vol", vols)
+	rows, err := x.db.Query(`SELECT vol, path FROM tagged WHERE tag = ?`+only+` ORDER BY vol, path`, append([]any{tag}, args...)...)
 	if err != nil {
 		return nil, err
 	}

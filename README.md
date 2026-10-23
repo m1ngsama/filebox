@@ -38,6 +38,22 @@ filebox extracts the text inside documents in the background so search also find
 
 The index lives in `content.db` in the data directory and takes 2.5 to 4 times the extracted text, so a library of 500 books needs 1 to 2 GB. content.db can be deleted at any time and is rebuilt in the background. Pass `-content=false` to stop indexing and ignore the file.
 
+## Team
+
+Several people can share one server. An account is an admin, who reaches every volume and manages the others, or a member, who reaches only the volumes granted to them: read, or read and write. A volume nobody granted does not exist for a member: it is missing from lists, search, recent files, photos, storage, duplicates and WebDAV, and its files answer 404. Share links made by a member stop working the moment they lose access to what the link shows. Favorites belong to each person. Tags, the trash and file versions belong to the volume.
+
+The first account is an admin, and so is every account that existed before roles did. Accounts made later start with no access:
+
+```sh
+echo 'her-password' | filebox passwd -data /srv/data/filebox -user alice
+filebox user -data /srv/data/filebox access alice downloads rw
+filebox user -data /srv/data/filebox access alice archive r
+filebox user -data /srv/data/filebox ls
+filebox user -data /srv/data/filebox role alice admin     # or member
+```
+
+A running server notices a change made on the command line within 30 seconds.
+
 ## Duplicates
 
 The duplicate finder (`/duplicates`) hashes only files that share a size with another file, remembers each hash in the database until the file changes, and works through a large library over several rounds of 8 seconds. Selected copies go to the trash, and at least one copy in each group always stays.

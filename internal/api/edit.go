@@ -30,7 +30,7 @@ func etag(fi os.FileInfo) string { return fmt.Sprintf(`"%x-%x"`, fi.Size(), fi.M
 
 // save replaces a text file the browser edited; If-Match must name the copy the editor opened, so a change made meanwhile is never lost.
 func (a *API) save(w http.ResponseWriter, r *http.Request) {
-	v, rel, err := a.query(r)
+	v, rel, err := a.queryWrite(r)
 	if err == nil && (rel == "." || vol.Reserved(path.Base(rel))) {
 		err = vol.ErrBadPath
 	}

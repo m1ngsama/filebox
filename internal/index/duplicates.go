@@ -26,16 +26,18 @@ const maxDupGroups = 100
 
 // Duplicates groups files of identical content. It only reads files that share a size with another, remembers every hash it
 // computes, and stops hashing after budget so a large library is worked through over several calls; Pending counts what is left.
-func (x *Index) Duplicates(ctx context.Context, vols *vol.Set, min int64, budget time.Duration) (Dups, error) {
+func (x *Index) Duplicates(ctx context.Context, vols *vol.Set, only []string, min int64, budget time.Duration) (Dups, error) {
 	x.dup.Lock()
 	defer x.dup.Unlock()
 	d := Dups{Groups: []DupGroup{}}
 	if err := x.exec(x.db, `DELETE FROM hashes WHERE NOT EXISTS (SELECT 1 FROM files f WHERE f.vol = hashes.vol AND f.path = hashes.path AND f.size = hashes.size AND f.mtime = hashes.mtime)`); err != nil {
 		return d, err
 	}
+	in, args := onlyVols("f.vol", only)
+	inner, _ := onlyVols("g.vol", only)
 	rows, err := x.db.QueryContext(ctx, `SELECT f.vol, f.path, f.size, f.mtime, h.sum FROM files f
 		LEFT JOIN hashes h ON h.vol = f.vol AND h.path = f.path
-		WHERE f.dir = 0 AND f.size >= ?1`+visible+` AND f.size IN (SELECT size FROM files WHERE dir = 0 AND size >= ?1 GROUP BY size HAVING count(*) > 1)`, min)
+		WHERE f.dir = 0 AND f.size >= ?1`+visible+in+` AND f.size IN (SELECT g.size FROM files g WHERE g.dir = 0 AND g.size >= ?1`+inner+` GROUP BY g.size HAVING count(*) > 1)`, append(append([]any{min}, args...), args...)...)
 	if err != nil {
 		return d, err
 	}

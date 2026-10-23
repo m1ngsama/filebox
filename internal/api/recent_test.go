@@ -83,7 +83,7 @@ func TestRecentSeesPastAHugeBurst(t *testing.T) {
 	if err := tx.Commit(); err != nil {
 		t.Fatal(err)
 	}
-	out, runs, err := recentRuns(context.Background(), index.New(d), 200, 0)
+	out, runs, err := recentRuns(context.Background(), index.New(d), nil, 200, 0)
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -60,6 +60,12 @@ func (s *Service) Register(mux *http.ServeMux) {
 	s.Uploads.Allow = s.allow
 }
 
+// ownerAllows is false once the person who made a share can no longer reach what it shows, or take uploads into it.
+func (s *Service) ownerAllows(sh db.Share) bool {
+	p, ok := s.Auth.Of(sh.UserID)
+	return ok && p.Can(sh.Vol, sh.Mode != "read")
+}
+
 func (s *Service) allow(owner string, size int64) error {
 	if !strings.HasPrefix(owner, "share:") {
 		return nil
@@ -135,6 +141,10 @@ func (s *Service) create(w http.ResponseWriter, r *http.Request) {
 	}
 	if err := httpx.Read(r, &in); err != nil || !modes[in.Mode] || in.ExpiresIn < 0 || in.MaxUpload < 0 || len(in.Note) > maxNote || in.MaxDownloads < 0 || in.MaxDownloads > maxDownloads {
 		httpx.Fail(w, 400, "bad request")
+		return
+	}
+	if err := auth.Allow(r.Context(), in.Vol, in.Mode != "read"); err != nil {
+		httpx.Error(w, err)
 		return
 	}
 	v, rel, err := s.Vols.Resolve(in.Vol, in.Path)
@@ -224,6 +234,10 @@ func (s *Service) edit(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if in.Mode != nil && *in.Mode != sh.Mode {
+		if err := auth.Allow(r.Context(), sh.Vol, *in.Mode != "read"); err != nil {
+			httpx.Error(w, err)
+			return
+		}
 		v, ok := s.Vols.Get(sh.Vol)
 		if !ok {
 			httpx.Fail(w, 404, "not found")
@@ -308,6 +322,10 @@ func (s *Service) open(w http.ResponseWriter, r *http.Request, allowed ...string
 	}
 	if sh.MaxDownloads > 0 && sh.Downloads >= sh.MaxDownloads {
 		httpx.Fail(w, 410, "download limit reached")
+		return opened{}, false
+	}
+	if !s.ownerAllows(sh) {
+		httpx.Fail(w, 404, "not found")
 		return opened{}, false
 	}
 	v, ok := s.Vols.Get(sh.Vol)
@@ -599,7 +617,7 @@ func (s *Service) scoped(fn func(opened) handler) http.HandlerFunc {
 func (s *Service) Head(r *http.Request, origin string) string {
 	const robots = `<meta name="robots" content="noindex, nofollow">`
 	sh, err := s.DB.ShareByToken(r.PathValue("token"))
-	if err != nil || (sh.ExpiresAt != 0 && sh.ExpiresAt <= time.Now().Unix()) || sh.PasswordHash != "" {
+	if err != nil || (sh.ExpiresAt != 0 && sh.ExpiresAt <= time.Now().Unix()) || sh.PasswordHash != "" || !s.ownerAllows(sh) {
 		return `<title>filebox</title>` + robots
 	}
 	v, ok := s.Vols.Get(sh.Vol)

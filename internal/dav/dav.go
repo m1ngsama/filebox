@@ -46,6 +46,10 @@ func Handler(vols *vol.Set, a *auth.Auth, ix *index.Index, vs *version.Store) ht
 			http.Error(w, "read-only token", http.StatusForbidden)
 			return
 		}
+		if !readOnlyMethod(r.Method) && !mayChange(r) {
+			http.Error(w, "forbidden", http.StatusForbidden)
+			return
+		}
 		if r.Method == "PROPFIND" && r.Header.Get("Depth") == "" {
 			r.Header.Set("Depth", "1")
 		}
@@ -165,6 +169,22 @@ func (f *FS) same(a, b string) bool {
 	return err1 == nil && err2 == nil && os.SameFile(x, y)
 }
 
+// mayChange checks write access to the volume a request names, and to the one it copies or moves to, before any lock or file is touched.
+func mayChange(r *http.Request) bool {
+	names := []string{strings.TrimPrefix(r.URL.Path, "/dav")}
+	if u, err := url.Parse(r.Header.Get("Destination")); err == nil && (r.Method == "MOVE" || r.Method == "COPY") {
+		names = append(names, strings.TrimPrefix(u.Path, "/dav"))
+	}
+	for _, n := range names {
+		if v, _, ok := strings.Cut(strings.TrimPrefix(path.Clean("/"+n), "/"), "/"); v != "" || ok {
+			if auth.Allow(r.Context(), v, true) != nil {
+				return false
+			}
+		}
+	}
+	return true
+}
+
 func readOnlyMethod(m string) bool {
 	switch m {
 	case "GET", "HEAD", "OPTIONS", "PROPFIND":
@@ -208,8 +228,19 @@ func (f *FS) resolve(name string) (*vol.Volume, string, error) {
 	return v, rel, nil
 }
 
+// check says whether the caller may read, or write, a volume; the WebDAV root belongs to no volume and is listed for everyone.
+func check(ctx context.Context, v *vol.Volume, write bool) error {
+	if v == nil {
+		return nil
+	}
+	return auth.Allow(ctx, v.Name, write)
+}
+
 func (f *FS) Mkdir(ctx context.Context, name string, perm os.FileMode) error {
 	v, rel, err := f.resolve(name)
+	if err == nil {
+		err = check(ctx, v, true)
+	}
 	if err != nil {
 		return err
 	}
@@ -229,7 +260,10 @@ func (f *FS) OpenFile(ctx context.Context, name string, flag int, perm os.FileMo
 		if flag&(os.O_WRONLY|os.O_RDWR|os.O_CREATE|os.O_TRUNC) != 0 {
 			return nil, os.ErrPermission
 		}
-		return &rootDir{vols: f.vols}, nil
+		return &rootDir{vols: f.vols, ctx: ctx}, nil
+	}
+	if err := check(ctx, v, flag&(os.O_WRONLY|os.O_RDWR|os.O_CREATE|os.O_TRUNC) != 0); err != nil {
+		return nil, err
 	}
 	// PROPPATCH opens with a bare O_RDWR, which fails on directories.
 	if flag == os.O_RDWR && f.ix != nil {
@@ -345,6 +379,9 @@ func (s staged) Close() error { return s.commit(s.File.Close()) }
 
 func (f *FS) RemoveAll(ctx context.Context, name string) error {
 	v, rel, err := f.resolve(name)
+	if err == nil {
+		err = check(ctx, v, true)
+	}
 	if err != nil {
 		return err
 	}
@@ -406,6 +443,12 @@ func (f *FS) Rename(ctx context.Context, oldName, newName string) error {
 	if err != nil {
 		return err
 	}
+	if err := check(ctx, v1, true); err != nil {
+		return err
+	}
+	if err := check(ctx, v2, true); err != nil {
+		return err
+	}
 	if v1 == nil || v2 == nil || r1 == "." || r2 == "." {
 		return os.ErrPermission
 	}
@@ -428,6 +471,9 @@ func (f *FS) Rename(ctx context.Context, oldName, newName string) error {
 
 func (f *FS) Stat(ctx context.Context, name string) (os.FileInfo, error) {
 	v, rel, err := f.resolve(name)
+	if err == nil {
+		err = check(ctx, v, false)
+	}
 	if err != nil {
 		return nil, err
 	}
@@ -543,6 +589,7 @@ func (d volRoot) Readdir(n int) ([]fs.FileInfo, error) {
 
 type rootDir struct {
 	vols *vol.Set
+	ctx  context.Context
 	done bool
 }
 
@@ -562,6 +609,9 @@ func (d *rootDir) Readdir(n int) ([]fs.FileInfo, error) {
 	d.done = true
 	var out []fs.FileInfo
 	for _, v := range d.vols.All() {
+		if check(d.ctx, v, false) != nil {
+			continue
+		}
 		if fi, err := v.Root.Stat("."); err == nil {
 			out = append(out, named{fi, v.Name})
 		}

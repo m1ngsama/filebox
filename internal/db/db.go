@@ -192,6 +192,24 @@ var migrations = []string{
 		sum BLOB NOT NULL,
 		PRIMARY KEY (vol, path)
 	) WITHOUT ROWID;`,
+	`ALTER TABLE users ADD COLUMN role TEXT NOT NULL DEFAULT 'member';
+	UPDATE users SET role = 'admin';
+	CREATE TABLE volume_access (
+		user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+		vol TEXT NOT NULL,
+		level TEXT NOT NULL,
+		PRIMARY KEY (user_id, vol)
+	) WITHOUT ROWID;
+	CREATE TABLE favorites_new (
+		user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+		vol TEXT NOT NULL,
+		path TEXT NOT NULL,
+		created INTEGER NOT NULL,
+		PRIMARY KEY (user_id, vol, path)
+	) WITHOUT ROWID;
+	INSERT INTO favorites_new SELECT (SELECT min(id) FROM users), vol, path, created FROM favorites WHERE EXISTS (SELECT 1 FROM users);
+	DROP TABLE favorites;
+	ALTER TABLE favorites_new RENAME TO favorites;`,
 }
 
 type DB struct {
@@ -204,6 +222,7 @@ type DB struct {
 type User struct {
 	ID                 int64
 	Name, PasswordHash string
+	Role               string
 }
 
 type Token struct {
@@ -300,7 +319,7 @@ func notFound(err error) error {
 
 func (d *DB) SetPassword(name, hash string) (int64, error) {
 	var id int64
-	err := d.QueryRow(`INSERT INTO users (name, password_hash) VALUES (?, ?)
+	err := d.QueryRow(`INSERT INTO users (name, password_hash, role) VALUES (?1, ?2, iif((SELECT count(*) FROM users) = 0, 'admin', 'member'))
 		ON CONFLICT(name) DO UPDATE SET password_hash = excluded.password_hash
 		RETURNING id`, name, hash).Scan(&id)
 	return id, err
@@ -308,8 +327,8 @@ func (d *DB) SetPassword(name, hash string) (int64, error) {
 
 func (d *DB) UserByName(name string) (User, error) {
 	var u User
-	err := d.QueryRow(`SELECT id, name, password_hash FROM users WHERE name = ?`, name).
-		Scan(&u.ID, &u.Name, &u.PasswordHash)
+	err := d.QueryRow(`SELECT id, name, password_hash, role FROM users WHERE name = ?`, name).
+		Scan(&u.ID, &u.Name, &u.PasswordHash, &u.Role)
 	return u, notFound(err)
 }
 
@@ -332,8 +351,8 @@ func (d *DB) UserNames() ([]string, error) {
 
 func (d *DB) UserByID(id int64) (User, error) {
 	var u User
-	err := d.QueryRow(`SELECT id, name, password_hash FROM users WHERE id = ?`, id).
-		Scan(&u.ID, &u.Name, &u.PasswordHash)
+	err := d.QueryRow(`SELECT id, name, password_hash, role FROM users WHERE id = ?`, id).
+		Scan(&u.ID, &u.Name, &u.PasswordHash, &u.Role)
 	return u, notFound(err)
 }
 
@@ -519,8 +538,8 @@ func (d *DB) WebAuthnID(userID int64, fresh []byte) ([]byte, error) {
 
 func (d *DB) UserByWebAuthnID(h []byte) (User, error) {
 	var u User
-	err := d.QueryRow(`SELECT id, name, password_hash FROM users WHERE webauthn_id = ?`, h).
-		Scan(&u.ID, &u.Name, &u.PasswordHash)
+	err := d.QueryRow(`SELECT id, name, password_hash, role FROM users WHERE webauthn_id = ?`, h).
+		Scan(&u.ID, &u.Name, &u.PasswordHash, &u.Role)
 	return u, notFound(err)
 }
 
