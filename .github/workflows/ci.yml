@@ -37,8 +37,11 @@ jobs:
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
           go-version-file: go.mod
-      # A stalled mirror must not hold the job until its timeout: give up on a download after 20 seconds and retry it.
-      - run: |
+      # A slow mirror must not hold the job until its timeout. Without these tools the tests that need them skip,
+      # so after four minutes the job goes on without them rather than failing.
+      - timeout-minutes: 4
+        continue-on-error: true
+        run: |
           apt_opts="-o Acquire::Retries=5 -o Acquire::http::Timeout=20 -o Acquire::https::Timeout=20"
           sudo apt-get $apt_opts install -y --no-install-recommends ffmpeg poppler-utils || (sudo apt-get $apt_opts update && sudo apt-get $apt_opts install -y --no-install-recommends ffmpeg poppler-utils)
       - run: go vet ./...
@@ -63,8 +66,9 @@ jobs:
             ~/.bun/install/cache
             ~/.cache/ms-playwright
           key: bun-pw-${{ hashFiles('web/bun.lock', 'e2e/bun.lock') }}
-      # A stalled mirror must not hold the job until its timeout: give up on a download after 20 seconds and retry it.
-      - run: |
+      # The browser tests need ffmpeg; a mirror slower than this fails the job early instead of at its timeout.
+      - timeout-minutes: 6
+        run: |
           apt_opts="-o Acquire::Retries=5 -o Acquire::http::Timeout=20 -o Acquire::https::Timeout=20"
           sudo apt-get $apt_opts install -y --no-install-recommends ffmpeg || (sudo apt-get $apt_opts update && sudo apt-get $apt_opts install -y --no-install-recommends ffmpeg)
       - run: cd e2e && bun install --frozen-lockfile && bunx playwright install --with-deps --only-shell chromium
