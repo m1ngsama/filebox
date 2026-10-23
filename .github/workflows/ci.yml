@@ -37,7 +37,10 @@ jobs:
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
           go-version-file: go.mod
-      - run: sudo apt-get install -y --no-install-recommends ffmpeg poppler-utils || (sudo apt-get update && sudo apt-get install -y --no-install-recommends ffmpeg poppler-utils)
+      # A stalled mirror must not hold the job until its timeout: give up on a download after 20 seconds and retry it.
+      - run: |
+          apt_opts="-o Acquire::Retries=5 -o Acquire::http::Timeout=20 -o Acquire::https::Timeout=20"
+          sudo apt-get $apt_opts install -y --no-install-recommends ffmpeg poppler-utils || (sudo apt-get $apt_opts update && sudo apt-get $apt_opts install -y --no-install-recommends ffmpeg poppler-utils)
       - run: go vet ./...
       - run: make test
 
@@ -60,7 +63,10 @@ jobs:
             ~/.bun/install/cache
             ~/.cache/ms-playwright
           key: bun-pw-${{ hashFiles('web/bun.lock', 'e2e/bun.lock') }}
-      - run: sudo apt-get install -y --no-install-recommends ffmpeg || (sudo apt-get update && sudo apt-get install -y --no-install-recommends ffmpeg)
+      # A stalled mirror must not hold the job until its timeout: give up on a download after 20 seconds and retry it.
+      - run: |
+          apt_opts="-o Acquire::Retries=5 -o Acquire::http::Timeout=20 -o Acquire::https::Timeout=20"
+          sudo apt-get $apt_opts install -y --no-install-recommends ffmpeg || (sudo apt-get $apt_opts update && sudo apt-get $apt_opts install -y --no-install-recommends ffmpeg)
       - run: cd e2e && bun install --frozen-lockfile && bunx playwright install --with-deps --only-shell chromium
       - run: make e2e
 
