@@ -1,0 +1,3 @@
+# Notifications
+
+Under Settings, add a webhook URL and choose what to hear about: uploads, shared-link downloads, sign-ins, failed sign-ins, new share links, new app passwords and low disk space (under 10% free on a volume). Send either JSON or plain text, which ntfy and Gotify take as the message. A signing secret adds `X-Filebox-Signature: sha256=<hmac of the body>` to JSON messages. Failed deliveries retry twice, a webhook gets at most 30 messages a minute, and repeated downloads of one file by one visitor within an hour count once. The page shows only the host of each URL, since the path often holds a secret.

@@ -2,129 +2,56 @@
 
 A self-hosted file server in one binary. Browse, preview, upload and share files on local disks from a browser, a WebDAV client or the command line.
 
-- Resumable uploads via [tus 1.0](https://tus.io/protocols/resumable-upload), served by [tusd](https://github.com/tus/tusd); downloads support HTTP Range.
-- WebDAV at `/dav/` with per-device app passwords, optionally read-only.
-- Share links with password, expiry, a download limit, and upload or drop-box modes. A drop box can ask uploaders for their name and keep each one's files in a folder of that name.
-- WebP thumbnails via ffmpeg (optional).
-- Search by name, path and the text inside documents.
-- Deletes from the web UI and WebDAV go to a per-volume trash that keeps items for 30 days, or less when the disk falls below 10% free, and so does a folder replaced by a WebDAV MOVE or COPY. Junk that macOS and Windows write and delete on their own (`._*`, `.DS_Store`, `.Trashes`, `Thumbs.db`, `desktop.ini`) is deleted for good and never versioned.
-- Passkey login next to the password.
-- Command palette on Ctrl/⌘+K, drag-to-select with the mouse, a storage page by type, folder and file, and a duplicate finder that compares content.
-- Webhook notifications to ntfy, Gotify, Slack or your own endpoint.
+![A folder of photos in filebox](docs/images/files.png)
 
-## Install
+## Features
 
-**A release build** (Linux and macOS, amd64 and arm64): download the archive for your system from the [Releases](https://github.com/m1ngsama/filebox/releases) page, check it, and unpack it.
+- **Files.** Resumable uploads over [tus](https://tus.io/protocols/resumable-upload), downloads with HTTP Range, WebDAV with per-device app passwords, zip and unzip, and a text editor in the browser.
+- **Preview.** Images, video, audio, PDF, EPUB, comics, code and Markdown, and Word, Excel and PowerPoint through LibreOffice. Thumbnails and video streaming use ffmpeg when it is installed.
+- **Find.** Search by name, path and the text inside documents. A photo timeline ordered by when each picture was taken, colored tags, recent files, a storage page, a duplicate finder, and a command palette on Ctrl/⌘+K.
+- **Share.** Links with a password, an expiry and a download limit, and drop boxes that receive files from people without an account.
+- **Keep.** A trash that holds deletes for 30 days, earlier versions of overwritten files, and a log of what changed.
+- **Team.** Admins and members, access set per volume as none, read or read and write, and one-time invite links.
+- **Sign in.** Passwords, passkeys and app passwords, which can be read-only. Every session can be listed and ended.
+- **Notify.** Webhooks to ntfy, Gotify, Slack or your own endpoint.
 
-```sh
-sha256sum -c SHA256SUMS --ignore-missing                    # on macOS: shasum -a 256 -c SHA256SUMS --ignore-missing
-gh attestation verify filebox_*_linux_amd64.tar.gz --repo m1ngsama/filebox   # proves GitHub Actions built it from this repository
-tar xzf filebox_*_linux_amd64.tar.gz && sudo install filebox_*/filebox /usr/local/bin/
-filebox version
-```
+The interface is in English and Chinese, and installs as an app on a phone.
 
-**Docker**: `ghcr.io/m1ngsama/filebox` for amd64 and arm64. [deploy/docker-compose.yml](deploy/docker-compose.yml) is a starting point; the first account is made with `docker compose run --rm -T filebox passwd -data /data < password.txt`.
+## Quick start
 
-**A service**: [deploy/filebox.service](deploy/filebox.service) is a hardened systemd unit, and [deploy/nginx.conf.example](deploy/nginx.conf.example) a reverse proxy that streams large uploads. Both use placeholder names and paths.
-
-`go install` cannot build filebox, because the web interface is built with bun and embedded in the binary; use a release, the image, or the steps below.
-
-## Update
-
-Updating is manual on purpose: nothing in this repository, and no workflow, ever connects to your server. To update, stop filebox, copy the data directory's `filebox.db` somewhere safe, put the new binary in place (or pull the new image) and start it again. Database changes apply on start and only go one way, so keep that copy until you trust the new version, and roll back with the old binary and the old copy together. `filebox version` shows which build is running.
-
-## Build from source
-
-Requires Go 1.26.10+ and [bun](https://bun.sh).
+With Docker, from a new folder:
 
 ```sh
-make build        # bin/filebox
-make test e2e
+curl -O https://raw.githubusercontent.com/m1ngsama/filebox/main/deploy/docker-compose.yml
+# edit the volume paths and -origin, then make the first account and start it
+echo 'your-password' | docker compose run --rm -T filebox passwd -data /data
+docker compose up -d
 ```
 
-## Run
+Or with a [release build](docs/install.md):
 
 ```sh
-echo 'your-password' | filebox passwd -data /srv/data/filebox
-filebox serve -data /srv/data/filebox -listen :5280 -ffmpeg /usr/bin/ffmpeg -origin https://files.example.com \
-  -vol downloads=/mnt/disk/downloads -vol archive=/mnt/disk/archive
-filebox token -data /srv/data/filebox new "laptop"         # app password for WebDAV and CLI
+echo 'your-password' | filebox passwd -data ./data
+filebox serve -data ./data -vol files=$HOME/files
 ```
 
-Behind a reverse proxy, turn off request and response buffering (nginx: `proxy_request_buffering off; proxy_buffering off;`) and forward `X-Real-IP` and `X-Forwarded-Proto` from loopback. filebox trusts `X-Real-IP`, then the last `X-Forwarded-For` entry, only when the direct peer is loopback, and uses the address for rate limits and the activity log. The proxy must set these headers itself (nginx: `proxy_set_header X-Real-IP $remote_addr;`) and must not pass a client-supplied value through. Caddy and Traefik pass them through by default.
+Open http://localhost:5280 and sign in as `admin`. Put filebox behind a reverse proxy that serves HTTPS before it faces the internet; [docs/running.md](docs/running.md) says how.
 
-## Content search
+Database changes only go one way, so copy `filebox.db` before you update. Updating is always manual; see [docs/install.md](docs/install.md).
 
-filebox extracts the text inside documents in the background so search also finds words in them. It reads up to 1 MiB of text from each plain-text, Markdown, code, HTML, SVG, XML and EPUB file, and from PDFs when poppler's [`pdftotext`](https://poppler.freedesktop.org/) is on the `PATH`. Content matches need at least 3 characters, except Chinese, Japanese and Korean text, which a separate bigram index lets match from 1 character. On Linux the extraction threads and `pdftotext` run at nice 19; elsewhere only `pdftotext` does. A file that fails to extract is retried once after 24 hours.
+## Documentation
 
-The index lives in `content.db` in the data directory and takes 2.5 to 4 times the extracted text, so a library of 500 books needs 1 to 2 GB. content.db can be deleted at any time and is rebuilt in the background. Pass `-content=false` to stop indexing and ignore the file.
+- [Install and update](docs/install.md): release builds and how to check them, Docker, a systemd unit, building from source.
+- [Running filebox](docs/running.md): flags, a reverse proxy, passkeys, the trash and versions.
+- [Team](docs/team.md): admins, members, per-volume access and invite links.
+- [Search and duplicates](docs/search.md): what the search reads and what it costs on disk.
+- [Notifications](docs/notifications.md): webhooks, formats and limits.
+- [Command line](docs/command-line.md): WebDAV and resumable uploads with `curl`.
+- [Releasing](RELEASING.md): how a version is made.
 
-## Team
+## Security
 
-Several people can share one server. An account is an admin, who reaches every volume and manages the others, or a member, who reaches only the volumes granted to them: read, or read and write. A volume nobody granted does not exist for a member: it is missing from lists, search, recent files, photos, storage, duplicates and WebDAV, and its files answer 404. Share links made by a member stop working the moment they lose access to what the link shows. Favorites belong to each person. Tags, the trash and file versions belong to the volume.
-
-The first account is an admin, and so is every account that existed before roles did. Accounts made later start with no access:
-
-```sh
-echo 'her-password' | filebox passwd -data /srv/data/filebox -user alice
-filebox user -data /srv/data/filebox access alice downloads rw
-filebox user -data /srv/data/filebox access alice archive r
-filebox user -data /srv/data/filebox ls
-filebox user -data /srv/data/filebox role alice admin     # or member
-```
-
-A running server notices a change made on the command line within 30 seconds.
-
-Admins manage the team from the Team page instead: invite someone with a one-time link that sets their role and per-volume access (the link works once and expires after 1, 7 or 30 days), change anyone's role or access, make a one-time link for a member who forgot their password (it signs them out everywhere once used), and remove members. There is always at least one admin.
-
-## Duplicates
-
-The duplicate finder (`/duplicates`) hashes only files that share a size with another file, remembers each hash in the database until the file changes, and works through a large library over several rounds of 8 seconds. Selected copies go to the trash, and at least one copy in each group always stays.
-
-## Notifications
-
-Under Settings, add a webhook URL and choose what to hear about: uploads, shared-link downloads, sign-ins, failed sign-ins, new share links, new app passwords and low disk space (under 10% free on a volume). Send either JSON or plain text, which ntfy and Gotify take as the message. A signing secret adds `X-Filebox-Signature: sha256=<hmac of the body>` to JSON messages. Failed deliveries retry twice, a webhook gets at most 30 messages a minute, and repeated downloads of one file by one visitor within an hour count once. The page shows only the host of each URL, since the path often holds a secret.
-
-## Versions
-
-When a file is overwritten by an upload, WebDAV or a restore, filebox keeps the previous content in `<volume>/.filebox/versions` and lists it in the file's details. A file that has other hard links shares its bytes with its versions, so a program that edits it in place through another link also changes those versions.
-
-## Passkeys
-
-Passkeys ([WebAuthn](https://www.w3.org/TR/webauthn-3/)) work only on origins passed with `-origin https://files.example.com` (repeatable). The relying party ID is that host, so a reverse proxy must pass the original `Host` header. Browsers require HTTPS, so plain-HTTP LAN access shows no passkey UI; `http://localhost` is allowed for testing. Add passkeys under Settings. The password always keeps working, and `filebox passkey -data DIR ls | rm ID` removes a lost one.
-
-## Command line
-
-```sh
-export FILEBOX_URL=https://file.example.com FILEBOX_TOKEN=fb_...
-curl -T big.iso -u ":$FILEBOX_TOKEN" "$FILEBOX_URL/dav/downloads/"                      # upload
-curl -C - -o big.iso -H "Authorization: Bearer $FILEBOX_TOKEN" "$FILEBOX_URL/raw/downloads/big.iso"   # resumable download
-```
-
-Resumable upload — rerun the same command after an interruption. `fbput` speaks plain [tus](https://tus.io/protocols/resumable-upload) to `/upload/` with a Bearer app token, which [tusd](https://github.com/tus/tusd) accepts:
-
-```sh
-fbput() { # fbput FILE VOLUME [DIR]
-  local f=$1 vol=$2 dir=${3:-/} size state loc off meta
-  size=$(wc -c < "$f" | tr -d ' ')
-  state="$HOME/.cache/fbput/$(printf %s "$FILEBOX_URL|$vol|$dir|$(realpath "$f")|$size" | shasum | cut -c1-40)"
-  mkdir -p "${state%/*}"
-  set -- -H "Authorization: Bearer $FILEBOX_TOKEN" -H 'Tus-Resumable: 1.0.0'
-  loc=$(cat "$state" 2>/dev/null)
-  off=$([ -n "$loc" ] && curl -sfI "$@" "$FILEBOX_URL$loc" | tr -d '\r' | awk -F': ' 'tolower($1)=="upload-offset"{print $2}')
-  if [ -z "$off" ]; then
-    meta="vol $(printf %s "$vol" | base64 | tr -d '\n'),dir $(printf %s "$dir" | base64 | tr -d '\n'),filename $(printf %s "${f##*/}" | base64 | tr -d '\n')"
-    loc=$(curl -sf -D - -o /dev/null -X POST "$@" -H "Upload-Length: $size" -H "Upload-Metadata: $meta" "$FILEBOX_URL/upload/" \
-      | tr -d '\r' | awk -F': ' 'tolower($1)=="location"{print $2}') || return 1
-    [ "$size" = 0 ] && return 0
-    echo "$loc" > "$state"; off=0
-  fi
-  tail -c +$((off + 1)) "$f" | curl -f --progress-bar -X PATCH "$@" -H "Upload-Offset: $off" \
-    -H 'Content-Type: application/offset+octet-stream' -T - -o /dev/null "$FILEBOX_URL$loc" && rm -f "$state"
-}
-```
-
-`curl -T -` streams the PATCH body chunked (no `Content-Length`); tusd reads the request body until EOF regardless, so this needs no special handling.
+Report a vulnerability privately; [SECURITY.md](SECURITY.md) says how and what is in scope.
 
 ## License
 
