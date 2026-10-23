@@ -4,7 +4,7 @@ go 1.26.10
 
 require (
 	github.com/alecthomas/chroma/v2 v2.27.0
-	github.com/fxamacker/cbor/v2 v2.9.4
+	github.com/fxamacker/cbor/v2 v2.9.6
 	github.com/go-webauthn/webauthn v0.18.2
 	github.com/microcosm-cc/bluemonday v1.0.27
 	github.com/tus/tusd/v2 v2.10.1
