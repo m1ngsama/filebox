@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"golang.org/x/net/webdav"
+	"golang.org/x/text/unicode/norm"
 )
 
 const lockBody = `<?xml version="1.0" encoding="utf-8"?><D:lockinfo xmlns:D="DAV:"><D:lockscope><D:exclusive/></D:lockscope><D:locktype><D:write/></D:locktype><D:owner>t</D:owner></D:lockinfo>`
@@ -169,5 +170,72 @@ func TestDavLockHoldsThroughACaseAlias(t *testing.T) {
 	}
 	if res, _ := e.req(t, e.rw, "PUT", "/dav/v/Case/f.txt", "new"); res.StatusCode != 201 {
 		t.Fatalf("lock survived a DELETE through its case alias: PUT %d", res.StatusCode)
+	}
+}
+
+// aliasing is how a filesystem that ignores case and Unicode normalization form decides two spellings are one name.
+func aliasing(a, b string) bool {
+	return strings.EqualFold(norm.NFC.String(a), norm.NFC.String(b))
+}
+
+func TestWithinTreatsNormalizationAliasesAsOnePath(t *testing.T) {
+	nfc, nfd := "café", "café"
+	if nfc == nfd || len(nfc) == len(nfd) {
+		t.Fatal("test names must differ in bytes")
+	}
+	for _, c := range []struct {
+		p, root string
+		want    bool
+	}{
+		{"/v/" + nfd + "/f.txt", "/v/" + nfc, true},
+		{"/v/" + nfc + "/f.txt", "/v/" + nfd, true},
+		{"/v/" + nfd, "/v/" + nfc, true},
+		{"/v/" + strings.ToUpper(nfd) + "/f.txt", "/v/" + nfc, true},
+		{"/v/" + nfd + "/f.txt", "/v/" + nfc + "/f.txt", true},
+		{"/v/" + nfd + "xyz/f.txt", "/v/" + nfc, false},
+		{"/v/" + nfd, "/v/" + nfc + "/f.txt", false},
+		{"/v/other/f.txt", "/v/" + nfc, false},
+		{"/v/" + nfd + "/f.txt", "/", true},
+	} {
+		if got := within(c.p, c.root, aliasing); got != c.want {
+			t.Errorf("within(%q, %q) = %v, want %v", c.p, c.root, got, c.want)
+		}
+	}
+	if within("/v/"+nfd+"/f.txt", "/v/"+nfc, nil) {
+		t.Error("without a filesystem to ask, a different spelling is a different path")
+	}
+	if within("/v/"+nfd+"/f.txt", "/v/"+nfc, func(a, b string) bool { return false }) {
+		t.Error("two spellings that name different files must stay different, as on ext4")
+	}
+}
+
+func TestLockCoversANormalizationAlias(t *testing.T) {
+	nfc, nfd := "café", "café"
+	l := newLocks()
+	if _, err := l.Create(time.Now(), webdav.LockDetails{Root: "/v/" + nfc + "/f.txt", Duration: time.Minute}); err != nil {
+		t.Fatal(err)
+	}
+	if got := l.covering(time.Now(), "/v/"+nfd, aliasing); len(got) != 1 {
+		t.Errorf("a lock below a folder must cover the folder spelled another way: %v", got)
+	}
+	if got := l.below("/v/"+nfd, aliasing); len(got) != 1 {
+		t.Errorf("a lock below a deleted folder must be found through its alias: %v", got)
+	}
+}
+
+func TestDavLockHoldsThroughANormalizationAlias(t *testing.T) {
+	nfc, nfd := "café", "café"
+	e := setup(t)
+	e.req(t, e.rw, "MKCOL", "/dav/v/"+nfc, "")
+	e.req(t, e.rw, "PUT", "/dav/v/"+nfc+"/f.txt", "f")
+	if _, err := os.Stat(filepath.Join(e.dir, nfd)); err != nil {
+		t.Skip("the filesystem tells the two spellings apart")
+	}
+	tok := e.lock(t, "/dav/v/"+nfc+"/f.txt")
+	if res, _ := e.req(t, e.rw, "DELETE", "/dav/v/"+nfd, ""); res.StatusCode != 423 {
+		t.Fatalf("DELETE through a normalization alias %d", res.StatusCode)
+	}
+	if res, _ := e.req(t, e.rw, "DELETE", "/dav/v/"+nfd, "", "If", "<"+e.srv.URL+"/dav/v/"+nfc+"/f.txt> ("+tok+")"); res.StatusCode != 204 {
+		t.Fatalf("DELETE through a normalization alias with the token %d", res.StatusCode)
 	}
 }

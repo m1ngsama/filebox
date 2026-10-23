@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"golang.org/x/net/webdav"
+	"golang.org/x/text/unicode/norm"
 )
 
 type held struct {
@@ -81,15 +82,34 @@ func (l *locks) Unlock(now time.Time, tok string) error {
 
 func under(p, root string) bool { return p == root || root == "/" || strings.HasPrefix(p, root+"/") }
 
+// within says whether p is root or lies below it. A client may spell a name another way than the lock did: in another case,
+// or in another Unicode normalization form, which a filesystem like APFS treats as the same name. Spellings that differ only that
+// way are compared segment by segment, since their byte lengths differ, and the filesystem decides whether they are one file.
 func within(p, root string, same func(a, b string) bool) bool {
 	if under(p, root) {
 		return true
 	}
-	if len(p) < len(root) || (len(p) > len(root) && p[len(root)] != '/') {
+	if same == nil {
 		return false
 	}
-	head := p[:len(root)]
-	return same != nil && strings.EqualFold(head, root) && same(head, root)
+	ps, rs := segments(p), segments(root)
+	if len(ps) < len(rs) {
+		return false
+	}
+	for i, r := range rs {
+		if ps[i] != r && !strings.EqualFold(norm.NFC.String(ps[i]), norm.NFC.String(r)) {
+			return false
+		}
+	}
+	return same("/"+strings.Join(ps[:len(rs)], "/"), root)
+}
+
+func segments(p string) []string {
+	p = strings.Trim(p, "/")
+	if p == "" {
+		return nil
+	}
+	return strings.Split(p, "/")
 }
 
 func (l *locks) covering(now time.Time, p string, same func(a, b string) bool) []string {
