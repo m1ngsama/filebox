@@ -10,6 +10,7 @@ import (
 	"os"
 	"os/exec"
 	"path"
+	"slices"
 	"strconv"
 	"strings"
 	"syscall"
@@ -33,6 +34,7 @@ const (
 	maxRatio     = 100
 	maxUnpacked  = 64 << 20
 	markupBudget = 16 << 20
+	maxImage     = 32 << 20
 )
 
 var (
@@ -56,7 +58,8 @@ func init() {
 }
 
 type Extractor struct {
-	nice, pdftotext string
+	nice, pdftotext  string
+	tesseract, langs string
 }
 
 func New(ctx context.Context) *Extractor {
@@ -73,12 +76,49 @@ func New(ctx context.Context) *Extractor {
 	return x
 }
 
+// OCR reads the words in images with tesseract, in whichever of these languages it has installed.
+// It costs a lot of CPU on a big photo library, so it is only on when asked for.
+func (x *Extractor) OCR(ctx context.Context) {
+	p, err := exec.LookPath("tesseract")
+	if err != nil {
+		slog.Info("content index: no tesseract, text in images off")
+		return
+	}
+	ctx, cancel := context.WithTimeout(ctx, probeTimeout)
+	defer cancel()
+	out, err := exec.CommandContext(ctx, p, "--list-langs").Output()
+	if err != nil {
+		slog.Warn("content index: tesseract does not run", "err", err)
+		return
+	}
+	have := map[string]bool{}
+	for _, l := range strings.Fields(string(out)) {
+		have[l] = true
+	}
+	var langs []string
+	for _, l := range []string{"eng", "chi_sim", "chi_tra", "jpn", "kor"} {
+		if have[l] {
+			langs = append(langs, l)
+		}
+	}
+	if len(langs) == 0 {
+		slog.Warn("content index: tesseract has none of eng, chi_sim, chi_tra, jpn, kor")
+		return
+	}
+	x.tesseract, x.langs = p, strings.Join(langs, "+")
+	slog.Info("content index: text in images", "tool", p, "langs", x.langs)
+}
+
+var imageExts = []string{".png", ".jpg", ".jpeg", ".webp", ".tif", ".tiff", ".bmp", ".gif"}
+
 func kind(name string) string {
 	ext := strings.ToLower(path.Ext(name))
 	if ext == "" {
 		ext = strings.ToLower(path.Base(name))
 	}
 	switch {
+	case slices.Contains(imageExts, ext):
+		return "image"
 	case ext == ".pdf":
 		return "pdf"
 	case ext == ".epub":
@@ -95,13 +135,16 @@ func kind(name string) string {
 
 func (x *Extractor) Handles(name string) bool {
 	k := kind(name)
-	return k != "" && (k != "pdf" || x.pdftotext != "")
+	return k != "" && (k != "pdf" || x.pdftotext != "") && (k != "image" || x.tesseract != "")
 }
 
 func (x *Extractor) Kinds() []string {
 	out := []string{".epub", ".html", ".htm", ".xhtml", ".xml", ".svg"}
 	if x.pdftotext != "" {
 		out = append(out, ".pdf")
+	}
+	if x.tesseract != "" {
+		out = append(out, imageExts...)
 	}
 	for e := range plain {
 		out = append(out, e)
@@ -111,7 +154,7 @@ func (x *Extractor) Kinds() []string {
 
 func (x *Extractor) Extract(ctx context.Context, root *os.Root, rel string) (string, error) {
 	k := kind(rel)
-	if k == "" || (k == "pdf" && x.pdftotext == "") {
+	if k == "" || (k == "pdf" && x.pdftotext == "") || (k == "image" && x.tesseract == "") {
 		return "", ErrSkipped
 	}
 	// O_NONBLOCK keeps a FIFO swapped in since the scan from hanging the open.
@@ -157,6 +200,11 @@ func (x *Extractor) Extract(ctx context.Context, root *os.Root, rel string) (str
 			return "", ErrSkipped
 		}
 		err = x.pdf(ctx, &w, f)
+	case "image":
+		if st.Size() > maxImage {
+			return "", ErrSkipped
+		}
+		err = x.ocr(ctx, &w, f)
 	}
 	if err != nil && !errors.Is(err, errFull) {
 		return "", err
@@ -237,6 +285,56 @@ func (t *text) brk() {
 }
 
 func (t *text) String() string { return t.b.String() }
+
+func (x *Extractor) ocr(ctx context.Context, w *text, f *os.File) error {
+	ctx, cancel := context.WithTimeout(ctx, Timeout)
+	defer cancel()
+	args := []string{"/dev/fd/3", "-", "-l", x.langs, "quiet"}
+	var cmd *exec.Cmd
+	if x.nice != "" {
+		cmd = exec.CommandContext(ctx, x.nice, append([]string{"-n", "19", x.tesseract}, args...)...)
+	} else {
+		cmd = exec.CommandContext(ctx, x.tesseract, args...)
+	}
+	cmd.ExtraFiles = []*os.File{f}
+	var out bytes.Buffer
+	cmd.Stdout = &limited{&out, MaxText}
+	cmd.WaitDelay = time.Second
+	if err := cmd.Run(); err != nil {
+		if ctx.Err() != nil {
+			return ctx.Err()
+		}
+		return err
+	}
+	// A photo with no writing in it still makes tesseract print a few stray letters; those are not worth indexing.
+	if words(out.String()) >= 3 {
+		w.write(out.Bytes())
+	}
+	return nil
+}
+
+// words counts runs of at least three letters or digits, or two CJK characters.
+func words(s string) int {
+	n := 0
+	for _, f := range strings.FieldsFunc(s, func(r rune) bool { return !unicode.IsLetter(r) && !unicode.IsDigit(r) }) {
+		if utf8.RuneCountInString(f) >= 3 || (utf8.RuneCountInString(f) >= 2 && unicode.In([]rune(f)[0], unicode.Han, unicode.Hiragana, unicode.Katakana, unicode.Hangul)) {
+			n++
+		}
+	}
+	return n
+}
+
+type limited struct {
+	b   *bytes.Buffer
+	max int
+}
+
+func (l *limited) Write(p []byte) (int, error) {
+	if room := l.max - l.b.Len(); room > 0 {
+		l.b.Write(p[:min(len(p), room)])
+	}
+	return len(p), nil
+}
 
 func (x *Extractor) pdf(ctx context.Context, w *text, f *os.File) error {
 	ctx, cancel := context.WithTimeout(ctx, Timeout)

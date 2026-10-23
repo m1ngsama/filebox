@@ -7,6 +7,8 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
+	"image"
+	"image/png"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -270,4 +272,50 @@ func TestPDFTimeoutAndCap(t *testing.T) {
 	if err != nil || len(got) > MaxText || len(got) < MaxText-16 || !strings.HasPrefix(got, "lorem ipsum lorem") {
 		t.Fatalf("flood: len %d err %v", len(got), err)
 	}
+}
+
+func TestImagesNeedOCR(t *testing.T) {
+	x := New(context.Background())
+	if x.Handles("scan.png") {
+		t.Fatal("images are read only when OCR is on")
+	}
+	if _, err := x.Extract(context.Background(), fixture(t, map[string][]byte{"a.png": {1}}), "a.png"); !errors.Is(err, ErrSkipped) {
+		t.Fatalf("an image without OCR: %v", err)
+	}
+}
+
+func TestOCRReadsWordsInAnImage(t *testing.T) {
+	if _, err := exec.LookPath("tesseract"); err != nil {
+		t.Skip("no tesseract")
+	}
+	words, err := os.ReadFile("testdata/words.png")
+	if err != nil {
+		t.Fatal(err)
+	}
+	x := New(context.Background())
+	x.OCR(context.Background())
+	if !x.Handles("scan.PNG") {
+		t.Fatal("OCR is on but images are not handled")
+	}
+	root := fixture(t, map[string][]byte{"scan.png": words, "blank.png": blankPNG(t)})
+	got, err := x.Extract(context.Background(), root, "scan.png")
+	if err != nil || !strings.Contains(got, "Invoice") || !strings.Contains(got, "4512") {
+		t.Fatalf("ocr %q %v", got, err)
+	}
+	if got, err := x.Extract(context.Background(), root, "blank.png"); err != nil || strings.TrimSpace(got) != "" {
+		t.Fatalf("a picture with no words gave %q %v", got, err)
+	}
+}
+
+func blankPNG(t *testing.T) []byte {
+	t.Helper()
+	var b bytes.Buffer
+	img := image.NewGray(image.Rect(0, 0, 64, 64))
+	for i := range img.Pix {
+		img.Pix[i] = 0xff
+	}
+	if err := png.Encode(&b, img); err != nil {
+		t.Fatal(err)
+	}
+	return b.Bytes()
 }

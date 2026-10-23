@@ -237,7 +237,7 @@ func (x *Index) SearchContent(ctx context.Context, q Query) ([]ContentHit, error
 	if n := utf8.RuneCountInString(q.Text); c == nil || n < 3 && !CJK(q.Text) {
 		return []ContentHit{}, nil
 	}
-	if q.Kind != "" && q.Kind != "doc" {
+	if q.Kind != "" && q.Kind != "doc" && q.Kind != "image" {
 		return []ContentHit{}, nil
 	}
 	out, err := x.searchContent(ctx, c, q)

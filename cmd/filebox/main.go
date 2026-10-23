@@ -112,6 +112,7 @@ func serveCmd(args []string) error {
 	listen := fl.String("listen", ":5280", "listen address")
 	ffmpeg := fl.String("ffmpeg", "", "path to ffmpeg for thumbnails; empty disables them")
 	content := fl.Bool("content", true, "index text inside documents for search into content.db in the data directory")
+	ocr := fl.Bool("ocr", false, "also index the words in images with tesseract, which takes a lot of CPU on a big photo library")
 	var vols, origins multi
 	fl.Var(&vols, "vol", "volume as name=path, repeatable")
 	fl.Var(&origins, "origin", "public origin that may use passkeys, e.g. https://files.example.com; repeatable")
@@ -158,7 +159,13 @@ func serveCmd(args []string) error {
 			slog.Error("content index off", "err", err)
 		} else {
 			defer ix.CloseContent()
-			go func() { ix.Extract(ctx, set, extract.New(ctx)) }()
+			go func() {
+				ex := extract.New(ctx)
+				if *ocr {
+					ex.OCR(ctx)
+				}
+				ix.Extract(ctx, set, ex)
+			}()
 		}
 	}
 	go ix.Date(ctx, set)
