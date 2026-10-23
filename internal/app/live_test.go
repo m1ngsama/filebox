@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -203,5 +204,82 @@ func TestNoticesForShareActivityAndNewMembers(t *testing.T) {
 	bob := f.member(t, "bob", map[string]string{"v": "r"})
 	if _, b := bob.do(f, "GET", "/api/notices", ""); !strings.Contains(b, `"notices":[]`) {
 		t.Fatalf("a member sees someone else's notices: %s", b)
+	}
+}
+
+func TestCommentsMentionsAndRenames(t *testing.T) {
+	f := newTestApp(t)
+	f.write(t, "docs/plan.md", "# plan")
+	bob := f.member(t, "bob", map[string]string{"v": "r"})
+	carol := f.member(t, "carol", map[string]string{"w": "rw"})
+	dave := f.member(t, "dave", map[string]string{"v": "rw"})
+
+	if w := f.do("POST", "/api/comments", body(`{"vol":"v","path":"docs/plan.md","body":"   "}`)); w.Code != 400 {
+		t.Fatalf("empty comment %d", w.Code)
+	}
+	if w := f.do("POST", "/api/comments", body(`{"vol":"v","path":"docs/nope.md","body":"x"}`)); w.Code != 404 {
+		t.Fatalf("comment on a missing file %d", w.Code)
+	}
+	if c, _ := carol.do(f, "POST", "/api/comments", `{"vol":"v","path":"docs/plan.md","body":"hi"}`); c != 404 {
+		t.Fatalf("a comment on a volume carol cannot read: %d", c)
+	}
+	if w := f.do("POST", "/api/comments", body(`{"vol":"v","path":"docs/plan.md","body":"Looks good. @Bob and @carol, please check."}`)); w.Code != 201 {
+		t.Fatalf("comment %d %s", w.Code, w.Body)
+	}
+	notices := func(p person) []map[string]any {
+		_, b := p.do(f, "GET", "/api/notices", "")
+		var r struct{ Notices []map[string]any }
+		json.Unmarshal([]byte(b), &r)
+		return r.Notices
+	}
+	deadline := time.Now().Add(2 * time.Second)
+	for len(notices(bob)) == 0 && time.Now().Before(deadline) {
+		time.Sleep(20 * time.Millisecond)
+	}
+	if n := notices(bob); len(n) != 1 || n[0]["kind"] != "mention" || n[0]["actor"] != "admin" || n[0]["name"] != "plan.md" {
+		t.Fatalf("bob's notice %v", n)
+	}
+	if n := notices(carol); len(n) != 0 {
+		t.Fatalf("carol cannot read v, yet was told about it: %v", n)
+	}
+	if c, _ := bob.do(f, "POST", "/api/comments", `{"vol":"v","path":"docs/plan.md","body":"On it."}`); c != 201 {
+		t.Fatalf("a reader can comment: %d", c)
+	}
+	time.Sleep(200 * time.Millisecond)
+	admin := person{hdr: []string{"Cookie", f.Cookie.String()}}
+	if n := notices(admin); len(n) != 1 || n[0]["kind"] != "comment" || n[0]["actor"] != "bob" {
+		t.Fatalf("the admin, who took part, hears about the reply: %v", n)
+	}
+	if n := notices(dave); len(n) != 0 {
+		t.Fatalf("dave neither took part nor was named: %v", n)
+	}
+
+	list := func(p person, path string) []map[string]any {
+		_, b := p.do(f, "GET", "/api/comments?vol=v&path="+path, "")
+		var r struct{ Comments []map[string]any }
+		json.Unmarshal([]byte(b), &r)
+		return r.Comments
+	}
+	cs := list(bob, "docs/plan.md")
+	if len(cs) != 2 || cs[0]["author"] != "admin" || cs[1]["author"] != "bob" || cs[0]["removable"] != false || cs[1]["mine"] != true {
+		t.Fatalf("comments as bob %v", cs)
+	}
+	id := strconv.FormatInt(int64(cs[0]["id"].(float64)), 10)
+	if c, _ := bob.do(f, "DELETE", "/api/comments/"+id, ""); c != 403 {
+		t.Fatalf("bob removed someone else's comment: %d", c)
+	}
+
+	f.do("POST", "/api/mv", body(`{"src":{"vol":"v","path":"docs/plan.md"},"dst":{"vol":"v","path":"docs/final plan.md"}}`))
+	if cs := list(bob, "docs/final%20plan.md"); len(cs) != 2 {
+		t.Fatalf("comments did not follow the rename: %v", cs)
+	}
+	if w := f.do("DELETE", "/api/comments/"+id, nil); w.Code != 204 {
+		t.Fatalf("an admin removes any comment: %d", w.Code)
+	}
+	if cs := list(bob, "docs/final%20plan.md"); len(cs) != 1 {
+		t.Fatalf("after removal %v", cs)
+	}
+	if _, b := dave.do(f, "GET", "/api/people?vol=v", ""); !strings.Contains(b, `"bob"`) || strings.Contains(b, `"carol"`) {
+		t.Fatalf("people on v %s", b)
 	}
 }

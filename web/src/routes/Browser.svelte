@@ -142,6 +142,7 @@
   let preview = $state.raw<Entry | null>(null)
   let editFirst = $state(false)
   let details = $state.raw<Entry | null>(null)
+  let opening = $state<string>()
   let dialog = $state<Dialog | null>(null)
   let searching = $state(false)
   let help = $state(false)
@@ -305,6 +306,7 @@
     listing = []
     listingKey = ''
     const focus = new URLSearchParams(untrack(() => route.search)).get('details')
+    opening = new URLSearchParams(untrack(() => route.search)).get('tab') ?? undefined
     refresh().then((ok) => {
       if (ok && focus) details = entries.find((e) => e.name === focus) ?? null
     })
@@ -1240,6 +1242,7 @@
           onclose={closeDetails}
           onchange={reload}
           ontags={writable ? () => details && (dialog = { kind: 'tags', names: [details.name] }) : undefined}
+          start={opening}
         />
       {/key}
     {/await}

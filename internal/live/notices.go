@@ -51,6 +51,24 @@ func (h *Hub) admins(n db.Notice, except int64) {
 	}
 }
 
+// Notice stores a notice for one person and tells their open tabs.
+func (h *Hub) Notice(userID int64, n db.Notice) { h.notice(userID, n) }
+
+// Commented tells the tabs of everyone who can read an item that what was said about it changed.
+func (h *Hub) Commented(vol, rel string) {
+	h.mu.Lock()
+	subs := make([]*sub, 0, len(h.subs))
+	for s := range h.subs {
+		subs = append(subs, s)
+	}
+	h.mu.Unlock()
+	for _, s := range subs {
+		if p, ok := h.Auth.Of(s.user); ok && p.Can(vol, false) {
+			h.send(s, Event{Type: "comment", Vol: vol, Dir: rel})
+		}
+	}
+}
+
 func (h *Hub) notice(userID int64, n db.Notice) {
 	n, err := h.DB.AddNotice(userID, n)
 	if err != nil {

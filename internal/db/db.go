@@ -235,6 +235,16 @@ var migrations = []string{
 	);
 	CREATE INDEX notices_user ON notices(user_id, id DESC);`,
 	`ALTER TABLE users ADD COLUMN prefs TEXT NOT NULL DEFAULT '{}';`,
+	`CREATE TABLE comments (
+		id INTEGER PRIMARY KEY AUTOINCREMENT,
+		vol TEXT NOT NULL,
+		path TEXT NOT NULL,
+		user_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
+		body TEXT NOT NULL,
+		at INTEGER NOT NULL
+	);
+	CREATE INDEX comments_path ON comments(vol, path, id);
+	ALTER TABLE notices ADD COLUMN actor TEXT NOT NULL DEFAULT '';`,
 }
 
 type DB struct {

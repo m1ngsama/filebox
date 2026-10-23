@@ -221,8 +221,8 @@ func (x *Index) rename(vol, from, to string) error {
 		return err
 	}
 	defer tx.Rollback()
-	for _, t := range []string{"files", "dav_props", "favorites", "tagged", "taken", "shares", "versions", "events"} {
-		if t != "versions" && t != "events" {
+	for _, t := range []string{"files", "dav_props", "favorites", "tagged", "taken", "shares", "versions", "events", "comments"} {
+		if t != "versions" && t != "events" && t != "comments" {
 			if _, err := tx.Exec(`DELETE FROM `+t+` WHERE `+subtree, under(vol, to)...); err != nil {
 				return err
 			}

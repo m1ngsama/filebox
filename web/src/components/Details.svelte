@@ -12,6 +12,7 @@
   import SharePanel from './SharePanel.svelte'
   import VersionsPanel from './VersionsPanel.svelte'
   import Activity from './Activity.svelte'
+  import Comments from './Comments.svelte'
   import { api, fileURL, type Entry, type Version } from '../lib/api'
   import { size, date, fallback, parent, place, visual, metaRows, type Meta } from '../lib/format'
   import { t } from '../lib/i18n'
@@ -27,7 +28,8 @@
     onclose,
     onchange = () => {},
     ontags,
-  }: { vol: string; path: string; entry: Entry; thumbs: (string | null)[]; onclose: () => void; onchange?: () => void; ontags?: () => void } = $props()
+    start,
+  }: { vol: string; path: string; entry: Entry; thumbs: (string | null)[]; onclose: () => void; onchange?: () => void; ontags?: () => void; start?: string } = $props()
   let tries = $state(0)
   const src = $derived(fallback(thumbs, tries))
   const on = $derived(starred(vol, path))
@@ -48,7 +50,7 @@
       .then((m: Meta) => (meta = metaRows(m)), () => {})
     return () => stop.abort()
   })
-  let tab = $state(untrack(() => (remembered === 'versions' && entry.dir ? 'share' : remembered)))
+  let tab = $state(untrack(() => start ?? (remembered === 'versions' && entry.dir ? 'share' : remembered)))
   $effect(() => void (remembered = tab))
   const map = (gps: string) => {
     const [lat, lon] = gps.split(',').map((s) => s.trim())
@@ -93,12 +95,16 @@
       <Tabs.Trigger value="share" class="tab">{t.share}</Tabs.Trigger>
       {#if !entry.dir}<Tabs.Trigger value="versions" class="tab">{t.versions}</Tabs.Trigger>{/if}
       <Tabs.Trigger value="activity" class="tab">{t.activity}</Tabs.Trigger>
+      <Tabs.Trigger value="comments" class="tab">{t.comments}</Tabs.Trigger>
     </Tabs.List>
     <Tabs.Content value="share" class="tab-body">
       <SharePanel {vol} {path} dir={entry.dir} />
     </Tabs.Content>
     <Tabs.Content value="activity" class="tab-body">
       <Activity {vol} {path} />
+    </Tabs.Content>
+    <Tabs.Content value="comments" class="tab-body">
+      <Comments {vol} {path} />
     </Tabs.Content>
     {#if !entry.dir}
       <Tabs.Content value="versions" class="tab-body">

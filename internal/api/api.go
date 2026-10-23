@@ -19,6 +19,7 @@ import (
 	"github.com/m1ngsama/filebox/internal/db"
 	"github.com/m1ngsama/filebox/internal/httpx"
 	"github.com/m1ngsama/filebox/internal/index"
+	"github.com/m1ngsama/filebox/internal/live"
 	"github.com/m1ngsama/filebox/internal/notify"
 	"github.com/m1ngsama/filebox/internal/serve"
 	"github.com/m1ngsama/filebox/internal/version"
@@ -63,6 +64,7 @@ type API struct {
 	Jobs     *Jobs
 	Index    *index.Index
 	Notify   *notify.Notifier
+	Live     *live.Hub
 	Versions *version.Store
 	Origins  []string
 }
@@ -85,6 +87,10 @@ func (a *API) Register(mux *http.ServeMux) {
 	h("GET /api/vols", a.vols)
 	h("GET /api/size", a.size)
 	h("GET /api/usage", a.usage)
+	h("GET /api/comments", a.comments)
+	h("POST /api/comments", a.comment)
+	h("DELETE /api/comments/{id}", a.uncomment)
+	h("GET /api/people", a.people)
 	mux.Handle("GET /api/team", a.admin(a.team))
 	mux.Handle("PATCH /api/team/users/{id}", a.admin(a.teamEdit))
 	mux.Handle("DELETE /api/team/users/{id}", a.admin(a.teamDel))

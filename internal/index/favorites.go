@@ -63,7 +63,7 @@ func (x *Index) Carry(src *vol.Volume, srel string, dst *vol.Volume, drel string
 	}
 	x.db.Flush()
 	expr, args := moved(srel, drel)
-	for _, t := range []string{"favorites", "tagged", "events"} {
+	for _, t := range []string{"favorites", "tagged", "events", "comments"} {
 		err := x.exec(x.db, `UPDATE OR REPLACE `+t+` SET vol = ?, path = `+expr+` WHERE `+subtree,
 			append(append([]any{dst.Name}, args...), under(src.Name, srel)...)...)
 		if err != nil {

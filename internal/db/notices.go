@@ -12,6 +12,7 @@ type Notice struct {
 	Share string `json:"share"`
 	Count int64  `json:"count"`
 	Read  bool   `json:"read"`
+	Actor string `json:"actor"`
 }
 
 const keepNotices = 200
@@ -21,8 +22,8 @@ func (d *DB) AddNotice(userID int64, n Notice) (Notice, error) {
 	if n.Count == 0 {
 		n.Count = 1
 	}
-	err := d.QueryRow(`INSERT INTO notices (user_id, at, kind, name, vol, path, share, count) VALUES (?, ?, ?, ?, ?, ?, ?, ?) RETURNING id`,
-		userID, n.At, n.Kind, n.Name, n.Vol, n.Path, n.Share, n.Count).Scan(&n.ID)
+	err := d.QueryRow(`INSERT INTO notices (user_id, at, kind, name, vol, path, share, count, actor) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING id`,
+		userID, n.At, n.Kind, n.Name, n.Vol, n.Path, n.Share, n.Count, n.Actor).Scan(&n.ID)
 	if err != nil {
 		return n, err
 	}
@@ -32,7 +33,7 @@ func (d *DB) AddNotice(userID int64, n Notice) (Notice, error) {
 
 // Notices lists a person's newest notices, older than before when before is set.
 func (d *DB) Notices(userID, before int64, limit int) ([]Notice, error) {
-	rows, err := d.Query(`SELECT id, at, kind, name, vol, path, share, count, read FROM notices
+	rows, err := d.Query(`SELECT id, at, kind, name, vol, path, share, count, read, actor FROM notices
 		WHERE user_id = ? AND (? = 0 OR id < ?) ORDER BY id DESC LIMIT ?`, userID, before, before, limit)
 	if err != nil {
 		return nil, err
@@ -41,7 +42,7 @@ func (d *DB) Notices(userID, before int64, limit int) ([]Notice, error) {
 	out := []Notice{}
 	for rows.Next() {
 		var n Notice
-		if err := rows.Scan(&n.ID, &n.At, &n.Kind, &n.Name, &n.Vol, &n.Path, &n.Share, &n.Count, &n.Read); err != nil {
+		if err := rows.Scan(&n.ID, &n.At, &n.Kind, &n.Name, &n.Vol, &n.Path, &n.Share, &n.Count, &n.Read, &n.Actor); err != nil {
 			return nil, err
 		}
 		out = append(out, n)

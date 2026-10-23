@@ -79,7 +79,7 @@ func (a *App) Handler() http.Handler {
 	mux.Handle("GET /api/office", a.Auth.RequireAny(http.HandlerFunc(a.office)))
 	mux.Handle("GET /api/stream/index.m3u8", a.Auth.RequireAny(a.located(a.Stream.Playlist)))
 	mux.Handle("GET /api/stream/seg", a.Auth.RequireAny(a.located(a.Stream.Segment)))
-	(&api.API{Vols: a.Vols, DB: a.DB, Auth: a.Auth, Jobs: api.NewJobs(a.Index), Index: a.Index, Notify: a.Notify, Versions: a.Versions, Origins: a.Origins}).Register(mux)
+	(&api.API{Vols: a.Vols, DB: a.DB, Auth: a.Auth, Jobs: api.NewJobs(a.Index), Index: a.Index, Notify: a.Notify, Live: a.Live, Versions: a.Versions, Origins: a.Origins}).Register(mux)
 	a.Passkeys.Register(mux)
 	a.Live.Register(mux)
 	d := dav.Handler(a.Vols, a.Auth, a.Index, a.Versions)

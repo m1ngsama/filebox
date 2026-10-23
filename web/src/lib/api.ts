@@ -15,7 +15,8 @@ export type Entry = { name: string; dir: boolean; size: number; mtime: number; i
 export type Tag = { id: number; name: string; color: string; count: number }
 export type Photo = { id: number; vol: string; path: string; name: string; size: number; mtime: number; taken: number }
 export type Me = { name: string; admin: boolean; vols: string[]; access: Record<string, string>; prefs?: { accent?: string; density?: string }; origins?: string[] }
-export type Notice = { id: number; at: number; kind: string; name: string; vol: string; path: string; share: string; count: number; read: boolean }
+export type Notice = { id: number; at: number; kind: string; name: string; vol: string; path: string; share: string; count: number; read: boolean; actor: string }
+export type Comment = { id: number; at: number; author: string; body: string; mine: boolean; removable: boolean }
 export type Member = { id: number; name: string; role: 'admin' | 'member'; access: Record<string, string>; created: number; self: boolean }
 export type Invite = { id: number; kind: 'join' | 'reset'; user: string; role: 'admin' | 'member'; access: Record<string, string>; created: number; expires: number }
 export type InviteInfo = { kind: 'join' | 'reset'; user: string; role: 'admin' | 'member'; access: Record<string, string> }
@@ -178,6 +179,10 @@ export const api = {
     ),
   vols: () => req<{ vols: Usage[] }>('GET', '/api/vols'),
   duplicates: (min: string, signal?: AbortSignal) => req<DuplicateReport>('GET', `/api/duplicates?min=${min}`, undefined, signal),
+  comments: (vol: string, path: string) => req<{ comments: Comment[] }>('GET', `/api/comments?${q({ vol, path })}`),
+  addComment: (vol: string, path: string, body: string) => req<Comment>('POST', '/api/comments', { vol, path, body }),
+  delComment: (id: number) => req<void>('DELETE', `/api/comments/${id}`),
+  people: (vol: string) => req<{ people: string[] }>('GET', `/api/people?${q({ vol })}`),
   setPrefs: (p: { accent?: string; density?: string }) => req<void>('PUT', '/api/prefs', p),
   notices: (before = 0) => req<{ notices: Notice[]; unread: number; more: boolean }>('GET', `/api/notices${before ? `?before=${before}` : ''}`),
   readNotices: (ids: number[] = []) => req<void>('POST', '/api/notices/read', { ids }),
