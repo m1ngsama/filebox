@@ -1,15 +1,18 @@
 name: release
-# Publishes downloadable builds when a version tag is pushed. Nothing here deploys anywhere:
-# updating a server is a manual step, see "Update" in the README.
+# A pushed version tag builds the binaries and opens a DRAFT release. Nothing is public until the
+# maintainer reviews the draft and publishes it by hand; publishing then builds the Docker image (image.yml).
+# Nothing here deploys anywhere: updating a server is a manual step, see "Update" in the README.
+# The rules for a release are in RELEASING.md.
 on:
   push:
     tags: ['v*']
 permissions: {}
 jobs:
-  binaries:
+  draft:
     runs-on: ubuntu-latest
     timeout-minutes: 25
     permissions:
+      actions: read
       contents: write
       id-token: write
       attestations: write
@@ -18,8 +21,15 @@ jobs:
         with:
           fetch-depth: 0
           persist-credentials: false
-      - name: The tag must be a commit on main
-        run: git merge-base --is-ancestor "$GITHUB_SHA" origin/main
+      - name: Only a plain version tag, on main, whose CI passed
+        env:
+          TAG: ${{ github.ref_name }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          [[ "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]] || { echo "::error::$TAG is not vMAJOR.MINOR.PATCH"; exit 1; }
+          git merge-base --is-ancestor "$GITHUB_SHA" origin/main || { echo "::error::$TAG is not a commit on main"; exit 1; }
+          ok=$(gh run list --repo "$GITHUB_REPOSITORY" --workflow ci --commit "$GITHUB_SHA" --json conclusion --jq '[.[] | select(.conclusion == "success")] | length')
+          [ "$ok" -gt 0 ] || { echo "::error::CI has not passed on $GITHUB_SHA"; exit 1; }
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
           go-version-file: go.mod
@@ -42,46 +52,8 @@ jobs:
       - uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
         with:
           subject-path: dist/*.tar.gz
-      - name: Publish the release
+      - name: Open the draft
         env:
           GH_TOKEN: ${{ github.token }}
           TAG: ${{ github.ref_name }}
-        run: |
-          flags=""
-          case "$TAG" in *-*) flags="--prerelease" ;; esac
-          gh release create "$TAG" dist/* --verify-tag --generate-notes $flags
-
-  image:
-    runs-on: ubuntu-latest
-    timeout-minutes: 30
-    permissions:
-      contents: read
-      packages: write
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-      - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
-      - uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
-        with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ github.token }}
-      - name: Tags
-        id: tags
-        env:
-          TAG: ${{ github.ref_name }}
-          REPO: ${{ github.repository }}
-        run: |
-          tags="ghcr.io/${REPO,,}:$TAG"
-          case "$TAG" in *-*) ;; *) tags="$tags,ghcr.io/${REPO,,}:latest" ;; esac
-          echo "list=$tags" >> "$GITHUB_OUTPUT"
-      - uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
-        with:
-          context: .
-          platforms: linux/amd64,linux/arm64
-          push: true
-          tags: ${{ steps.tags.outputs.list }}
-          build-args: VERSION=${{ github.ref_name }}
-          provenance: true
-          sbom: true
+        run: gh release create "$TAG" dist/* --draft --verify-tag --generate-notes
