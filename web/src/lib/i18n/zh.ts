@@ -335,6 +335,11 @@ const zh = {
   storageLargest: '最大的文件',
   storageOther: '其他',
   storageEmpty: '还没有文件',
+  accentTitle: '强调色',
+  accentNames: { blue: '蓝', teal: '青', green: '绿', orange: '橙', pink: '粉', purple: '紫', graphite: '石墨' } as Record<string, string>,
+  densityTitle: '列表密度',
+  densities: { comfortable: '宽松', compact: '紧凑' } as Record<string, string>,
+  prefsFollow: '这些设置跟着账号走，在所有设备上都一样。',
   noticesEmpty: '还没有通知',
   noticesEmptyHint: '有人通过你的分享链接下载或上传、有新成员加入、磁盘快满时，会在这里告诉你。',
   noticeText: {

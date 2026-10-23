@@ -334,6 +334,11 @@ export default (locale: string) => {
     storageLargest: 'Largest files',
     storageOther: 'Other',
     storageEmpty: 'No files yet',
+    accentTitle: 'Accent color',
+    accentNames: { blue: 'Blue', teal: 'Teal', green: 'Green', orange: 'Orange', pink: 'Pink', purple: 'Purple', graphite: 'Graphite' } as Record<string, string>,
+    densityTitle: 'List density',
+    densities: { comfortable: 'Comfortable', compact: 'Compact' } as Record<string, string>,
+    prefsFollow: 'These follow your account to every device.',
     noticesEmpty: 'No notifications yet',
     noticesEmptyHint: 'You will hear here when someone downloads or uploads through your links, when someone joins, and when a disk runs low.',
     noticeText: {

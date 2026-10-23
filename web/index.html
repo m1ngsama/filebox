@@ -10,7 +10,7 @@
     <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
     <link rel="manifest" href="/manifest.webmanifest" />
     <title>filebox</title>
-    <script>try{var t=localStorage.getItem('theme');if(t==='light'||t==='dark')document.documentElement.dataset.theme=t}catch(e){}</script>
+    <script>try{var d=document.documentElement,t=localStorage.getItem('theme'),p=JSON.parse(localStorage.getItem('prefs')||'{}');if(t==='light'||t==='dark')d.dataset.theme=t;if(/^[a-z]{1,12}$/.test(p.accent))d.dataset.accent=p.accent;if(p.density==='compact')d.dataset.density='compact'}catch(e){}</script>
   </head>
   <body>
     <div id="app"></div>

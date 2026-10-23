@@ -13,6 +13,7 @@
   import Toasts from './components/Toasts.svelte'
   import { setAccess } from './lib/access.svelte'
   import { connect, disconnect } from './lib/live.svelte'
+  import { usePrefs } from './lib/prefs.svelte'
   import EmptyState from './components/EmptyState.svelte'
   import CloudOff from '@lucide/svelte/icons/cloud-off'
   import HardDrive from '@lucide/svelte/icons/hard-drive'
@@ -36,6 +37,7 @@
     try {
       me = await api.me()
       setAccess(me.admin, me.access)
+      usePrefs(me.prefs)
       connect()
       save('user', me.name)
       needLogin = false

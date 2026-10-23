@@ -17,8 +17,9 @@
   import { addPasskey, deviceName, passkeyError, validPasskeyName } from '../lib/passkey'
   import { date, ago, device } from '../lib/format'
   import { t, langPref, setLang, type LangPref } from '../lib/i18n'
-  import { toast } from '../lib/toast.svelte'
+  import { toast, fail } from '../lib/toast.svelte'
   import { theme, setTheme, type Theme } from '../lib/theme'
+  import { prefs, setPrefs, accents } from '../lib/prefs.svelte'
 
   let { vols, origins = [] }: { vols: string[]; origins?: string[] } = $props()
 
@@ -153,6 +154,23 @@
         {#each Object.entries(t.themes) as [k, label] (k)}
           <button type="button" class="chip" aria-pressed={mode === k} onclick={() => setTheme((mode = k as Theme))}>{label}</button>
         {/each}
+      </div>
+      <div class="pref" role="group" aria-labelledby="accent-title">
+        <h3 id="accent-title">{t.accentTitle}</h3>
+        <div class="swatches">
+          {#each accents as a (a)}
+            <button type="button" class="swatch" data-swatch={a} aria-label={t.accentNames[a]} title={t.accentNames[a]} aria-pressed={(prefs.accent ?? 'blue') === a} onclick={() => setPrefs({ accent: a }).catch(fail)}></button>
+          {/each}
+        </div>
+      </div>
+      <div class="pref" role="group" aria-labelledby="density-title">
+        <h3 id="density-title">{t.densityTitle}</h3>
+        <div class="chips">
+          {#each Object.entries(t.densities) as [k, label] (k)}
+            <button type="button" class="chip" aria-pressed={(prefs.density ?? 'comfortable') === k} onclick={() => setPrefs({ density: k }).catch(fail)}>{label}</button>
+          {/each}
+        </div>
+        <p class="hint">{t.prefsFollow}</p>
       </div>
       <div class="pref" role="group" aria-labelledby="language-title">
         <h3 id="language-title">{t.language}</h3>

@@ -73,6 +73,7 @@ func (a *API) Register(mux *http.ServeMux) {
 	h := func(pattern string, fn http.HandlerFunc) { mux.Handle(pattern, a.Auth.RequireSession(fn)) }
 	h("POST /api/logout", a.logout)
 	h("GET /api/me", a.me)
+	h("PUT /api/prefs", a.setPrefs)
 	h("GET /api/ls", a.ls)
 	h("GET /api/stat", a.stat)
 	mux.Handle("GET /api/zip", a.Auth.RequireAny(http.HandlerFunc(a.zip)))
@@ -227,7 +228,22 @@ func (a *API) me(w http.ResponseWriter, r *http.Request) {
 	for _, v := range vols {
 		levels[v] = p.Level(v)
 	}
-	httpx.JSON(w, 200, map[string]any{"name": u.Name, "admin": p.Admin, "vols": vols, "access": levels, "origins": append([]string{}, a.Origins...)})
+	prefs, _ := a.DB.Prefs(p.UserID)
+	httpx.JSON(w, 200, map[string]any{"name": u.Name, "admin": p.Admin, "vols": vols, "access": levels, "prefs": prefs, "origins": append([]string{}, a.Origins...)})
+}
+
+func (a *API) setPrefs(w http.ResponseWriter, r *http.Request) {
+	var in db.Prefs
+	if err := httpx.Read(r, &in); err != nil || !in.Valid() {
+		httpx.Fail(w, 400, "bad request")
+		return
+	}
+	p, _ := auth.From(r.Context())
+	if err := a.DB.SetPrefs(p.UserID, in); err != nil {
+		httpx.Error(w, err)
+		return
+	}
+	w.WriteHeader(204)
 }
 
 func (a *API) ls(w http.ResponseWriter, r *http.Request) {

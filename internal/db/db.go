@@ -234,6 +234,7 @@ var migrations = []string{
 		read INTEGER NOT NULL DEFAULT 0
 	);
 	CREATE INDEX notices_user ON notices(user_id, id DESC);`,
+	`ALTER TABLE users ADD COLUMN prefs TEXT NOT NULL DEFAULT '{}';`,
 }
 
 type DB struct {

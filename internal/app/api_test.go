@@ -712,3 +712,25 @@ func TestDuplicates(t *testing.T) {
 		t.Fatalf("bad min %d", w.Code)
 	}
 }
+
+func TestPrefsFollowTheAccount(t *testing.T) {
+	f := newTestApp(t)
+	if b := f.do("GET", "/api/me", nil).Body.String(); !strings.Contains(b, `"prefs":{}`) {
+		t.Fatalf("fresh prefs %s", b)
+	}
+	for _, bad := range []string{`{"accent":"neon"}`, `{"density":"tiny"}`, `{"wallpaper":"x"}`} {
+		if w := f.do("PUT", "/api/prefs", body(bad)); w.Code != 400 {
+			t.Errorf("%s: %d", bad, w.Code)
+		}
+	}
+	if w := f.do("PUT", "/api/prefs", body(`{"accent":"teal","density":"compact"}`)); w.Code != 204 {
+		t.Fatalf("set %d", w.Code)
+	}
+	if b := f.do("GET", "/api/me", nil).Body.String(); !strings.Contains(b, `"prefs":{"accent":"teal","density":"compact"}`) {
+		t.Fatalf("prefs after set %s", b)
+	}
+	bob := f.member(t, "bob", nil)
+	if _, b := bob.do(f, "GET", "/api/me", ""); !strings.Contains(b, `"prefs":{}`) {
+		t.Fatalf("someone else's prefs leaked: %s", b)
+	}
+}

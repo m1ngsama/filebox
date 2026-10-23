@@ -23,6 +23,7 @@
   import { narrow } from '../lib/shell.svelte'
   import { carry, drop, target, type Carried, type Target } from '../lib/dnd'
   import { tagOf } from '../lib/tags.svelte'
+  import { prefs } from '../lib/prefs.svelte'
 
   const inert: Target = { accepts: () => false, drop: () => {} }
 
@@ -137,7 +138,8 @@
   const cols = $derived(!grid ? 1 : Math.max(1, media || shelf ? Math.floor((width - gap) / ((tiles ? 110 : shelf && narrow.current ? 100 : 128) + gap)) : Math.floor((width - 16) / 172)))
   const tile = $derived((width - (cols + 1) * gap) / cols)
   const rowH = $derived(shelf ? tile * 1.5 + 56 : !media ? 212 : tiles ? tile + gap : tile + 52)
-  const rowPx = $derived(grid ? rowH : narrow.current ? 56 : 48)
+  const compact = $derived(prefs.density === 'compact')
+  const rowPx = $derived(grid ? rowH : narrow.current ? (compact ? 48 : 56) : compact ? 36 : 48)
   const layout = $derived.by(() => {
     if (!group) return null
     const items: (string | number | [number, number])[] = []
