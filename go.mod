@@ -9,11 +9,11 @@ require (
 	github.com/microcosm-cc/bluemonday v1.0.27
 	github.com/tus/tusd/v2 v2.10.1
 	github.com/yuin/goldmark v1.8.6
-	golang.org/x/crypto v0.57.0
+	golang.org/x/crypto v0.58.0
 	golang.org/x/exp v0.0.0-20260611194520-c48552f49976
-	golang.org/x/net v0.60.0
+	golang.org/x/net v0.61.0
 	golang.org/x/sys v0.49.0
-	golang.org/x/text v0.42.0
+	golang.org/x/text v0.43.0
 	modernc.org/sqlite v1.60.1
 )
 
