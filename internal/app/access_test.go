@@ -1,6 +1,7 @@
 package app
 
 import (
+	"encoding/json"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -245,5 +246,61 @@ func TestVolumeAccess(t *testing.T) {
 	f.App.Auth.Forget(alice.id)
 	if c, _ := alice.do(f, "POST", "/api/mkdir", `{"vol":"v","path":"d9"}`); c != 403 {
 		t.Errorf("a demoted writer still writes: %d", c)
+	}
+}
+
+func TestTeamActivity(t *testing.T) {
+	f := newTestApp(t)
+	f.write(t, "a.txt", "a")
+	os.WriteFile(filepath.Join(f.Dir2, "w.txt"), []byte("w"), 0o644)
+	bob := f.member(t, "bob", map[string]string{"v": "rw"})
+	carol := f.member(t, "carol", map[string]string{"w": "rw"})
+	bob.do(f, "POST", "/api/mkdir", `{"vol":"v","path":"by-bob"}`)
+	carol.do(f, "POST", "/api/mkdir", `{"vol":"w","path":"by-carol"}`)
+	f.do("POST", "/api/mkdir", body(`{"vol":"v","path":"by-admin"}`))
+	f.App.DB.Flush()
+	type ev struct {
+		Kind, Path, Actor string
+	}
+	list := func(p *person, q string) []ev {
+		var b string
+		if p == nil {
+			b = f.do("GET", "/api/activity"+q, nil).Body.String()
+		} else {
+			_, b = p.do(f, "GET", "/api/activity"+q, "")
+		}
+		var r struct{ Events []ev }
+		json.Unmarshal([]byte(b), &r)
+		return r.Events
+	}
+	if es := list(&bob, "?kind=files"); len(es) != 1 || es[0].Path != "by-bob" || es[0].Actor != "" {
+		t.Fatalf("bob's own activity %+v", es)
+	}
+	es := list(&bob, "?everyone=1")
+	paths := map[string]string{}
+	for _, e := range es {
+		paths[e.Path] = e.Actor
+	}
+	if paths["by-bob"] != "bob" || paths["by-admin"] != "admin" || len(paths) != 2 {
+		t.Fatalf("bob sees the team's changes on v, named, and nothing on w: %+v", es)
+	}
+	if es := list(&bob, "?everyone=1&kind=login"); len(es) != 0 {
+		t.Fatalf("a member sees other people's sign-ins: %+v", es)
+	}
+	all := list(nil, "?everyone=1")
+	seen := map[string]bool{}
+	for _, e := range all {
+		seen[e.Path] = true
+	}
+	if !seen["by-carol"] || !seen["by-bob"] || !seen["by-admin"] {
+		t.Fatalf("the admin sees everyone's changes: %+v", all)
+	}
+	logins := list(nil, "?everyone=1&kind=login")
+	who := map[string]bool{}
+	for _, e := range logins {
+		who[e.Actor] = true
+	}
+	if !who["bob"] || !who["carol"] {
+		t.Fatalf("the admin sees everyone's sign-ins: %+v", logins)
 	}
 }

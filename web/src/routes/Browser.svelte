@@ -42,6 +42,7 @@
   import Pencil from '@lucide/svelte/icons/pencil'
   import FolderInput from '@lucide/svelte/icons/folder-input'
   import Link from '@lucide/svelte/icons/link'
+  import Link2 from '@lucide/svelte/icons/link-2'
   import Star from '@lucide/svelte/icons/star'
   import TagIcon from '@lucide/svelte/icons/tag'
   import StarOff from '@lucide/svelte/icons/star-off'
@@ -521,6 +522,7 @@
     rename: { id: 'rename', label: t.rename, icon: Pencil },
     move: { id: 'move', label: t.moveOrCopy, icon: FolderInput },
     share: { id: 'share', label: t.copyLink, icon: Link },
+    internal: { id: 'internal', label: t.copyInternalLink, icon: Link2 },
     star: { id: 'star', label: t.star, icon: Star },
     unstar: { id: 'unstar', label: t.unstar, icon: StarOff },
     tags: { id: 'tags', label: t.tagsAction, icon: TagIcon },
@@ -536,8 +538,8 @@
 
   const actions = (e: Entry | null): Action[] =>
     !e ? (error || !writable ? [] : [act.mkdir, act.touch, act.upload, ...(board.items ? [act.paste] : [])])
-    : !writable ? [...(narrow.current ? [act.select] : []), act.open, act.download, act.share, starred(vol, join(e.name)) ? act.unstar : act.star, act.details]
-    : [...(narrow.current ? [act.select] : []), act.open, act.download, act.rename, act.duplicate, ...(!e.dir && /\.zip$/i.test(e.name) ? [act.unzip] : []), act.move, act.share, starred(vol, join(e.name)) ? act.unstar : act.star, act.tags, act.details, act.remove]
+    : !writable ? [...(narrow.current ? [act.select] : []), act.open, act.download, act.share, act.internal, starred(vol, join(e.name)) ? act.unstar : act.star, act.details]
+    : [...(narrow.current ? [act.select] : []), act.open, act.download, act.rename, act.duplicate, ...(!e.dir && /\.zip$/i.test(e.name) ? [act.unzip] : []), act.move, act.share, act.internal, starred(vol, join(e.name)) ? act.unstar : act.star, act.tags, act.details, act.remove]
 
   function onaction(id: string, e: Entry | null) {
     if (id === 'mkdir') dialog = { kind: 'mkdir' }
@@ -555,6 +557,7 @@
     else if (id === 'duplicate') duplicate(selected.has(e.name) ? [...selected] : [e.name])
     else if (id === 'star' || id === 'unstar') toggleStar([e.name], id === 'star')
     else if (id === 'share') quickShare(e)
+    else if (id === 'internal') copyLater(Promise.resolve(location.origin + (e.dir ? filesURL(vol, join(e.name)) : selectURL(vol, join(e.name))))).then((ok) => toast(ok ? t.internalCopied : t.copyFailed))
     else if (id === 'tags') dialog = { kind: 'tags', names: selected.has(e.name) ? [...selected] : [e.name] }
     else details = e
   }

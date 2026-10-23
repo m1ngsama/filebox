@@ -876,6 +876,22 @@ func (a *API) activity(w http.ResponseWriter, r *http.Request) {
 		httpx.Fail(w, 400, "bad kind")
 		return
 	}
+	// The whole team's activity: an admin sees all of it, a member only changes to files on volumes they can read.
+	if q.Get("everyone") == "1" {
+		f.Everyone = true
+		if !p.Admin {
+			f.Vols = a.readable(r)
+			want := f.Kinds
+			if want == nil {
+				want = activityKinds["files"]
+			}
+			f.Kinds = slices.DeleteFunc(slices.Clone(want), func(k string) bool { return !slices.Contains(activityKinds["files"], k) })
+			if len(f.Kinds) == 0 {
+				httpx.JSON(w, 200, map[string]any{"events": []any{}, "more": false})
+				return
+			}
+		}
+	}
 	if q.Has("vol") {
 		v, rel, err := a.query(r)
 		if err != nil {
@@ -893,10 +909,22 @@ func (a *API) activity(w http.ResponseWriter, r *http.Request) {
 	if more {
 		es = es[:len(es)-1]
 	}
+	names := map[int64]string{}
+	if f.Everyone {
+		if as, err := a.DB.Accounts(); err == nil {
+			for _, u := range as {
+				names[u.ID] = u.Name
+			}
+		}
+	}
 	out := []map[string]any{}
 	for _, e := range es {
-		out = append(out, map[string]any{"id": e.ID, "at": e.At, "kind": e.Kind, "share_id": e.ShareID, "target": e.Target,
-			"visitor": e.Visitor, "name": e.Name, "size": e.Size, "vol": e.Vol, "path": e.Path})
+		m := map[string]any{"id": e.ID, "at": e.At, "kind": e.Kind, "share_id": e.ShareID, "target": e.Target,
+			"visitor": e.Visitor, "name": e.Name, "size": e.Size, "vol": e.Vol, "path": e.Path}
+		if f.Everyone && e.ShareID == 0 {
+			m["actor"] = names[e.UserID]
+		}
+		out = append(out, m)
 	}
 	httpx.JSON(w, 200, map[string]any{"events": out, "more": more})
 }

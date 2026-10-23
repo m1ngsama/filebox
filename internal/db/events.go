@@ -6,6 +6,7 @@ import (
 	"crypto/rand"
 	"crypto/sha256"
 	"encoding/hex"
+	"encoding/json"
 	"log/slog"
 	"net/netip"
 	"slices"
@@ -306,12 +307,20 @@ type EventFilter struct {
 	Limit                   int
 	// Vol and Path narrow to one item and everything under it, including its shares' events.
 	Vol, Path string
+	// Everyone lists every person's events, not only UserID's; Vols, when not nil, keeps only events on those volumes.
+	Everyone bool
+	Vols     []string
 }
 
 func (d *DB) Events(f EventFilter) ([]Event, error) {
 	q := `SELECT id, at, user_id, share_id, kind, visitor, name, target, size, vol, path FROM events
-		WHERE (user_id = ?1 OR (user_id = 0 AND ?1 = (SELECT min(id) FROM users)))`
-	args := []any{f.UserID}
+		WHERE (?2 OR user_id = ?1 OR (user_id = 0 AND ?1 = (SELECT min(id) FROM users)))`
+	args := []any{f.UserID, f.Everyone}
+	if f.Vols != nil {
+		list, _ := json.Marshal(f.Vols)
+		q += ` AND vol IN (SELECT value FROM json_each(?3))`
+		args = append(args, string(list))
+	}
 	if f.ShareID != 0 {
 		q += ` AND share_id = ?`
 		args = append(args, f.ShareID)

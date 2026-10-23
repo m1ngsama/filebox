@@ -34,16 +34,19 @@
   let error = $state('')
   let more = $state(false)
   let kind = $state('')
+  // In a file's details the question is who changed it, so that view always covers the whole team.
+  let whose = $state<'mine' | 'everyone'>('mine')
+  const everyone = $derived(!!vol || whose === 'everyone')
   let share = $state('')
   let shares = $state<Share[]>([])
 
   $effect(() => void (!vol && api.shares().then((r) => (shares = r.shares), () => {})))
 
   async function load(before = '') {
-    const want = { kind, share, vol, path }
+    const want = { kind, share, vol, path, everyone }
     try {
-      const r = await api.activity({ kind, share, before, vol, path: vol ? path || '.' : undefined })
-      if (want.kind !== kind || want.share !== share || want.vol !== vol || want.path !== path) return
+      const r = await api.activity({ kind, share, before, vol, path: vol ? path || '.' : undefined, everyone: everyone ? '1' : undefined })
+      if (want.kind !== kind || want.share !== share || want.vol !== vol || want.path !== path || want.everyone !== everyone) return
       events = before && events ? [...events, ...r.events] : r.events
       more = r.more
       error = ''
@@ -57,6 +60,7 @@
     share
     vol
     path
+    everyone
     events = null
     load()
   })
@@ -64,7 +68,7 @@
   const fileEvent = (e: Activity) => fileKinds.has(e.kind) && !!e.vol
   const received = (e: Activity) => e.kind === 'upload' && !!e.share_id
   const together = (a: Activity, b: Activity) =>
-    fileEvent(a) && a.kind === b.kind && a.kind !== 'rename' && a.vol === b.vol && a.share_id === b.share_id && parent(a.path) === parent(b.path) && (a.kind !== 'edit' || a.path === b.path) && a.at - b.at < 600
+    fileEvent(a) && a.actor === b.actor && a.kind === b.kind && a.kind !== 'rename' && a.vol === b.vol && a.share_id === b.share_id && parent(a.path) === parent(b.path) && (a.kind !== 'edit' || a.path === b.path) && a.at - b.at < 600
   type Run = { day: string; items: Activity[] }
   const runs = $derived.by(() => {
     const day = dated()
@@ -98,10 +102,15 @@
 
 {#if !vol}
   <div class="activity-filters">
+    <div class="chips" role="radiogroup" aria-label={t.activity}>
+      {#each Object.entries(t.activityWhose) as [k, label] (k)}
+        <button type="button" class="chip" role="radio" aria-checked={whose === k} onclick={() => ((whose = k as 'mine' | 'everyone'), (share = ''))}>{label}</button>
+      {/each}
+    </div>
     <select bind:value={kind} aria-label={t.activityKinds['']}>
       {#each Object.entries(t.activityKinds) as [k, label] (k)}<option value={k}>{label}</option>{/each}
     </select>
-    {#if shares.length}
+    {#if shares.length && whose === 'mine'}
       <select bind:value={share} aria-label={t.allShares}>
         <option value="">{t.allShares}</option>
         {#each shares as s (s.id)}<option value={String(s.id)}>{place(s.vol, s.path)}</option>{/each}
@@ -135,6 +144,7 @@
             {#if (e.kind === 'move' || e.kind === 'copy') && r.items.length === 1}<span class="hint">{t.cameFrom(place(e.target || e.vol, parent(e.name), 3))}</span>{/if}
             {#if (e.kind === 'upload' || e.kind === 'download') && e.size}<span class="hint">{size(r.items.reduce((s, x) => s + x.size, 0))}</span>{/if}
             {#if e.visitor}<span class="hint">{e.kind.startsWith('login') ? t.source(e.visitor) : t.visitor(e.visitor)}</span>{/if}
+            {#if e.actor}<span class="hint actor">{t.by(e.actor)}</span>{/if}
             <span class="hint" title={date(e.at * 1000)}>{ago(e.at * 1000)}</span>
           </span>
         </div>
