@@ -4482,3 +4482,50 @@ test('a comment names a member, who is told, opens the conversation from the bel
   await expect(page.locator('.comments li:not(.mine) .comment-head b')).toHaveText('bob')
   await bob.close()
 })
+
+test('a search saved from the filters runs again from the sidebar', async ({ page, server }) => {
+  writeFileSync(join(server.vol, 'docs', 'q3 report.pdf'), 'x')
+  writeFileSync(join(server.vol, 'docs', 'q3 report.txt'), 'x')
+  await login(page)
+  await row(page, 'docs').locator('button.name').click()
+  await expect.poll(async () => (await page.request.get('/api/search?q=report')).text()).toContain('q3 report.pdf')
+  await page.locator('#filter').fill('report')
+  await page.getByRole('radio', { name: t.scopeAll }).click()
+  await page.getByLabel(t.filterKind).selectOption('doc')
+  await expect(page.locator('.row', { hasText: 'q3 report.pdf' })).toBeVisible()
+  await page.getByRole('button', { name: t.saveSearch }).click()
+  const dialog = page.locator('.dialog')
+  await dialog.getByLabel(t.searchName).fill('Reports')
+  await dialog.getByRole('button', { name: t.save }).click()
+  await expect(page.locator('.toast-text', { hasText: t.searchSaved('Reports') })).toBeVisible()
+
+  await page.goto('/recent')
+  await page.reload()
+  await page.getByRole('link', { name: 'Reports' }).click()
+  await expect(page.locator('#filter')).toHaveValue('report')
+  await expect(page.getByLabel(t.filterKind)).toHaveValue('doc')
+  await expect(page.locator('.row', { hasText: 'q3 report.pdf' })).toBeVisible()
+  await expect(page.locator('.row', { hasText: 'q3 report.txt' })).toBeVisible()
+
+  await page.getByRole('button', { name: t.removeSearch('Reports') }).click()
+  await expect(page.getByRole('link', { name: 'Reports' })).toHaveCount(0)
+})
+
+test('a folder takes the color of its first colored tag', async ({ page }) => {
+  await login(page)
+  const tag = await (await page.request.post('/api/tags', { data: { name: 'Urgent', color: 'red' } })).json()
+  expect((await page.request.post(`/api/tags/${tag.id}/items`, { data: { vol: 'v', paths: ['docs'], on: true } })).status()).toBe(204)
+  await page.reload()
+  const icon = row(page, 'docs').locator('.ficon')
+  await expect(icon).toHaveAttribute('data-color', 'red')
+  const red = await icon.evaluate((el) => getComputedStyle(el).color)
+  const plain = await page.evaluate(() => {
+    const probe = document.createElement('span')
+    probe.style.color = 'var(--accent)'
+    document.body.append(probe)
+    const c = getComputedStyle(probe).color
+    probe.remove()
+    return c
+  })
+  expect(red).not.toBe(plain)
+})

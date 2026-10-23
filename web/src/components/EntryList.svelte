@@ -131,6 +131,8 @@
       .then((m: { duration?: number }) => m.duration && lengths.set(k, clock(m.duration)), () => {})
   }
   const shown = (ev: Event) => (ev.currentTarget as HTMLElement).classList.add('ok')
+  // A folder wears the color of its first colored tag, so it stands out in a long list.
+  const tint = (e: Entry) => (e.dir ? e.tags?.map(tagOf).find((x) => x?.color)?.color : undefined)
   const media = $derived(grid && mostlyMedia(entries))
   const shelf = $derived(grid && !media && mostlyBooks(entries))
   const tiles = $derived(media && narrow.current)
@@ -666,13 +668,13 @@
                     {@render check(e, 'card-check')}
                     <button class="card-open" tabindex="-1" data-name={e.name} data-look={e.dir ? 'dir' : look(e.name)} onclick={() => tap(i)} title={e.name} aria-label={named(e)} aria-expanded={expanded?.(e)}>
                       {#if s}
-                        <FileIcon name={e.name} dir={e.dir} size={tiles ? 40 : 56} />
+                        <FileIcon name={e.name} dir={e.dir} size={tiles ? 40 : 56} color={tint(e)} />
                         <img src={s} alt="" draggable="false" loading="lazy" decoding="async" onload={shown} onerror={() => miss(e)} {@attach cancel} />
                         {@const g = tag?.(e)}
                         {#if look(e.name) === 'video' || g}<span class="card-badge" {@attach look(e.name) === 'video' ? length(e) : undefined}>{#if look(e.name) === 'video'}<Play size={icon.sm} />{lengths.get(id(e))}{/if}{#if g}{lengths.get(id(e)) ? ' · ' : ''}{g}{/if}</span>{/if}
                         {#if e.dir}<span class="card-badge"><FileIcon name={e.name} dir size={icon.sm} /></span>{/if}
                       {:else}
-                        <FileIcon name={e.name} dir={e.dir} size={tiles ? 40 : 56} />
+                        <FileIcon name={e.name} dir={e.dir} size={tiles ? 40 : 56} color={tint(e)} />
                         {#if tiles}<span class="tile-name">{@render label(e.name)}</span>{/if}
                       {/if}
                     </button>
@@ -720,7 +722,7 @@
               >
                 <span class="cell check-cell" role="gridcell">{@render check(e, '')}</span>
                 <span class="thumb" role="gridcell" data-name={e.name}>
-                  <FileIcon name={e.name} dir={e.dir} />{#if s}<img src={s} alt="" draggable="false" loading="lazy" decoding="async" onload={shown} onerror={() => miss(e)} {@attach cancel} />{/if}
+                  <FileIcon name={e.name} dir={e.dir} color={tint(e)} />{#if s}<img src={s} alt="" draggable="false" loading="lazy" decoding="async" onload={shown} onerror={() => miss(e)} {@attach cancel} />{/if}
                 </span>
                 <span class="cell name-cell" role="gridcell">
                   <button class="name" tabindex="-1" onclick={() => tap(n)} title={e.name} aria-label={named(e)} aria-expanded={expanded?.(e)}>{@render label(e.name)}{#if tag?.(e)}<span class="tag">{tag(e)}</span>{/if}{@render badges(e)}</button>

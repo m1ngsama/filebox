@@ -734,3 +734,35 @@ func TestPrefsFollowTheAccount(t *testing.T) {
 		t.Fatalf("someone else's prefs leaked: %s", b)
 	}
 }
+
+func TestSavedSearches(t *testing.T) {
+	f := newTestApp(t)
+	for _, bad := range []string{`{"name":"x","params":"evil=1"}`, `{"name":"","params":"q=pdf"}`, `{"name":"x","params":""}`, `{"name":"x","params":"q=a&q=b"}`} {
+		if w := f.do("POST", "/api/searches", body(bad)); w.Code != 400 {
+			t.Errorf("%s: %d", bad, w.Code)
+		}
+	}
+	w := f.do("POST", "/api/searches", body(`{"name":"Recent PDFs","params":"when=week&kind=doc&q=report&tag="}`))
+	if w.Code != 201 {
+		t.Fatalf("save %d %s", w.Code, w.Body)
+	}
+	got := decode[struct {
+		Searches []struct {
+			ID           int64
+			Name, Params string
+		}
+	}](t, f.do("GET", "/api/searches", nil)).Searches
+	if len(got) != 1 || got[0].Name != "Recent PDFs" || got[0].Params != "kind=doc&q=report&when=week" {
+		t.Fatalf("searches %+v", got)
+	}
+	bob := f.member(t, "bob", nil)
+	if _, b := bob.do(f, "GET", "/api/searches", ""); !strings.Contains(b, `"searches":[]`) {
+		t.Fatalf("bob sees the admin's searches: %s", b)
+	}
+	if c, _ := bob.do(f, "DELETE", "/api/searches/"+itoa(got[0].ID), ""); c != 404 {
+		t.Fatalf("bob deleted the admin's search: %d", c)
+	}
+	if w := f.do("DELETE", "/api/searches/"+itoa(got[0].ID), nil); w.Code != 204 {
+		t.Fatalf("delete %d", w.Code)
+	}
+}

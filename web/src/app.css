@@ -135,6 +135,9 @@ p.error::before { content: ''; flex: none; width: 1em; height: 1lh; background: 
 .twisty svg { transition: rotate var(--dur-1) var(--ease-out); }
 .twisty.open svg { rotate: 90deg; }
 .tree .tree-group { gap: 0; }
+.saved-search { position: relative; }
+.saved-search > a { padding-right: calc(var(--space-3) + 24px); }
+.saved-search > .twisty { position: absolute; right: var(--space-1); top: 50%; translate: 0 -50%; }
 .tree-row { display: flex; align-items: center; padding-left: calc(var(--depth) * 12px + var(--space-1)); border-radius: var(--radius-md); }
 .nav .tree-row a { flex: 1; min-width: 0; gap: var(--space-2); padding: var(--space-1) var(--space-2) var(--space-1) var(--space-0); font-size: var(--text-sm); white-space: nowrap; }
 .nav .tree-row a svg { flex: none; color: var(--muted); }
@@ -826,6 +829,7 @@ button.busy::before { content: ''; width: 14px; height: 14px; border: 2px solid 
 [data-color='purple'] { --tag: light-dark(#7c4ddb, #b392f0); }
 [data-color='pink'] { --tag: light-dark(#c9367a, #f778ba); }
 [data-color='gray'] { --tag: light-dark(#6e7781, #9ba4ae); }
+.ficon.dir[data-color] { color: var(--tag); fill: color-mix(in srgb, var(--tag) 22%, transparent); }
 .tag-dot { flex: none; width: 10px; height: 10px; border-radius: 50%; background: var(--tag); }
 .tag-chip { display: inline-flex; align-items: center; gap: var(--space-1); flex: none; max-width: 10em; padding: 0 var(--space-2); border-radius: var(--radius-full); background: color-mix(in srgb, var(--tag) 14%, transparent); color: color-mix(in srgb, var(--tag) 80%, var(--fg)); font-size: var(--text-xs); line-height: 20px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .tag-chips { display: flex; flex-wrap: wrap; gap: var(--space-1); }

@@ -77,20 +77,20 @@
   import { tags, loadTags } from '../lib/tags.svelte'
   import { canWrite } from '../lib/access.svelte'
   import { onFolder, onReconnect } from '../lib/live.svelte'
+  import { saveSearch } from '../lib/searches.svelte'
   import { kind, searchKind, size, thumbable, rawThumb, arrange, parent, base, child, flip, sorts, place, prefersGrid, mostlyMedia, dated, days, sidecars, subtitleRename, stem, type Sort } from '../lib/format'
   import { t } from '../lib/i18n'
   import { load, save, viewOf, keepView, type View } from '../lib/storage'
   import NavToggle from '../components/NavToggle.svelte'
   import EmptyState from '../components/EmptyState.svelte'
   import EntryList, { type Action } from '../components/EntryList.svelte'
-  import ContentHits from '../components/ContentHits.svelte'
   import type { Choice } from '../components/ConflictDialog.svelte'
   import { board } from '../lib/board.svelte'
   import { target, inside, sink, type Carried, type Target } from '../lib/dnd'
 
   let { vol, path, vols }: { vol: string; path: string; vols: string[] } = $props()
 
-  type Dialog = { kind: 'mkdir' } | { kind: 'touch' } | { kind: 'rename'; e: Entry } | { kind: 'renameMany'; names: string[] } | { kind: 'move'; names: string[] } | { kind: 'tags'; names: string[] }
+  type Dialog = { kind: 'mkdir' } | { kind: 'touch' } | { kind: 'rename'; e: Entry } | { kind: 'renameMany'; names: string[] } | { kind: 'move'; names: string[] } | { kind: 'tags'; names: string[] } | { kind: 'saveSearch' }
 
   let collapsed = $state(false)
   let entries = $state.raw<Entry[]>([])
@@ -312,6 +312,25 @@
     })
     return () => loading?.abort()
   })
+
+  // A saved search arrives as ?find with its words and filters, and opens search everywhere with them.
+  $effect(() => {
+    const q = new URLSearchParams(route.search)
+    if (!q.has('find')) return
+    untrack(async () => {
+      scope = 'all'
+      searching = true
+      filter = q.get('q') ?? ''
+      kindF = q.get('kind') ?? ''
+      whenF = q.get('when') ?? ''
+      sizeF = q.get('size') ?? ''
+      tagF = q.get('tag') ?? ''
+      navigate(route.path, true)
+      await tick()
+      filterEl?.focus()
+    })
+  })
+  const searchParams = () => new URLSearchParams(Object.entries({ q: filter.trim(), kind: kindF, when: whenF, size: sizeF, tag: tagF }).filter(([, v]) => v)).toString()
 
   async function nearest(p: string) {
     const ups: string[] = []
@@ -1128,6 +1147,7 @@
           </label>
         {/each}
         {#if filtering || local}<button class="ghost clear-filters" onclick={() => (kindF = whenF = sizeF = tagF = '')}>{t.clearFilters}</button>{/if}
+        {#if scope === 'all' && (filtering || filter.trim())}<button class="ghost" onclick={() => (dialog = { kind: 'saveSearch' })}>{t.saveSearch}</button>{/if}
       </div>
     {/if}
     {#if streaming && at === here}<p class="loading-count" aria-hidden="true">{t.loadingItems(entries.length)}</p>{/if}
@@ -1154,7 +1174,7 @@
           {#if !finding && !content.length}<EmptyState icon={SearchX} title={t.noResults} hint={t.noResultsHint} />{/if}
         {/snippet}
         {#snippet footer()}
-          {#if !finding && (content.length || indexing)}<ContentHits hits={content} {indexing} onopen={(h) => actOn('folder', { ...h, dir: false })} />{/if}
+          {#if !finding && (content.length || indexing)}{#await import('../components/ContentHits.svelte') then { default: ContentHits }}<ContentHits hits={content} {indexing} onopen={(h) => actOn('folder', { ...h, dir: false })} />{/await}{/if}
         {/snippet}
       </EntryList>
     {:else}
@@ -1356,6 +1376,20 @@
       {#await import('../components/BatchRename.svelte') then { default: BatchRename }}
         <BatchRename names={dialog.names} taken={new Set(entries.map((x) => x.name))} onsave={renameMany} onclose={() => (dialog = null)} />
       {/await}
+    {:else if dialog?.kind === 'saveSearch'}
+      {@const params = searchParams()}
+      <NameDialog
+        title={t.saveSearch}
+        label={t.searchName}
+        action={t.save}
+        value={filter.trim() || t.saveSearch}
+        fresh
+        onsave={async (n) => {
+          await saveSearch(n, params)
+          toast(t.searchSaved(n))
+        }}
+        onclose={() => (dialog = null)}
+      />
     {:else if dialog?.kind === 'tags'}
       {#await import('../components/TagPicker.svelte') then { default: TagPicker }}
         <TagPicker {vol} items={dialog.names.map((n) => ({ path: join(n), tags: entries.find((x) => x.name === n)?.tags }))} onchange={reload} onclose={() => (dialog = null)} />

@@ -13,6 +13,10 @@
   import Users from '@lucide/svelte/icons/users'
   import { access, canWrite } from '../lib/access.svelte'
   import NoticeBell from './NoticeBell.svelte'
+  import SearchIcon from '@lucide/svelte/icons/search'
+  import X from '@lucide/svelte/icons/x'
+  import { saved, loadSearches, dropSearch } from '../lib/searches.svelte'
+  import { fail } from '../lib/toast.svelte'
   import LogOut from '@lucide/svelte/icons/log-out'
   import { link } from '../lib/router.svelte'
   import ChevronRight from '@lucide/svelte/icons/chevron-right'
@@ -32,6 +36,7 @@
       () => {},
     ).finally(() => (measured = true))
   $effect(() => void measure())
+  $effect(() => void loadSearches())
   const groups = $derived.by(() => {
     const m = new Map<string, string[]>()
     for (const v of vols) if (usage[v]?.total) m.set(usage[v].fs || v, [...(m.get(usage[v].fs || v) ?? []), v])
@@ -89,6 +94,12 @@
       <li>
         <a href="/activity" onclick={go} aria-current={parts[0] === 'activity' ? 'page' : undefined}><ActivityIcon size={icon.md} /><span>{t.activity}</span></a>
       </li>
+      {#each saved.list as s (s.id)}
+        <li class="saved-search">
+          <a href={`/files/${encodeURIComponent(vols[0])}/?find&${s.params}`} onclick={go}><SearchIcon size={icon.md} /><span>{s.name}</span></a>
+          <button type="button" class="twisty" aria-label={t.removeSearch(s.name)} title={t.removeSearch(s.name)} onclick={() => dropSearch(s.id).catch(fail)}><X size={14} /></button>
+        </li>
+      {/each}
     {/if}
     {#each vols as v}
       {@const open = tree.open.has(`${v}/`)}

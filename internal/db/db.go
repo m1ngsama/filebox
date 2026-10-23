@@ -245,6 +245,13 @@ var migrations = []string{
 	);
 	CREATE INDEX comments_path ON comments(vol, path, id);
 	ALTER TABLE notices ADD COLUMN actor TEXT NOT NULL DEFAULT '';`,
+	`CREATE TABLE searches (
+		id INTEGER PRIMARY KEY AUTOINCREMENT,
+		user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+		name TEXT NOT NULL,
+		params TEXT NOT NULL,
+		created INTEGER NOT NULL
+	);`,
 }
 
 type DB struct {

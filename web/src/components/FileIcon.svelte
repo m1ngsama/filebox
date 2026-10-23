@@ -14,10 +14,10 @@
   import BookImage from '@lucide/svelte/icons/book-image'
   import { look } from '../lib/format'
 
-  let { name, dir, size = icon.lg }: { name: string; dir: boolean; size?: number } = $props()
+  let { name, dir, size = icon.lg, color }: { name: string; dir: boolean; size?: number; color?: string } = $props()
   const icons = { image: FileImage, video: FileVideo, audio: FileMusic, pdf: FileText, office: FileText, slides: Presentation, text: FileText, code: FileCode, archive: FileArchive, sheet: FileSpreadsheet, book: BookOpen, comic: BookImage, '': File }
   const k = $derived(dir ? 'dir' : look(name))
   const Icon = $derived(k === 'dir' ? Folder : icons[k])
 </script>
 
-<Icon {size} class={`ficon ${k}`} aria-hidden="true" />
+<Icon {size} class={`ficon ${k}`} data-color={color || undefined} aria-hidden="true" />
