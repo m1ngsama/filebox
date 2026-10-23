@@ -74,6 +74,7 @@
   import { loadStars, starred, star } from '../lib/favorites.svelte'
   import { folderAction, downloadAction, actOn, saveZip } from '../lib/located'
   import { tags, loadTags } from '../lib/tags.svelte'
+  import { canWrite } from '../lib/access.svelte'
   import { kind, searchKind, size, thumbable, rawThumb, arrange, parent, base, child, flip, sorts, place, prefersGrid, mostlyMedia, dated, days, sidecars, subtitleRename, stem, type Sort } from '../lib/format'
   import { t } from '../lib/i18n'
   import { load, save, viewOf, keepView, type View } from '../lib/storage'
@@ -156,6 +157,7 @@
   let folder = $state<HTMLInputElement>()
 
   const here = $derived(`${vol}/${path}`)
+  const writable = $derived(canWrite(vol))
   const join = (n: string) => child(path, n)
   const crumbs = $derived(path ? path.split('/') : [])
   const side = $derived(at === here ? sidecars(entries) : new Map<string, string[]>())
@@ -448,7 +450,7 @@
   const ask = (name: string, rest: number) => new Promise<[Choice, boolean] | null>((resolve) => (conflict = { name, rest, resolve }))
 
   async function upload(list: FileList | File[] | null | undefined, asFolder = false) {
-    if (!list?.length || error) return
+    if (!list?.length || error || !writable) return
     forgetUndo()
     const v = vol
     const dir = path
@@ -532,7 +534,8 @@
   } satisfies Record<string, Action>
 
   const actions = (e: Entry | null): Action[] =>
-    !e ? (error ? [] : [act.mkdir, act.touch, act.upload, ...(board.items ? [act.paste] : [])])
+    !e ? (error || !writable ? [] : [act.mkdir, act.touch, act.upload, ...(board.items ? [act.paste] : [])])
+    : !writable ? [...(narrow.current ? [act.select] : []), act.open, act.download, act.share, starred(vol, join(e.name)) ? act.unstar : act.star, act.details]
     : [...(narrow.current ? [act.select] : []), act.open, act.download, act.rename, act.duplicate, ...(!e.dir && /\.zip$/i.test(e.name) ? [act.unzip] : []), act.move, act.share, starred(vol, join(e.name)) ? act.unstar : act.star, act.tags, act.details, act.remove]
 
   function onaction(id: string, e: Entry | null) {
@@ -865,7 +868,7 @@
   }
 
   const into = (to: { vol: string; path: string }, spring?: () => void): Target => ({
-    accepts: (c) => !inside(c, to),
+    accepts: (c) => writable && !inside(c, to),
     drop: (c, copy) => dropInto(to, c, copy),
     spring,
     label: base(to.path) || to.vol,
@@ -905,7 +908,7 @@
     if (document.querySelector(":is([role=dialog], [role=menu]):not([data-state='closed'])")) return
     if ((e.target as Element).matches?.('input, select, textarea, [contenteditable]')) return
     const files = [...(e.clipboardData?.files ?? [])]
-    if (!files.length) return
+    if (!files.length || !writable) return
     e.preventDefault()
     const d = new Date()
     const two = (n: number) => String(n).padStart(2, '0')
@@ -928,10 +931,10 @@
     else if (mod && !e.shiftKey && !e.altKey && k === 'c' && inList(e.target as Element) && (selected.size || target) && !getSelection()?.toString()) {
       e.preventDefault()
       clip(selected.size ? shown.filter((x) => selected.has(x.name)).map((x) => x.name) : [target!.name])
-    } else if (mod && !e.shiftKey && e.code === 'KeyV' && board.items && !e.repeat) {
+    } else if (mod && !e.shiftKey && e.code === 'KeyV' && board.items && !e.repeat && writable) {
       e.preventDefault()
       pasteItems(e.altKey)
-    } else if (mod && !e.shiftKey && !e.altKey && k === 'd' && (selected.size || target)) {
+    } else if (mod && !e.shiftKey && !e.altKey && k === 'd' && (selected.size || target) && writable) {
       e.preventDefault()
       duplicate(selected.size ? shown.filter((x) => selected.has(x.name)).map((x) => x.name) : [target!.name])
     }
@@ -939,7 +942,7 @@
       e.preventDefault()
       for (const x of shown) selected.add(x.name)
     } else if (mod) return
-    else if (e.key === '/' || e.key === '?' || ((e.key === 'n' || e.key === 'u') && !(e.target as Element).closest('[data-seeking]')) || (e.key === 'F2' && target)) {
+    else if (e.key === '/' || e.key === '?' || ((e.key === 'n' || e.key === 'u') && writable && !(e.target as Element).closest('[data-seeking]')) || (e.key === 'F2' && target && writable)) {
       e.preventDefault()
       if (e.key === '/') search()
       else if (e.key === '?') help = true
@@ -947,7 +950,7 @@
       else if (e.key === 'u') files?.click()
       else if (selected.size > 1) dialog = { kind: 'renameMany', names: shown.filter((x) => selected.has(x.name)).map((x) => x.name) }
       else if (target) dialog = { kind: 'rename', e: target }
-    } else if ((e.key === 'Delete' || e.key === 'Backspace') && !(e.target as Element).closest('[data-seeking]') && selected.size && !e.repeat && performance.now() > calm && inList(e.target as Element)) remove([...selected])
+    } else if ((e.key === 'Delete' || e.key === 'Backspace') && !(e.target as Element).closest('[data-seeking]') && selected.size && !e.repeat && performance.now() > calm && writable && inList(e.target as Element)) remove([...selected])
     else if (e.key === 'Enter' && selected.size === 1 && !(e.target as Element).closest('button, a, [role=grid]')) {
       const hit = entries.find((x) => selected.has(x.name))
       if (hit) open(hit)
@@ -963,13 +966,15 @@
   <button class="ghost" onclick={() => download([...selected])}>
     <Download size={icon.sm} />{t.download}
   </button>
-  <button class="ghost" onclick={() => (dialog = { kind: 'move', names: [...selected] })}><FolderInput size={icon.sm} />{t.moveOrCopy}</button>
-  {#if selected.size > 1}<button class="ghost" onclick={() => (dialog = { kind: 'renameMany', names: shown.filter((x) => selected.has(x.name)).map((x) => x.name) })}><Pencil size={icon.sm} />{t.rename}</button>{/if}
-  <button class="ghost" onclick={() => (dialog = { kind: 'tags', names: [...selected] })}><TagIcon size={icon.sm} />{t.tags}</button>
+  {#if writable}
+    <button class="ghost" onclick={() => (dialog = { kind: 'move', names: [...selected] })}><FolderInput size={icon.sm} />{t.moveOrCopy}</button>
+    {#if selected.size > 1}<button class="ghost" onclick={() => (dialog = { kind: 'renameMany', names: shown.filter((x) => selected.has(x.name)).map((x) => x.name) })}><Pencil size={icon.sm} />{t.rename}</button>{/if}
+    <button class="ghost" onclick={() => (dialog = { kind: 'tags', names: [...selected] })}><TagIcon size={icon.sm} />{t.tags}</button>
+  {/if}
   <button class="ghost" onclick={() => toggleStar([...selected], !allStarred)}>
     {#if allStarred}<StarOff size={icon.sm} />{t.unstar}{:else}<Star size={icon.sm} />{t.star}{/if}
   </button>
-  <button class="ghost danger" onclick={() => remove([...selected])}><Trash size={icon.sm} />{t.remove}</button>
+  {#if writable}<button class="ghost danger" onclick={() => remove([...selected])}><Trash size={icon.sm} />{t.remove}</button>{/if}
   <button class="icon-btn" aria-label={t.clearSelection} onclick={() => selected.clear()}><X size={icon.sm} /></button>
 {/snippet}
 
@@ -979,7 +984,7 @@
     class:selecting={selected.size > 0}
     aria-label={vol}
     ondragenter={(e) => {
-      if (!hasFiles(e)) return
+      if (!hasFiles(e) || !writable) return
       depth++
       dragging = true
     }}
@@ -1010,6 +1015,7 @@
           <a href={filesURL(vol, to)} onclick={link} use:target={into({ vol, path: to })} aria-current={i === crumbs.length - 1 ? 'page' : undefined}>{c}</a>
         {/each}
       </nav>
+      {#if writable}
       <DropdownMenu.Root>
         <DropdownMenu.Trigger class="primary new" disabled={!!error}><Plus size={icon.md} />{t.new}</DropdownMenu.Trigger>
         <DropdownMenu.Portal to="main">
@@ -1021,6 +1027,7 @@
           </DropdownMenu.Content>
         </DropdownMenu.Portal>
       </DropdownMenu.Root>
+      {/if}
       <span class="grow"></span>
       <div class="find">
         <label for="filter" class="sr-only">{t.filter}</label>
@@ -1146,7 +1153,7 @@
         {onaction}
         onopen={open}
         {batch}
-        {dnd}
+        dnd={writable ? dnd : undefined}
         {reveal}
         tag={(e) => (side.has(e.name) && !subs ? (kind(e.name) === 'audio' ? t.lyrics : t.subtitles) : undefined)}
         loading={at !== here}
@@ -1192,7 +1199,7 @@
             </EmptyState>
           {:else}
             <EmptyState icon={FolderOpen} title={t.folderEmpty} hint={t.emptyHint}>
-              <button class="primary" onclick={() => files?.click()}><Upload size={icon.sm} />{t.upload}</button>
+              {#if writable}<button class="primary" onclick={() => files?.click()}><Upload size={icon.sm} />{t.upload}</button>{/if}
             </EmptyState>
           {/if}
         {/snippet}
@@ -1201,7 +1208,7 @@
     {/if}
 
     {#if dragging}<div class="dropzone">{t.dropHere}</div>{/if}
-    {#if !selected.size && !details && !error}<button class="primary fab" aria-label={t.new} onclick={() => (sheet = 'new')}><Plus size={icon.lg} /></button>{/if}
+    {#if !selected.size && !details && !error && writable}<button class="primary fab" aria-label={t.new} onclick={() => (sheet = 'new')}><Plus size={icon.lg} /></button>{/if}
   </section>
 
   {#if details}
@@ -1214,7 +1221,7 @@
           thumbs={[thumb(details), raw(details)]}
           onclose={closeDetails}
           onchange={reload}
-          ontags={() => details && (dialog = { kind: 'tags', names: [details.name] })}
+          ontags={writable ? () => details && (dialog = { kind: 'tags', names: [details.name] }) : undefined}
         />
       {/key}
     {/await}
@@ -1242,10 +1249,10 @@
 {#if selected.size}
   <div class="sel-tools" role="group" aria-label={t.selected(selected.size)} bind:offsetHeight={barH}>
     <button onclick={() => download([...selected])}><Download size={icon.md} /><span>{t.download}</span></button>
-    <button onclick={() => (dialog = { kind: 'move', names: [...selected] })}><FolderInput size={icon.md} /><span>{t.moveOrCopy}</span></button>
+    {#if writable}<button onclick={() => (dialog = { kind: 'move', names: [...selected] })}><FolderInput size={icon.md} /><span>{t.moveOrCopy}</span></button>{/if}
     <button disabled={!one} onclick={() => pass('share')}><Link size={icon.md} /><span>{t.copyLink}</span></button>
     <button onclick={() => (sheet = 'more')}><Ellipsis size={icon.md} /><span>{t.more}</span></button>
-    <button class="danger" onclick={() => remove([...selected])}><Trash size={icon.md} /><span>{t.remove}</span></button>
+    {#if writable}<button class="danger" onclick={() => remove([...selected])}><Trash size={icon.md} /><span>{t.remove}</span></button>{/if}
   </div>
 {/if}
 
@@ -1256,7 +1263,9 @@
     {@const items =
       sheet === 'new'
         ? creators
-        : [
+        : !writable
+          ? [{ ...mark, run: () => toggleStar(names, mark === act.star) }, ...(one ? [{ ...act.details, run: () => pass(act.details.id) }] : [])]
+          : [
             { ...mark, run: () => toggleStar(names, mark === act.star) },
             { ...act.tags, run: () => (dialog = { kind: 'tags', names }) },
             ...(one ? [act.rename, act.details].map((a) => ({ ...a, run: () => pass(a.id) })) : [{ ...act.rename, run: () => (dialog = { kind: 'renameMany', names: shown.filter((x) => selected.has(x.name)).map((x) => x.name) }) }]),
@@ -1278,7 +1287,7 @@
 
 {#if preview}
   {#await import('../components/Preview.svelte') then { default: Preview }}
-    <Preview bind:entry={preview} entries={hidden.size ? [...shown, ...entries.filter((e) => hidden.has(e.name))] : shown} url={(e, as) => fileURL(vol, join(e.name), as)} saveTo={(e) => `/api/file?${new URLSearchParams({ vol, path: join(e.name) })}`} startEdit={editFirst} onclose={() => ((preview = null), (editFirst = false))} />
+    <Preview bind:entry={preview} entries={hidden.size ? [...shown, ...entries.filter((e) => hidden.has(e.name))] : shown} url={(e, as) => fileURL(vol, join(e.name), as)} saveTo={writable ? (e) => `/api/file?${new URLSearchParams({ vol, path: join(e.name) })}` : undefined} startEdit={editFirst} onclose={() => ((preview = null), (editFirst = false))} />
   {/await}
 {/if}
 

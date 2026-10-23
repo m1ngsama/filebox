@@ -14,7 +14,10 @@ export class HttpError extends Error {
 export type Entry = { name: string; dir: boolean; size: number; mtime: number; items?: number; bytes?: number; tags?: number[] }
 export type Tag = { id: number; name: string; color: string; count: number }
 export type Photo = { id: number; vol: string; path: string; name: string; size: number; mtime: number; taken: number }
-export type Me = { name: string; vols: string[]; origins?: string[] }
+export type Me = { name: string; admin: boolean; vols: string[]; access: Record<string, string>; origins?: string[] }
+export type Member = { id: number; name: string; role: 'admin' | 'member'; access: Record<string, string>; created: number; self: boolean }
+export type Invite = { id: number; kind: 'join' | 'reset'; user: string; role: 'admin' | 'member'; access: Record<string, string>; created: number; expires: number }
+export type InviteInfo = { kind: 'join' | 'reset'; user: string; role: 'admin' | 'member'; access: Record<string, string> }
 export type RecentFile = Entry & Loc
 export type Favorite = RecentFile & { missing: boolean }
 export type UsageReport = { kinds: { kind: string; size: number; files: number }[]; folders: { vol: string; path: string; size: number; files: number }[]; largest: (Loc & { name: string; size: number; mtime: number })[]; scanning: boolean }
@@ -174,6 +177,14 @@ export const api = {
     ),
   vols: () => req<{ vols: Usage[] }>('GET', '/api/vols'),
   duplicates: (min: string, signal?: AbortSignal) => req<DuplicateReport>('GET', `/api/duplicates?min=${min}`, undefined, signal),
+  team: () => req<{ users: Member[]; invites: Invite[]; vols: string[] }>('GET', '/api/team'),
+  editMember: (id: number, change: { role?: string; access?: Record<string, string> }) => req<void>('PATCH', `/api/team/users/${id}`, change),
+  removeMember: (id: number) => req<void>('DELETE', `/api/team/users/${id}`),
+  resetMember: (id: number) => req<{ id: number; token: string; expires: number }>('POST', `/api/team/users/${id}/reset`),
+  newInvite: (role: string, access: Record<string, string>, hours: number) => req<{ id: number; token: string; expires: number }>('POST', '/api/team/invites', { role, access, hours }),
+  delInvite: (id: number) => req<void>('DELETE', `/api/team/invites/${id}`),
+  inviteInfo: (token: string) => req<InviteInfo>('GET', `/api/invite/${encodeURIComponent(token)}`),
+  useInvite: (token: string, name: string, password: string) => req<void>('POST', `/api/invite/${encodeURIComponent(token)}`, { name, password }),
   usage: (signal?: AbortSignal) => req<UsageReport>('GET', '/api/usage', undefined, signal),
   exists: (vol: string, path: string) =>
     fetch(lsURL(vol, path)).then(

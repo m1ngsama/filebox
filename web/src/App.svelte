@@ -11,6 +11,7 @@
   import Nav from './components/Nav.svelte'
   import NavToggle from './components/NavToggle.svelte'
   import Toasts from './components/Toasts.svelte'
+  import { setAccess } from './lib/access.svelte'
   import EmptyState from './components/EmptyState.svelte'
   import CloudOff from '@lucide/svelte/icons/cloud-off'
   import HardDrive from '@lucide/svelte/icons/hard-drive'
@@ -21,7 +22,7 @@
   let palette = $state(false)
   let shared = $state(new URLSearchParams(location.search).get('share-target'))
   const parts = $derived(route.path.split('/').filter(Boolean).map(decodeURIComponent))
-  const titles: Record<string, string> = { recent: t.recent, favorites: t.favorites, activity: t.activity, tags: t.tags, photos: t.photos, storage: t.storage, duplicates: t.duplicates, shares: t.myShares, trash: t.trash, settings: t.settings }
+  const titles: Record<string, string> = { recent: t.recent, favorites: t.favorites, activity: t.activity, tags: t.tags, photos: t.photos, storage: t.storage, duplicates: t.duplicates, shares: t.myShares, trash: t.trash, settings: t.settings, team: t.team, invite: t.inviteTitle }
   const heading = $derived(needLogin ? t.login : parts[0] === 'files' ? parts.slice(1).at(-1) : titles[parts[0]])
 
   session.lost = () => {
@@ -32,6 +33,7 @@
   async function load() {
     try {
       me = await api.me()
+      setAccess(me.admin, me.access)
       save('user', me.name)
       needLogin = false
       error = ''
@@ -73,7 +75,9 @@
 
 <svelte:head><title>{heading ? `${heading} — ${t.brand}` : t.brand}</title></svelte:head>
 
-{#if error}
+{#if parts[0] === 'invite' && parts[1]}
+  <main><Lazy load={() => import('./routes/Invite.svelte')} token={parts[1]} onok={() => { navigate('/', true); load() }} /></main>
+{:else if error}
   <main class="load-error">
     <EmptyState icon={CloudOff} as="h1" title={t.loadFailedTitle} hint={error}>
       <button class="primary" onclick={load}>{t.retry}</button>
@@ -116,6 +120,12 @@
               <Lazy load={() => import('./routes/Duplicates.svelte')} />
             {:else if parts[0] === 'shares'}
               <Lazy load={() => import('./routes/Shares.svelte')} />
+            {:else if parts[0] === 'team'}
+              {#if me.admin}
+                <Lazy load={() => import('./routes/Team.svelte')} />
+              {:else}
+                <EmptyState icon={HardDrive} as="h2" title={t.invalidInvite} hint="" />
+              {/if}
             {:else if parts[0] === 'settings'}
               <Lazy load={() => import('./routes/Settings.svelte')} vols={me.vols} origins={me.origins} />
             {:else if parts[0] === 'trash'}

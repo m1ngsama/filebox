@@ -7,6 +7,7 @@
   import { t } from '../lib/i18n'
   import { toast } from '../lib/toast.svelte'
   import { copyLater } from '../lib/clipboard'
+  import { canWrite } from '../lib/access.svelte'
 
   let { vol, path, dir }: { vol: string; path: string; dir: boolean } = $props()
 
@@ -16,7 +17,7 @@
   let expires = $state(7 * 86400)
   let error = $state('')
   let busy = $state(false)
-  const modes = ['read', 'upload', 'drop'] as const
+  const modes = $derived(canWrite(vol) ? (['read', 'upload', 'drop'] as const) : (['read'] as const))
 
   async function load() {
     try {
@@ -70,7 +71,7 @@
 </ul>
 
 <form class="share-form" onsubmit={create}>
-  {#if dir}
+  {#if dir && modes.length > 1}
     <fieldset>
       <legend>{t.permission}</legend>
       {#each modes as m (m)}

@@ -10,6 +10,8 @@
   import Trash from '@lucide/svelte/icons/trash'
   import Settings from '@lucide/svelte/icons/settings'
   import ChartPie from '@lucide/svelte/icons/chart-pie'
+  import Users from '@lucide/svelte/icons/users'
+  import { access, canWrite } from '../lib/access.svelte'
   import LogOut from '@lucide/svelte/icons/log-out'
   import { link } from '../lib/router.svelte'
   import ChevronRight from '@lucide/svelte/icons/chevron-right'
@@ -46,7 +48,7 @@
   })
 
   const root = (v: string) => ({
-    accepts: (c: Parameters<typeof inside>[0]) => !!sink.into && !inside(c, { vol: v, path: '' }),
+    accepts: (c: Parameters<typeof inside>[0]) => !!sink.into && canWrite(v) && !inside(c, { vol: v, path: '' }),
     drop: (c: Parameters<typeof inside>[0], copy: boolean) => sink.into?.({ vol: v, path: '' }, c, copy),
     label: v,
   })
@@ -125,6 +127,11 @@
           <Trash size={icon.md} /><span>{t.trash}</span>
         </a>
       </li>
+      {#if access.admin}
+        <li>
+          <a href="/team" onclick={go} aria-current={parts[0] === 'team' ? 'page' : undefined}><Users size={icon.md} /><span>{t.team}</span></a>
+        </li>
+      {/if}
       <li>
         <a href="/settings" onclick={go} aria-current={parts[0] === 'settings' ? 'page' : undefined}><Settings size={icon.md} /><span>{t.settings}</span></a>
       </li>

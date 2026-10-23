@@ -54,6 +54,8 @@ filebox user -data /srv/data/filebox role alice admin     # or member
 
 A running server notices a change made on the command line within 30 seconds.
 
+Admins manage the team from the Team page instead: invite someone with a one-time link that sets their role and per-volume access (the link works once and expires after 1, 7 or 30 days), change anyone's role or access, make a one-time link for a member who forgot their password (it signs them out everywhere once used), and remove members. There is always at least one admin.
+
 ## Duplicates
 
 The duplicate finder (`/duplicates`) hashes only files that share a size with another file, remembers each hash in the database until the file changes, and works through a large library over several rounds of 8 seconds. Selected copies go to the trash, and at least one copy in each group always stays.

@@ -14,6 +14,7 @@
   import { size, date, ago, parent, place } from '../lib/format'
   import { t } from '../lib/i18n'
   import { toast, fail } from '../lib/toast.svelte'
+  import { canWrite } from '../lib/access.svelte'
 
   let { vol, vols }: { vol: string; vols: string[] } = $props()
 
@@ -70,6 +71,7 @@
     if (all) selected.clear()
     else for (const x of items ?? []) selected.add(x.id)
   }
+  const writable = $derived(canWrite(vol))
 </script>
 
 <div class="toolbar">
@@ -79,7 +81,7 @@
     {/each}
   </div>
   <span class="grow"></span>
-  <button class="quiet" disabled={!items?.length} onclick={() => (confirm = 'empty')}><TrashIcon size={icon.sm} />{t.emptyTrash}</button>
+  {#if writable}<button class="quiet" disabled={!items?.length} onclick={() => (confirm = 'empty')}><TrashIcon size={icon.sm} />{t.emptyTrash}</button>{/if}
 </div>
 <p class="hint trash-note">{t.trashNote}</p>
 
@@ -88,8 +90,10 @@
     <label class="hit"><input type="checkbox" checked={all} indeterminate={!all && selected.size > 0} onchange={toggleAll} aria-label={t.selectAll} /></label>
     {#if selected.size}
       <span class="count">{t.selected(selected.size)}</span>
-      <button class="ghost" disabled={busy} onclick={() => restore(picked)}><RotateCcw size={icon.sm} />{t.restore}</button>
-      <button class="ghost danger" disabled={busy} onclick={() => (confirm = picked)}><TrashIcon size={icon.sm} />{t.deleteForever}</button>
+      {#if writable}
+        <button class="ghost" disabled={busy} onclick={() => restore(picked)}><RotateCcw size={icon.sm} />{t.restore}</button>
+        <button class="ghost danger" disabled={busy} onclick={() => (confirm = picked)}><TrashIcon size={icon.sm} />{t.deleteForever}</button>
+      {/if}
       <button class="icon-btn" aria-label={t.clearSelection} onclick={() => selected.clear()}><X size={icon.sm} /></button>
     {:else}
       <span class="hint">{t.trashCount(items.length)}{#if items.length}{' · '}{size(items.reduce((n, x) => n + x.size, 0))}{/if}</span>
@@ -115,7 +119,7 @@
       </span>
     </div>
     <span class="num">{it.dir ? '' : size(it.size)}</span>
-    <button class="ghost" disabled={busy} onclick={() => restore([it])}><RotateCcw size={icon.sm} />{t.restore}</button>
+    {#if writable}<button class="ghost" disabled={busy} onclick={() => restore([it])}><RotateCcw size={icon.sm} />{t.restore}</button>{/if}
   {/snippet}
   {#snippet empty()}<EmptyState icon={TrashIcon} title={t.trashEmpty} hint={t.trashEmptyHint} />{/snippet}
 </RowList>

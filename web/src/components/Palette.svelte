@@ -13,12 +13,14 @@
   import Trash from '@lucide/svelte/icons/trash'
   import ChartPie from '@lucide/svelte/icons/chart-pie'
   import Copy from '@lucide/svelte/icons/copy'
+  import Users from '@lucide/svelte/icons/users'
   import Settings from '@lucide/svelte/icons/settings'
   import Sun from '@lucide/svelte/icons/sun'
   import File from '@lucide/svelte/icons/file'
   import Folder from '@lucide/svelte/icons/folder'
   import { api, filesURL, selectURL, type RecentFile } from '../lib/api'
   import { navigate } from '../lib/router.svelte'
+  import { access } from '../lib/access.svelte'
   import { setTheme, type Theme } from '../lib/theme'
   import { t } from '../lib/i18n'
 
@@ -41,6 +43,7 @@
     { id: 'duplicates', label: t.duplicates, icon: Copy, run: go('/duplicates') },
     { id: 'shares', label: t.myShares, icon: Share2, run: go('/shares') },
     { id: 'trash', label: t.trash, icon: Trash, run: go('/trash') },
+    ...(access.admin ? [{ id: 'team', label: t.team, icon: Users, run: go('/team') }] : []),
     { id: 'settings', label: t.settings, icon: Settings, run: go('/settings') },
   ].map((c) => ({ ...c, group: t.paletteGo }))
   const places = $derived<Item[]>(vols.map((v) => ({ id: `vol:${v}`, label: v, group: t.paletteGo, icon: HardDrive, run: go(filesURL(v, '')) })))

@@ -716,6 +716,28 @@ button.busy::before { content: ''; width: 14px; height: 14px; border: 2px solid 
 .webhook-row .field:not(.grow) { min-width: 0; }
 .webhook-kinds { display: flex; flex-wrap: wrap; gap: var(--space-2) var(--space-5); margin: 0; padding: 0; border: 0; min-width: 0; }
 .webhook-kinds legend { padding: 0; margin-bottom: var(--space-1-5); color: var(--muted); font-size: var(--text-sm); }
+.team { display: flex; flex-direction: column; gap: var(--space-6); max-width: 960px; }
+.team-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--space-3); }
+.team-head p { margin: 0; flex: 1 1 24em; }
+.team h2 { margin-bottom: var(--space-2); }
+.members { list-style: none; margin: 0; padding: 0; border: 1px solid var(--line); border-radius: var(--radius-lg); overflow: hidden; }
+.members li { display: grid; grid-template-columns: auto minmax(8em, 1fr) auto; align-items: center; gap: var(--space-2) var(--space-3); padding: var(--space-3); }
+.members li + li { border-top: 1px solid var(--line); }
+.members .row-icon { color: var(--muted); }
+.member-main { display: flex; flex-direction: column; min-width: 0; }
+.member-main .tag { margin-left: var(--space-2); }
+.member-access { grid-column: 2 / -1; display: flex; flex-wrap: wrap; gap: var(--space-2) var(--space-4); }
+.member-vol { display: flex; align-items: center; gap: var(--space-2); }
+.member-vol > span { color: var(--muted); font-size: var(--text-sm); }
+.member-actions { grid-column: 2 / -1; display: flex; flex-wrap: wrap; gap: var(--space-2); }
+.invite-access { display: flex; flex-direction: column; gap: var(--space-2); margin: 0; padding: 0; border: 0; min-width: 0; }
+.invite-access legend { padding: 0; margin-bottom: var(--space-1-5); color: var(--muted); font-size: var(--text-sm); }
+.invite-vols { text-align: center; margin: 0; }
+@media (min-width: 900px) {
+  .members li { grid-template-columns: auto minmax(8em, 14em) auto minmax(0, 1fr) auto; }
+  .member-access, .member-actions { grid-column: auto; }
+  .invites li { grid-template-columns: auto minmax(8em, 1fr) minmax(0, 1fr) auto; }
+}
 .dups { display: flex; flex-direction: column; gap: var(--space-4); max-width: 960px; }
 .dups .filters { display: flex; align-items: center; gap: var(--space-3); padding: 0; }
 .dup-group h2 { font-size: var(--text-md); color: var(--muted); font-weight: 600; margin-bottom: var(--space-1); }
