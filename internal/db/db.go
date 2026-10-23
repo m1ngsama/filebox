@@ -169,6 +169,9 @@ var migrations = []string{
 	`ALTER TABLE taken ADD COLUMN hidden INTEGER NOT NULL DEFAULT 0;
 	DROP INDEX taken_at;
 	CREATE INDEX taken_shown ON taken(at DESC, id DESC) WHERE hidden = 0;`,
+	`ALTER TABLE shares ADD COLUMN max_downloads INTEGER NOT NULL DEFAULT 0;
+	ALTER TABLE shares ADD COLUMN downloads INTEGER NOT NULL DEFAULT 0;`,
+	`ALTER TABLE shares ADD COLUMN ask_name INTEGER NOT NULL DEFAULT 0;`,
 	`CREATE TABLE webhooks (
 		id INTEGER PRIMARY KEY AUTOINCREMENT,
 		user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
@@ -225,6 +228,8 @@ type Share struct {
 	ExpiresAt, CreatedAt, Hits    int64
 	Note                          string
 	MaxUpload, Views              int64
+	MaxDownloads, Downloads       int64
+	AskName                       bool
 }
 
 func Open(path string) (*DB, error) {
@@ -403,24 +408,24 @@ func (d *DB) ListTokens(userID int64, kind string) ([]Token, error) {
 	return out, rows.Err()
 }
 
-const shareCols = `id, token, user_id, vol, path, mode, password_hash, expires_at, created_at, hits, note, max_upload, views`
+const shareCols = `id, token, user_id, vol, path, mode, password_hash, expires_at, created_at, hits, note, max_upload, views, max_downloads, downloads, ask_name`
 
 func scanShare(r interface{ Scan(...any) error }) (Share, error) {
 	var s Share
 	err := r.Scan(&s.ID, &s.Token, &s.UserID, &s.Vol, &s.Path, &s.Mode, &s.PasswordHash, &s.ExpiresAt, &s.CreatedAt, &s.Hits,
-		&s.Note, &s.MaxUpload, &s.Views)
+		&s.Note, &s.MaxUpload, &s.Views, &s.MaxDownloads, &s.Downloads, &s.AskName)
 	return s, notFound(err)
 }
 
 func (d *DB) InsertShare(s *Share) error {
-	return d.QueryRow(`INSERT INTO shares (token, user_id, vol, path, mode, password_hash, expires_at, created_at, note, max_upload)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING id`,
-		s.Token, s.UserID, s.Vol, s.Path, s.Mode, s.PasswordHash, s.ExpiresAt, s.CreatedAt, s.Note, s.MaxUpload).Scan(&s.ID)
+	return d.QueryRow(`INSERT INTO shares (token, user_id, vol, path, mode, password_hash, expires_at, created_at, note, max_upload, max_downloads, ask_name)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING id`,
+		s.Token, s.UserID, s.Vol, s.Path, s.Mode, s.PasswordHash, s.ExpiresAt, s.CreatedAt, s.Note, s.MaxUpload, s.MaxDownloads, s.AskName).Scan(&s.ID)
 }
 
 func (d *DB) SameShare(userID int64, vol, path, mode string, duration, now int64) (Share, error) {
 	return scanShare(d.QueryRow(`SELECT `+shareCols+` FROM shares
-		WHERE user_id = ? AND vol = ? AND path = ? AND mode = ? AND password_hash = '' AND note = '' AND max_upload = 0
+		WHERE user_id = ? AND vol = ? AND path = ? AND mode = ? AND password_hash = '' AND note = '' AND max_upload = 0 AND max_downloads = 0 AND ask_name = 0
 		AND iif(?5 = 0, expires_at = 0, expires_at - ?6 BETWEEN ?5 - 60 AND ?5 + 60)
 		ORDER BY id DESC LIMIT 1`, userID, vol, path, mode, duration, now))
 }
@@ -439,8 +444,8 @@ func (d *DB) UpdateShare(s Share, logout bool) error {
 		return err
 	}
 	defer tx.Rollback()
-	if err := one(tx.Exec(`UPDATE shares SET mode = ?, password_hash = ?, expires_at = ?, note = ?, max_upload = ?
-		WHERE user_id = ? AND id = ?`, s.Mode, s.PasswordHash, s.ExpiresAt, s.Note, s.MaxUpload, s.UserID, s.ID)); err != nil {
+	if err := one(tx.Exec(`UPDATE shares SET mode = ?, password_hash = ?, expires_at = ?, note = ?, max_upload = ?, max_downloads = ?, ask_name = ?
+		WHERE user_id = ? AND id = ?`, s.Mode, s.PasswordHash, s.ExpiresAt, s.Note, s.MaxUpload, s.MaxDownloads, s.AskName, s.UserID, s.ID)); err != nil {
 		return err
 	}
 	if logout {
@@ -488,6 +493,16 @@ func (d *DB) DeleteShare(userID, id int64) error {
 		}
 	}
 	return tx.Commit()
+}
+
+// TakeDownload counts one download against the share's limit and reports whether one was left.
+func (d *DB) TakeDownload(id int64) (bool, error) {
+	n, err := affected(d.Exec(`UPDATE shares SET downloads = downloads + 1 WHERE id = ? AND (max_downloads = 0 OR downloads < max_downloads)`, id))
+	return n > 0, err
+}
+
+func (d *DB) GiveBackDownload(id int64) {
+	d.Exec(`UPDATE shares SET downloads = max(downloads - 1, 0) WHERE id = ?`, id)
 }
 
 func (d *DB) HitShare(id int64) error {

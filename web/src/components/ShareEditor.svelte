@@ -15,6 +15,8 @@
   let expires = $state(-1)
   let note = $state(init.note)
   let limit = $state(init.max_upload ? String(Math.round(init.max_upload / 1048576)) : '')
+  let ask = $state(!!init.ask_name)
+  let downloads = $state(init.max_downloads ? String(init.max_downloads) : '')
   let error = $state('')
   let busy = $state(false)
 
@@ -25,6 +27,8 @@
     else if (!protect && share.has_password) e.password = ''
     if (expires >= 0) e.expires_in = expires
     e.max_upload = mode === 'read' ? share.max_upload : Math.max(0, Math.round(Number(limit) * 1048576) || 0)
+    e.ask_name = mode === 'drop' && ask
+    e.max_downloads = mode === 'drop' ? share.max_downloads : Math.max(0, Math.round(Number(downloads)) || 0)
     busy = true
     try {
       await api.editShare(share.id, e)
@@ -63,6 +67,16 @@
     <span>{t.note}</span>
     <textarea bind:value={note} rows="3" maxlength="300" placeholder={t.noteHint}></textarea>
   </label>
+  {#if mode === 'drop'}
+    <label class="radio"><input type="checkbox" bind:checked={ask} />{t.askName}</label>
+    <p class="hint">{t.askNameHint}</p>
+  {/if}
+  {#if mode !== 'drop'}
+    <label class="field">
+      <span>{t.downloadLimit}</span>
+      <input type="number" min="0" max="1000000" step="1" inputmode="numeric" bind:value={downloads} placeholder={t.downloadLimitHint} />
+    </label>
+  {/if}
   {#if mode !== 'read'}
     <label class="field">
       <span>{t.uploadLimit}</span>

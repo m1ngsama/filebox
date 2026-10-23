@@ -4,7 +4,7 @@ A self-hosted file server in one binary. Browse, preview, upload and share files
 
 - Resumable uploads via [tus 1.0](https://tus.io/protocols/resumable-upload), served by [tusd](https://github.com/tus/tusd); downloads support HTTP Range.
 - WebDAV at `/dav/` with per-device app passwords, optionally read-only.
-- Share links with password, expiry, and upload or drop-box modes.
+- Share links with password, expiry, a download limit, and upload or drop-box modes. A drop box can ask uploaders for their name and keep each one's files in a folder of that name.
 - WebP thumbnails via ffmpeg (optional).
 - Search by name, path and the text inside documents.
 - Deletes from the web UI and WebDAV go to a per-volume trash that keeps items for 30 days, or less when the disk falls below 10% free, and so does a folder replaced by a WebDAV MOVE or COPY. Junk that macOS and Windows write and delete on their own (`._*`, `.DS_Store`, `.Trashes`, `Thumbs.db`, `desktop.ini`) is deleted for good and never versioned.

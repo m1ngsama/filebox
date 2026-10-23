@@ -22,7 +22,7 @@
   import { route, link, navigate } from '../lib/router.svelte'
   import { enqueue } from '../lib/uploads.svelte'
   import { arrange, size, kind, thumbable, rawThumb, fallback, child, prefersGrid, sidecars, type Sort } from '../lib/format'
-  import { viewOf, keepView, type View } from '../lib/storage'
+  import { viewOf, keepView, load as stored, save as keep, type View } from '../lib/storage'
   import { saveZip, packing } from '../lib/located'
   import { t } from '../lib/i18n'
   import { playing } from '../lib/playing.svelte'
@@ -44,6 +44,9 @@
   let dragging = $state(false)
   let depth = 0
   let picker = $state<HTMLInputElement>()
+  let nameEl = $state<HTMLInputElement>()
+  let who = $state(stored('uploader') ?? '')
+  let whoError = $state(false)
   let tries = $state(0)
   const selected = new SvelteSet<string>()
 
@@ -154,9 +157,27 @@
     unlocking = false
   }
 
+  const asks = $derived(shared?.mode === 'drop' && !!shared.ask_name)
+  const folderName = (s: string) => s.replace(/[\\/\u0000-\u001f\u007f]/g, ' ').replace(/\s+/g, ' ').trim().replace(/^\.+/, '').slice(0, 64).trim()
+
+  function pickFiles() {
+    if (asks && !folderName(who)) {
+      whoError = true
+      nameEl?.focus()
+      return
+    }
+    picker?.click()
+  }
+
   function upload(list: FileList | null | undefined) {
     if (!canUpload || !list?.length) return
-    const sub = info?.mode === 'upload' ? p : ''
+    if (asks && !folderName(who)) {
+      whoError = true
+      nameEl?.focus()
+      return
+    }
+    if (asks) keep('uploader', who)
+    const sub = asks ? folderName(who) : info?.mode === 'upload' ? p : ''
     enqueue(
       [...list].map((f) => ({ file: f, rel: sub ? `${sub}/${f.name}` : '' })),
       `${base}/upload/`,
@@ -256,13 +277,14 @@
     {/if}
   </header>
 
-  {#if shared && (shared.note || shared.expires || (canUpload && shared.max_upload) || listed)}
+  {#if shared && (shared.note || shared.expires || shared.downloads_left !== undefined || (canUpload && shared.max_upload) || listed)}
     <div class="public-info" class:hero={listed && !p}>
       {#if listed && !p}<div class="public-title" aria-hidden="true">{shared.name}</div>{/if}
       {#if shared.note}<p class="public-note">{shared.note}</p>{/if}
       <p class="hint">
         {#if listed}<span class="public-count">{at === p && !error ? t.folderSummary(shown.filter((e) => e.dir).length, shown.filter((e) => !e.dir).length, size(shown.reduce((n, e) => n + e.size, 0))) : '\u00a0'}</span>{/if}
         {#if shared.expires}<span><Clock size={icon.sm} />{left > 0 ? t.expiresIn(left) : t.expired}</span>{/if}
+        {#if shared.downloads_left !== undefined}<span>{t.downloadsLeft(shared.downloads_left)}</span>{/if}
         {#if canUpload && shared.max_upload}<span>{t.maxUpload(size(shared.max_upload))}</span>{/if}
       </p>
     </div>
@@ -323,7 +345,14 @@
     <div class="dropbox">
       <Upload size={40} class="ficon" />
       <p>{coarse ? t.dropTitleTouch : t.dropTitle}</p>
-      <button class="primary" onclick={() => picker?.click()}><Upload size={icon.md} />{t.chooseFiles}</button>
+      {#if asks}
+        <label class="field dropbox-name">
+          <span>{t.yourName}</span>
+          <input bind:this={nameEl} bind:value={who} maxlength="64" autocomplete="name" aria-invalid={whoError && !folderName(who)} oninput={() => (whoError = false)} />
+        </label>
+        {#if whoError && !folderName(who)}<p class="error" role="alert">{t.nameRequired}</p>{:else}<p class="hint">{t.yourNameHint}</p>{/if}
+      {/if}
+      <button class="primary" onclick={pickFiles}><Upload size={icon.md} />{t.chooseFiles}</button>
       <p class="hint">{t.dropHint}</p>
     </div>
   {:else if listed}

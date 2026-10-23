@@ -623,3 +623,98 @@ func TestSharePreviewCard(t *testing.T) {
 		t.Fatalf("locked share leaks: %s", b)
 	}
 }
+
+func TestShareDownloadLimit(t *testing.T) {
+	f := newTestApp(t)
+	f.write(t, "pub/a.txt", "hello")
+	f.write(t, "pub/b.txt", "world")
+	for _, bad := range []string{`"max_downloads":-1`, `"max_downloads":1000001`} {
+		if w := f.do("POST", "/api/shares", body(`{"vol":"v","path":"pub","mode":"read",`+bad+`}`)); w.Code != 400 {
+			t.Fatalf("%s: %d", bad, w.Code)
+		}
+	}
+	tok := mkShare(t, f, `{"vol":"v","path":"pub","mode":"read","max_downloads":2}`)
+	if c, b, _ := anon(f, "GET", "/s/"+tok+"/info", ""); c != 200 || !strings.Contains(b, `"downloads_left":2`) {
+		t.Fatalf("info %d %s", c, b)
+	}
+	for i := 0; i < 3; i++ {
+		if c, b, _ := anon(f, "GET", "/s/"+tok+"/raw/a.txt", ""); c != 200 || b != "hello" {
+			t.Fatalf("a preview that does not save is not counted: %d %q", c, b)
+		}
+	}
+	if c, _, _ := anon(f, "GET", "/s/"+tok+"/raw/a.txt?dl", ""); c != 200 {
+		t.Fatalf("first download %d", c)
+	}
+	if c, b, _ := anon(f, "GET", "/s/"+tok+"/info", ""); c != 200 || !strings.Contains(b, `"downloads_left":1`) {
+		t.Fatalf("one left: %d %s", c, b)
+	}
+	if c, _, _ := anon(f, "GET", "/s/"+tok+"/zip?p=a.txt&p=b.txt", ""); c != 200 {
+		t.Fatalf("zip counts as one download: %d", c)
+	}
+	for _, u := range []string{"/info", "/raw/a.txt", "/raw/a.txt?dl", "/ls"} {
+		if c, b, _ := anon(f, "GET", "/s/"+tok+u, ""); c != 410 {
+			t.Fatalf("limit reached %s: %d %s", u, c, b)
+		}
+	}
+	list := decode[struct {
+		Shares []struct {
+			ID        int64
+			Downloads int64
+		}
+	}](t, f.do("GET", "/api/shares", nil)).Shares
+	if len(list) != 1 || list[0].Downloads != 2 {
+		t.Fatalf("shares %+v", list)
+	}
+	id := strconv.FormatInt(list[0].ID, 10)
+	if w := f.do("PATCH", "/api/shares/"+id, body(`{"max_downloads":5}`)); w.Code != 204 {
+		t.Fatalf("raise limit %d", w.Code)
+	}
+	if c, b, _ := anon(f, "GET", "/s/"+tok+"/info", ""); c != 200 || !strings.Contains(b, `"downloads_left":3`) {
+		t.Fatalf("raised limit revives the link: %d %s", c, b)
+	}
+	if w := f.do("PATCH", "/api/shares/"+id, body(`{"max_downloads":0}`)); w.Code != 204 {
+		t.Fatalf("remove limit %d", w.Code)
+	}
+	if c, b, _ := anon(f, "GET", "/s/"+tok+"/info", ""); c != 200 || strings.Contains(b, "downloads_left") {
+		t.Fatalf("no limit: %d %s", c, b)
+	}
+}
+
+func TestShareAsksUploaderName(t *testing.T) {
+	f := newTestApp(t)
+	f.write(t, "inbox/.keep", "")
+	tok := mkShare(t, f, `{"vol":"v","path":"inbox","mode":"drop","ask_name":true}`)
+	if c, b, _ := anon(f, "GET", "/s/"+tok+"/info", ""); c != 200 || !strings.Contains(b, `"ask_name":true`) {
+		t.Fatalf("info %d %s", c, b)
+	}
+	read := mkShare(t, f, `{"vol":"v","path":"inbox","mode":"read","ask_name":true}`)
+	if c, b, _ := anon(f, "GET", "/s/"+read+"/info", ""); c != 200 || strings.Contains(b, "ask_name") {
+		t.Fatalf("only drop shares ask for a name: %d %s", c, b)
+	}
+	plain := mkShare(t, f, `{"vol":"v","path":"inbox","mode":"drop"}`)
+	if plain == tok {
+		t.Fatal("a share that asks for a name must not be reused as a plain one")
+	}
+	list := decode[struct {
+		Shares []struct {
+			ID      int64
+			Token   string
+			AskName bool `json:"ask_name"`
+		}
+	}](t, f.do("GET", "/api/shares", nil)).Shares
+	var id int64
+	for _, s := range list {
+		if s.Token == plain && s.AskName {
+			t.Fatal("plain share asks for a name")
+		}
+		if s.Token == tok {
+			id = s.ID
+		}
+	}
+	if w := f.do("PATCH", "/api/shares/"+strconv.FormatInt(id, 10), body(`{"ask_name":false}`)); w.Code != 204 {
+		t.Fatalf("edit %d", w.Code)
+	}
+	if c, b, _ := anon(f, "GET", "/s/"+tok+"/info", ""); c != 200 || strings.Contains(b, "ask_name") {
+		t.Fatalf("after edit %d %s", c, b)
+	}
+}

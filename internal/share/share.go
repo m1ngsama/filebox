@@ -116,19 +116,24 @@ func (s *Service) owner(owner string) (db.Share, bool) {
 
 var modes = map[string]bool{"read": true, "upload": true, "drop": true}
 
-const maxNote = 1000
+const (
+	maxNote      = 1000
+	maxDownloads = 1_000_000
+)
 
 func (s *Service) create(w http.ResponseWriter, r *http.Request) {
 	var in struct {
-		Vol       string `json:"vol"`
-		Path      string `json:"path"`
-		Mode      string `json:"mode"`
-		Password  string `json:"password"`
-		ExpiresIn int64  `json:"expires_in"`
-		Note      string `json:"note"`
-		MaxUpload int64  `json:"max_upload"`
+		Vol          string `json:"vol"`
+		Path         string `json:"path"`
+		Mode         string `json:"mode"`
+		Password     string `json:"password"`
+		ExpiresIn    int64  `json:"expires_in"`
+		Note         string `json:"note"`
+		MaxUpload    int64  `json:"max_upload"`
+		MaxDownloads int64  `json:"max_downloads"`
+		AskName      bool   `json:"ask_name"`
 	}
-	if err := httpx.Read(r, &in); err != nil || !modes[in.Mode] || in.ExpiresIn < 0 || in.MaxUpload < 0 || len(in.Note) > maxNote {
+	if err := httpx.Read(r, &in); err != nil || !modes[in.Mode] || in.ExpiresIn < 0 || in.MaxUpload < 0 || len(in.Note) > maxNote || in.MaxDownloads < 0 || in.MaxDownloads > maxDownloads {
 		httpx.Fail(w, 400, "bad request")
 		return
 	}
@@ -148,7 +153,7 @@ func (s *Service) create(w http.ResponseWriter, r *http.Request) {
 	}
 	p, _ := auth.From(r.Context())
 	now := time.Now().Unix()
-	if in.Password == "" && in.Note == "" && in.MaxUpload == 0 {
+	if in.Password == "" && in.Note == "" && in.MaxUpload == 0 && in.MaxDownloads == 0 && !in.AskName {
 		if sh, err := s.DB.SameShare(p.UserID, v.Name, rel, in.Mode, in.ExpiresIn, now); err == nil {
 			httpx.JSON(w, 200, map[string]any{"id": sh.ID, "token": sh.Token, "existing": true})
 			return
@@ -157,7 +162,7 @@ func (s *Service) create(w http.ResponseWriter, r *http.Request) {
 	b := make([]byte, 16)
 	rand.Read(b)
 	sh := &db.Share{Token: base64.RawURLEncoding.EncodeToString(b), UserID: p.UserID, Vol: v.Name,
-		Path: rel, Mode: in.Mode, CreatedAt: now, Note: in.Note, MaxUpload: in.MaxUpload}
+		Path: rel, Mode: in.Mode, CreatedAt: now, Note: in.Note, MaxUpload: in.MaxUpload, MaxDownloads: in.MaxDownloads, AskName: in.AskName && in.Mode == "drop"}
 	if in.ExpiresIn > 0 {
 		sh.ExpiresAt = now + in.ExpiresIn
 	}
@@ -191,7 +196,7 @@ func (s *Service) list(w http.ResponseWriter, r *http.Request) {
 		}
 		out = append(out, map[string]any{"dir": dir, "id": sh.ID, "token": sh.Token, "vol": sh.Vol, "path": sh.Path,
 			"mode": sh.Mode, "has_password": sh.PasswordHash != "", "expires": sh.ExpiresAt,
-			"created": sh.CreatedAt, "hits": sh.Hits, "views": sh.Views, "note": sh.Note, "max_upload": sh.MaxUpload})
+			"created": sh.CreatedAt, "hits": sh.Hits, "views": sh.Views, "note": sh.Note, "max_upload": sh.MaxUpload, "max_downloads": sh.MaxDownloads, "downloads": sh.Downloads, "ask_name": sh.AskName})
 	}
 	httpx.JSON(w, 200, map[string]any{"shares": out})
 }
@@ -199,14 +204,16 @@ func (s *Service) list(w http.ResponseWriter, r *http.Request) {
 func (s *Service) edit(w http.ResponseWriter, r *http.Request) {
 	id, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
 	var in struct {
-		Mode      *string `json:"mode"`
-		Password  *string `json:"password"`
-		ExpiresIn *int64  `json:"expires_in"`
-		Note      *string `json:"note"`
-		MaxUpload *int64  `json:"max_upload"`
+		Mode         *string `json:"mode"`
+		Password     *string `json:"password"`
+		ExpiresIn    *int64  `json:"expires_in"`
+		Note         *string `json:"note"`
+		MaxUpload    *int64  `json:"max_upload"`
+		MaxDownloads *int64  `json:"max_downloads"`
+		AskName      *bool   `json:"ask_name"`
 	}
 	if err != nil || httpx.Read(r, &in) != nil || (in.Mode != nil && !modes[*in.Mode]) || (in.ExpiresIn != nil && *in.ExpiresIn < 0) ||
-		(in.MaxUpload != nil && *in.MaxUpload < 0) || (in.Note != nil && len(*in.Note) > maxNote) {
+		(in.MaxUpload != nil && *in.MaxUpload < 0) || (in.MaxDownloads != nil && (*in.MaxDownloads < 0 || *in.MaxDownloads > maxDownloads)) || (in.Note != nil && len(*in.Note) > maxNote) {
 		httpx.Fail(w, 400, "bad request")
 		return
 	}
@@ -240,6 +247,13 @@ func (s *Service) edit(w http.ResponseWriter, r *http.Request) {
 	if in.MaxUpload != nil {
 		sh.MaxUpload = *in.MaxUpload
 	}
+	if in.MaxDownloads != nil {
+		sh.MaxDownloads = *in.MaxDownloads
+	}
+	if in.AskName != nil {
+		sh.AskName = *in.AskName
+	}
+	sh.AskName = sh.AskName && sh.Mode == "drop"
 	if in.Password != nil {
 		sh.PasswordHash = ""
 		if *in.Password != "" {
@@ -290,6 +304,10 @@ func (s *Service) open(w http.ResponseWriter, r *http.Request, allowed ...string
 	}
 	if sh.ExpiresAt != 0 && sh.ExpiresAt <= time.Now().Unix() {
 		httpx.Fail(w, 410, "expired")
+		return opened{}, false
+	}
+	if sh.MaxDownloads > 0 && sh.Downloads >= sh.MaxDownloads {
+		httpx.Fail(w, 410, "download limit reached")
 		return opened{}, false
 	}
 	v, ok := s.Vols.Get(sh.Vol)
@@ -364,6 +382,12 @@ func (s *Service) info(w http.ResponseWriter, r *http.Request) {
 	s.DB.View(o.sh.ID, s.DB.Visitor(auth.ClientIP(r), now), now)
 	out := map[string]any{"name": o.name(), "dir": o.dir, "mode": o.sh.Mode, "locked": false,
 		"note": o.sh.Note, "expires": o.sh.ExpiresAt, "max_upload": o.sh.MaxUpload}
+	if o.sh.AskName {
+		out["ask_name"] = true
+	}
+	if o.sh.MaxDownloads > 0 {
+		out["downloads_left"] = o.sh.MaxDownloads - o.sh.Downloads
+	}
 	if !o.dir {
 		if e, err := api.Stat(o.v.Root, o.sh.Path); err == nil {
 			out["size"] = e.Size
@@ -440,6 +464,10 @@ func (s *Service) raw(w http.ResponseWriter, r *http.Request) {
 		if rg := r.Header.Get("Range"); rg == "" || strings.HasPrefix(rg, "bytes=0-") {
 			s.DB.HitShare(o.sh.ID)
 			if r.URL.Query().Has("dl") && (rg == "" || rg == "bytes=0-") {
+				if ok, err := s.DB.TakeDownload(o.sh.ID); err != nil || !ok {
+					httpx.Fail(w, 410, "download limit reached")
+					return
+				}
 				s.log(r, o.sh, db.EventDownload, path.Base(path.Join(o.sh.Path, rel)), fi.Size())
 			}
 		}
@@ -483,9 +511,15 @@ func (s *Service) zip(w http.ResponseWriter, r *http.Request) {
 		top = o.name()
 	}
 	name := serve.ZipName(o.name(), rels, q.Get("name"))
+	if ok, err := s.DB.TakeDownload(o.sh.ID); err != nil || !ok {
+		httpx.Fail(w, 410, "download limit reached")
+		return
+	}
 	if serve.Zip(w, r, root, rels, top, name) {
 		s.DB.HitShare(o.sh.ID)
 		s.log(r, o.sh, db.EventDownload, serve.ZipName(o.name(), rels, ""), 0)
+	} else {
+		s.DB.GiveBackDownload(o.sh.ID)
 	}
 }
 

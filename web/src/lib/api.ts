@@ -25,8 +25,8 @@ export type Run = { vol: string; dir: string; count: number; more?: boolean; siz
 export type ContentHit = Loc & { name: string; size: number; mtime: number; snippet: string[] }
 export type Progress = { done: number; total: number }
 export type Move = { from: Loc; to: Loc }
-export type Share = { id: number; token: string; vol: string; path: string; mode: 'read' | 'upload' | 'drop'; has_password: boolean; expires: number; created: number; hits: number; views: number; note: string; max_upload: number; dir: boolean }
-export type ShareEdit = Partial<{ mode: Share['mode']; password: string; expires_in: number; note: string; max_upload: number }>
+export type Share = { id: number; token: string; vol: string; path: string; mode: 'read' | 'upload' | 'drop'; has_password: boolean; expires: number; created: number; hits: number; views: number; note: string; max_upload: number; max_downloads: number; downloads: number; ask_name?: boolean; dir: boolean }
+export type ShareEdit = Partial<{ mode: Share['mode']; password: string; expires_in: number; note: string; max_upload: number; max_downloads: number; ask_name: boolean }>
 export type Activity = { id: number; at: number; kind: string; share_id: number; target: string; visitor: string; name: string; size: number; vol: string; path: string }
 export type Webhook = { id: number; url: string; format: string; kinds: string[]; lang: string; signed: boolean; created: number; last_at: number; last_status: string }
 export type Token = { id: number; label: string; readonly: boolean; created: number; last_used: number }
@@ -37,7 +37,7 @@ export type Version = { id: string; size: number; mtime: number; created: number
 export type TrashItem = { id: string; name: string; path: string; dir: boolean; size: number; deleted: number }
 export type ShareInfo =
   | { locked: true; mode: Share['mode'] }
-  | { locked: false; mode: Share['mode']; name: string; dir: boolean; size?: number; note: string; expires: number; max_upload: number }
+  | { locked: false; mode: Share['mode']; name: string; dir: boolean; size?: number; note: string; expires: number; max_upload: number; downloads_left?: number; ask_name?: boolean }
 
 export const session = { lost: () => {} }
 
