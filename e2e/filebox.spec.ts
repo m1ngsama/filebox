@@ -4529,3 +4529,27 @@ test('a folder takes the color of its first colored tag', async ({ page }) => {
   })
   expect(red).not.toBe(plain)
 })
+
+test('people in the same folder see each other, and leaving clears it', async ({ page, browser, server }) => {
+  execFileSync(BIN, ['passwd', '-data', join(server.vol, '../data'), '-user', 'bob'], { input: 'pw-bob-pw-bob\n', stdio: ['pipe', 'ignore', 'ignore'] })
+  execFileSync(BIN, ['user', '-data', join(server.vol, '../data'), 'access', 'bob', 'v', 'r'], { stdio: 'ignore' })
+  const signIn = async (p: Page, name: string, pw: string) => {
+    await p.goto('/')
+    await p.getByLabel(t.username).fill(name)
+    await p.getByLabel(t.password, { exact: true }).fill(pw)
+    await p.getByRole('button', { name: t.login, exact: true }).click()
+    await expect(p).toHaveURL(/\/files\/v\/$/)
+  }
+  await signIn(page, 'admin', 'pw-pw-pw-pw')
+  await page.goto('/files/v/docs/')
+  const bob = await browser.newPage()
+  await signIn(bob, 'bob', 'pw-bob-pw-bob')
+  await bob.goto('/files/v/docs/')
+  const here = page.getByRole('status', { name: t.alsoHere('bob', 1) })
+  await expect(here).toBeVisible({ timeout: 3000 })
+  await expect(here.locator('.avatar')).toHaveText('B')
+  await expect(bob.getByRole('status', { name: t.alsoHere('admin', 1) })).toBeVisible({ timeout: 3000 })
+  await bob.goto('/recent')
+  await expect(here).toHaveCount(0, { timeout: 3000 })
+  await bob.close()
+})

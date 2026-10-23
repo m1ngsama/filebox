@@ -1,7 +1,9 @@
 import type { Notice } from './api'
 
 // The server pushes what changed over one EventSource per tab; screens subscribe to the parts they show.
-export const live = $state({ unread: 0, connected: false })
+export const live = $state({ unread: 0, connected: false, me: '' })
+// Who else is in each folder right now, by vol and path joined with a NUL.
+export const present = $state<Record<string, string[]>>({})
 
 type FS = (vol: string, dir: string) => void
 const folders = new Set<FS>()
@@ -11,7 +13,8 @@ const talk = new Set<(vol: string, path: string) => void>()
 let source: EventSource | null = null
 let dropped = false
 
-export function connect() {
+export function connect(me = '') {
+  live.me = me
   if (source || typeof EventSource === 'undefined') return
   const es = (source = new EventSource('/api/events'))
   es.addEventListener('fs', (e) => {
@@ -21,6 +24,10 @@ export function connect() {
   es.addEventListener('comment', (e) => {
     const d = JSON.parse((e as MessageEvent).data) as { vol: string; dir?: string }
     for (const f of talk) f(d.vol, d.dir ?? '')
+  })
+  es.addEventListener('presence', (e) => {
+    const d = JSON.parse((e as MessageEvent).data) as { vol: string; dir?: string; people?: string[] }
+    present[`${d.vol}\0${d.dir ?? ''}`] = d.people ?? []
   })
   es.addEventListener('unread', (e) => (live.unread = JSON.parse((e as MessageEvent).data).unread ?? 0))
   es.addEventListener('notice', (e) => {
@@ -32,6 +39,7 @@ export function connect() {
     // Whatever changed while the stream was down was missed, so the screens reload what they show.
     if (dropped) for (const f of reconnects) f()
     dropped = false
+    tell()
   }
   es.onerror = () => {
     live.connected = false
@@ -51,3 +59,25 @@ export const onFolder = (f: FS) => sub(folders, f)
 export const onReconnect = (f: () => void) => sub(reconnects, f)
 export const onNotice = (f: (n: Notice) => void) => sub(notices, f)
 export const onComment = (f: (vol: string, path: string) => void) => sub(talk, f)
+
+// Where this tab is, told to the server while the tab is in front, so others see who is in a folder.
+let here = { vol: '', dir: '' }
+let pending = 0
+let beat = 0
+function tell() {
+  clearTimeout(pending)
+  pending = window.setTimeout(() => {
+    const where = document.visibilityState === 'visible' ? here : { vol: '', dir: '' }
+    fetch('/api/presence', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(where), keepalive: true }).catch(() => {})
+  }, 300)
+}
+
+export function report(vol: string, dir: string) {
+  here = { vol, dir }
+  if (!source) return
+  tell()
+  clearInterval(beat)
+  if (vol) beat = window.setInterval(tell, 30_000)
+}
+
+if (typeof document !== 'undefined') document.addEventListener('visibilitychange', () => source && tell())

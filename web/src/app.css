@@ -780,6 +780,10 @@ button.busy::before { content: ''; width: 14px; height: 14px; border: 2px solid 
 .composer textarea { resize: vertical; min-height: 64px; }
 .composer-foot { display: flex; align-items: center; justify-content: space-between; gap: var(--space-2); }
 .mentions { position: absolute; bottom: calc(100% + var(--space-1)); left: 0; list-style: none; margin: 0; }
+.presence { display: flex; align-items: center; padding: 0 var(--space-1); }
+.avatar { display: grid; place-items: center; width: 28px; height: 28px; margin-left: -6px; border-radius: 50%; border: 2px solid var(--bg); background: hsl(var(--h) 50% 34%); color: #fff; font-size: var(--text-xs); font-weight: 700; animation: appear var(--dur-2) var(--ease-out); }
+.avatar:first-child { margin-left: 0; }
+.avatar.more { background: var(--nav); color: var(--muted); }
 .team { display: flex; flex-direction: column; gap: var(--space-6); max-width: 960px; }
 .team-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--space-3); }
 .team-head p { margin: 0; flex: 1 1 24em; }

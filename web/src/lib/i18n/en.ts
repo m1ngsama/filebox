@@ -334,6 +334,7 @@ export default (locale: string) => {
     storageLargest: 'Largest files',
     storageOther: 'Other',
     storageEmpty: 'No files yet',
+    alsoHere: (names: string, n: number) => `${names} ${n > 1 ? 'are' : 'is'} also in this folder`,
     saveSearch: 'Save this search',
     searchName: 'Name',
     searchSaved: (name: string) => `Saved “${name}” to the sidebar`,

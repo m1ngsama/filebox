@@ -38,7 +38,7 @@
       me = await api.me()
       setAccess(me.admin, me.access)
       usePrefs(me.prefs)
-      connect()
+      connect(me.name)
       save('user', me.name)
       needLogin = false
       error = ''

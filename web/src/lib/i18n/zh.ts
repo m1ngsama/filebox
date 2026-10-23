@@ -335,6 +335,7 @@ const zh = {
   storageLargest: '最大的文件',
   storageOther: '其他',
   storageEmpty: '还没有文件',
+  alsoHere: (names: string, _n: number) => `${names} 也在这个文件夹`,
   saveSearch: '保存这个搜索',
   searchName: '名称',
   searchSaved: (name: string) => `已保存搜索“${name}”，在侧边栏里`,

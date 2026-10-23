@@ -32,6 +32,7 @@ type Event struct {
 	Dir    string     `json:"dir,omitempty"`
 	Notice *db.Notice `json:"notice,omitempty"`
 	Unread *int       `json:"unread,omitempty"`
+	People []string   `json:"people,omitempty"`
 }
 
 type sub struct {
@@ -52,13 +53,15 @@ type Hub struct {
 	pending map[[2]string]bool
 	timer   *time.Timer
 	seen    map[string]int64
+	places  map[int64]place
 	done    chan struct{}
 	stop    sync.Once
 }
 
 func New(d *db.DB, a *auth.Auth) *Hub {
-	h := &Hub{DB: d, Auth: a, subs: map[*sub]struct{}{}, pending: map[[2]string]bool{}, seen: map[string]int64{}, done: make(chan struct{})}
+	h := &Hub{DB: d, Auth: a, subs: map[*sub]struct{}{}, pending: map[[2]string]bool{}, seen: map[string]int64{}, places: map[int64]place{}, done: make(chan struct{})}
 	d.Observe(h.event)
+	go h.sweep()
 	return h
 }
 
@@ -69,6 +72,7 @@ func (h *Hub) Register(mux *http.ServeMux) {
 	mux.Handle("GET /api/events", h.Auth.RequireSession(http.HandlerFunc(h.stream)))
 	mux.Handle("GET /api/notices", h.Auth.RequireSession(http.HandlerFunc(h.notices)))
 	mux.Handle("POST /api/notices/read", h.Auth.RequireSession(http.HandlerFunc(h.read)))
+	mux.Handle("POST /api/presence", h.Auth.RequireSession(http.HandlerFunc(h.here)))
 }
 
 // Changed is told about a path filebox changed. The folder holding it, and the path itself when it is a folder,

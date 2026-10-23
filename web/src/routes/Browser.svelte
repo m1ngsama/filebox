@@ -76,7 +76,7 @@
   import { folderAction, downloadAction, actOn, saveZip } from '../lib/located'
   import { tags, loadTags } from '../lib/tags.svelte'
   import { canWrite } from '../lib/access.svelte'
-  import { onFolder, onReconnect } from '../lib/live.svelte'
+  import { onFolder, onReconnect, report, present, live as stream } from '../lib/live.svelte'
   import { saveSearch } from '../lib/searches.svelte'
   import { kind, searchKind, size, thumbable, rawThumb, arrange, parent, base, child, flip, sorts, place, prefersGrid, mostlyMedia, dated, days, sidecars, subtitleRename, stem, type Sort } from '../lib/format'
   import { t } from '../lib/i18n'
@@ -613,6 +613,12 @@
     soon = window.setTimeout(() => !streaming && refresh(), 250)
   }
   $effect(() => {
+    report(vol, path)
+    return () => report('', '')
+  })
+  const others = $derived((present[`${vol}\0${path}`] ?? []).filter((n) => n !== stream.me))
+
+  $effect(() => {
     const v = vol
     const p = path
     const off = [onFolder((ov, od) => ov === v && od === p && later()), onReconnect(later)]
@@ -1067,6 +1073,7 @@
       </DropdownMenu.Root>
       {/if}
       <span class="grow"></span>
+      {#if others.length}{#await import('../components/Presence.svelte') then { default: Presence }}<Presence people={others} />{/await}{/if}
       <div class="find">
         <label for="filter" class="sr-only">{t.filter}</label>
         <input

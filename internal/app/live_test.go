@@ -283,3 +283,58 @@ func TestCommentsMentionsAndRenames(t *testing.T) {
 		t.Fatalf("people on v %s", b)
 	}
 }
+
+func TestPresenceSaysWhoIsInAFolder(t *testing.T) {
+	f := newTestApp(t)
+	f.write(t, "docs/a.txt", "a")
+	srv := httptest.NewServer(f.H)
+	t.Cleanup(srv.Close)
+	admin := listen(t, srv, f.Cookie.String())
+	bob := f.member(t, "bob", map[string]string{"v": "r"})
+	carol := f.member(t, "carol", map[string]string{"w": "r"})
+	cs := listen(t, srv, carol.hdr[3])
+	isPresence := func(dir string, want ...string) func(map[string]any) bool {
+		return func(e map[string]any) bool {
+			if e["type"] != "presence" || e["vol"] != "v" || (e["dir"] != dir && !(dir == "" && e["dir"] == nil)) {
+				return false
+			}
+			got, _ := e["people"].([]any)
+			if len(got) != len(want) {
+				return false
+			}
+			for i := range got {
+				if got[i] != want[i] {
+					return false
+				}
+			}
+			return true
+		}
+	}
+	if c, _ := carol.do(f, "POST", "/api/presence", `{"vol":"v","dir":"docs"}`); c != 404 {
+		t.Fatalf("carol says she is in a volume she cannot read: %d", c)
+	}
+	if c, _ := bob.do(f, "POST", "/api/presence", `{"vol":"v","dir":"docs"}`); c != 204 {
+		t.Fatalf("presence %d", c)
+	}
+	if _, ok := admin.next(t, isPresence("docs", "bob"), 2*time.Second); !ok {
+		t.Fatal("the admin did not hear bob is in docs")
+	}
+	f.do("POST", "/api/presence", body(`{"vol":"v","dir":"docs"}`))
+	if _, ok := admin.next(t, isPresence("docs", "admin", "bob"), 2*time.Second); !ok {
+		t.Fatal("two people in docs")
+	}
+	bob.do(f, "POST", "/api/presence", `{"vol":"v","dir":""}`)
+	if _, ok := admin.next(t, isPresence("docs", "admin"), 2*time.Second); !ok {
+		t.Fatal("bob left docs but is still shown there")
+	}
+	if _, ok := admin.next(t, isPresence("", "bob"), 2*time.Second); !ok {
+		t.Fatal("bob arrived at the top of v")
+	}
+	bob.do(f, "POST", "/api/presence", `{"vol":"","dir":""}`)
+	if _, ok := admin.next(t, isPresence(""), 2*time.Second); !ok {
+		t.Fatal("bob closed his tab but is still shown")
+	}
+	if e, ok := cs.next(t, func(e map[string]any) bool { return e["type"] == "presence" }, 300*time.Millisecond); ok {
+		t.Fatalf("carol hears about a volume she cannot read: %v", e)
+	}
+}
