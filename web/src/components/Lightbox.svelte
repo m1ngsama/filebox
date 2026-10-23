@@ -69,7 +69,7 @@
     const n = images.length
     const pos = (i: number) => (book?.rtl ? n - 1 - i : i)
     const item = (i: number) => images[pos(i)]
-    const at = images.indexOf(entry)
+    const at = images.findIndex((e) => e.name === entry.name)
     const tile = (e: Entry) => (book ? null : document.querySelector<HTMLImageElement>(`[data-name="${CSS.escape(e.name)}"] img.ok`))
     const data = images.map((_, i) => item(i)).map((e) => {
       const th = tile(e)

@@ -256,6 +256,9 @@ func (a *API) inviteUse(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	a.Auth.Forget(uid)
+	if in.Kind == db.InviteJoin {
+		a.DB.Log(db.Event{At: time.Now().Unix(), UserID: uid, Kind: db.EventJoin, Name: body.Name})
+	}
 	tok, err := a.Auth.LoginWith(auth.ClientIP(r), r.UserAgent(), func() (int64, bool) { return uid, true })
 	if err != nil {
 		httpx.Error(w, err)

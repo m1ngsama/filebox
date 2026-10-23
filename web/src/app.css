@@ -91,7 +91,22 @@ p.error::before { content: ''; flex: none; width: 1em; height: 1lh; background: 
 
 .shell { display: grid; grid-template-columns: 248px minmax(0, 1fr); height: 100dvh; padding: env(safe-area-inset-top) 0 env(safe-area-inset-bottom); }
 .nav { display: flex; flex-direction: column; gap: var(--space-0); background: var(--nav); border-right: 1px solid var(--line); padding: var(--space-3) var(--space-2); overflow-y: auto; }
-.nav .brand { font-weight: 700; font-size: var(--text-xl); letter-spacing: -0.01em; padding: var(--space-1-5) var(--space-3) var(--space-3); }
+.nav .brand { display: flex; align-items: center; justify-content: space-between; font-weight: 700; font-size: var(--text-xl); letter-spacing: -0.01em; padding: var(--space-1-5) var(--space-1) var(--space-3) var(--space-3); }
+.bell, .nav-toggle { position: relative; }
+.bell-count { position: absolute; top: 2px; right: 0; min-width: 16px; height: 16px; padding: 0 4px; border-radius: var(--radius-full); background: var(--danger); color: var(--on-danger); font-size: 10px; font-weight: 700; line-height: 16px; text-align: center; }
+.bell-dot { position: absolute; top: 8px; right: 8px; width: 8px; height: 8px; border-radius: 50%; background: var(--danger); box-shadow: 0 0 0 2px var(--bg); }
+.notices-pop { width: min(380px, calc(100vw - 24px)); padding: 0; }
+.notices-title { font-weight: 600; padding: var(--space-3) var(--space-4) var(--space-2); }
+.notices ul { list-style: none; margin: 0; padding: 0 var(--space-1) var(--space-1); max-height: min(60dvh, 440px); overflow-y: auto; }
+.notice { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: var(--space-0) var(--space-2-5); align-items: start; width: 100%; padding: var(--space-2) var(--space-3); border-radius: var(--radius-md); cursor: default; outline: none; }
+.notice[data-highlighted] { background: var(--hover); }
+.notice svg { grid-row: span 2; color: var(--muted); margin-top: 2px; }
+.notice .hint { grid-column: 2; }
+.notice.unread .notice-text { font-weight: 600; }
+.notice.unread svg { color: var(--accent); }
+.notices-empty { display: flex; flex-direction: column; align-items: center; gap: var(--space-1-5); padding: var(--space-6) var(--space-5); text-align: center; color: var(--muted); }
+.notices-empty p { margin: 0; }
+.notices-more { justify-content: center; margin: 0 var(--space-1) var(--space-1); }
 .nav ul { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: var(--space-0); }
 .nav ul:first-of-type { flex: 1; }
 .nav a, .nav-item {

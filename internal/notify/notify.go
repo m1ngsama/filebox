@@ -41,6 +41,8 @@ var retries = []time.Duration{2 * time.Second, 10 * time.Second}
 type Notifier struct {
 	DB     *db.DB
 	Client *http.Client
+	// OnDiskLow hears when a volume runs short of space, as webhooks do.
+	OnDiskLow func(vol string, free int64)
 
 	queue chan job
 	mu    sync.Mutex
@@ -255,6 +257,9 @@ func (n *Notifier) Watch(ctx context.Context, vols *vol.Set, every time.Duration
 			case pct < 0.10 && !low[v.Name]:
 				low[v.Name] = true
 				n.Event(db.Event{Kind: EventDiskLow, Vol: v.Name, Size: int64(u.Free)})
+				if n.OnDiskLow != nil {
+					n.OnDiskLow(v.Name, int64(u.Free))
+				}
 			case pct > 0.15:
 				delete(low, v.Name)
 			}

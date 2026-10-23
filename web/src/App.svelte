@@ -12,6 +12,7 @@
   import NavToggle from './components/NavToggle.svelte'
   import Toasts from './components/Toasts.svelte'
   import { setAccess } from './lib/access.svelte'
+  import { connect, disconnect } from './lib/live.svelte'
   import EmptyState from './components/EmptyState.svelte'
   import CloudOff from '@lucide/svelte/icons/cloud-off'
   import HardDrive from '@lucide/svelte/icons/hard-drive'
@@ -26,6 +27,7 @@
   const heading = $derived(needLogin ? t.login : parts[0] === 'files' ? parts.slice(1).at(-1) : titles[parts[0]])
 
   session.lost = () => {
+    disconnect()
     me = null
     needLogin = true
   }
@@ -34,6 +36,7 @@
     try {
       me = await api.me()
       setAccess(me.admin, me.access)
+      connect()
       save('user', me.name)
       needLogin = false
       error = ''
@@ -56,6 +59,7 @@
   }
 
   async function logout() {
+    disconnect()
     await api.logout()
     globalThis.caches?.delete('share-target')
     me = null

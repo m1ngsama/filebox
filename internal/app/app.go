@@ -23,6 +23,7 @@ import (
 	"github.com/m1ngsama/filebox/internal/db"
 	"github.com/m1ngsama/filebox/internal/httpx"
 	"github.com/m1ngsama/filebox/internal/index"
+	"github.com/m1ngsama/filebox/internal/live"
 	"github.com/m1ngsama/filebox/internal/notify"
 	"github.com/m1ngsama/filebox/internal/office"
 	"github.com/m1ngsama/filebox/internal/passkey"
@@ -55,6 +56,7 @@ type App struct {
 	Office   *office.Converter
 	Index    *index.Index
 	Notify   *notify.Notifier
+	Live     *live.Hub
 	Versions *version.Store
 	Origins  []string
 }
@@ -62,6 +64,12 @@ type App struct {
 func (a *App) Handler() http.Handler {
 	if a.Notify == nil {
 		a.Notify = notify.New(a.DB)
+	}
+	if a.Live == nil {
+		a.Live = live.New(a.DB, a.Auth)
+		if a.Index != nil && a.Index.Changed == nil {
+			a.Index.Changed = a.Live.Changed
+		}
 	}
 	mux := http.NewServeMux()
 	mux.Handle("GET /raw/{vol}/{path...}", a.Auth.RequireAny(http.HandlerFunc(a.raw)))
@@ -73,6 +81,7 @@ func (a *App) Handler() http.Handler {
 	mux.Handle("GET /api/stream/seg", a.Auth.RequireAny(a.located(a.Stream.Segment)))
 	(&api.API{Vols: a.Vols, DB: a.DB, Auth: a.Auth, Jobs: api.NewJobs(a.Index), Index: a.Index, Notify: a.Notify, Versions: a.Versions, Origins: a.Origins}).Register(mux)
 	a.Passkeys.Register(mux)
+	a.Live.Register(mux)
 	d := dav.Handler(a.Vols, a.Auth, a.Index, a.Versions)
 	mux.Handle("/dav", d)
 	mux.Handle("/dav/", d)

@@ -27,6 +27,7 @@ const (
 	EventShareDelete = "share_delete"
 	EventTokenCreate = "token_create"
 	EventTokenRevoke = "token_revoke"
+	EventJoin        = "join"
 	EventCreate      = "create"
 	EventEdit        = "edit"
 	EventRevert      = "revert"
@@ -230,12 +231,26 @@ func (w *writer) stop() {
 	})
 }
 
-// Observe calls f with every event as it is logged. f runs on the logging goroutine and must not block.
-func (d *DB) Observe(f func(Event)) { d.observer.Store(&f) }
+// Observe calls f with every event as it is logged, after any observers added before it. f runs on the logging goroutine and must not block.
+func (d *DB) Observe(f func(Event)) {
+	for {
+		old := d.observers.Load()
+		var fs []func(Event)
+		if old != nil {
+			fs = append(fs, *old...)
+		}
+		fs = append(fs, f)
+		if d.observers.CompareAndSwap(old, &fs) {
+			return
+		}
+	}
+}
 
 func (d *DB) Log(e Event) {
-	if f := d.observer.Load(); f != nil {
-		(*f)(e)
+	if fs := d.observers.Load(); fs != nil {
+		for _, f := range *fs {
+			f(e)
+		}
 	}
 	if bulk[e.Kind] {
 		d.events.send(item{ev: e})

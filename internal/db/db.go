@@ -221,13 +221,26 @@ var migrations = []string{
 		created_at INTEGER NOT NULL,
 		expires_at INTEGER NOT NULL
 	);`,
+	`CREATE TABLE notices (
+		id INTEGER PRIMARY KEY AUTOINCREMENT,
+		user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+		at INTEGER NOT NULL,
+		kind TEXT NOT NULL,
+		name TEXT NOT NULL DEFAULT '',
+		vol TEXT NOT NULL DEFAULT '',
+		path TEXT NOT NULL DEFAULT '',
+		share TEXT NOT NULL DEFAULT '',
+		count INTEGER NOT NULL DEFAULT 1,
+		read INTEGER NOT NULL DEFAULT 0
+	);
+	CREATE INDEX notices_user ON notices(user_id, id DESC);`,
 }
 
 type DB struct {
 	*sql.DB
-	visitors visitorKey
-	events   *writer
-	observer atomic.Pointer[func(Event)]
+	visitors  visitorKey
+	events    *writer
+	observers atomic.Pointer[[]func(Event)]
 }
 
 type User struct {

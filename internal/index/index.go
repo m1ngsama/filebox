@@ -75,6 +75,8 @@ type Index struct {
 	dates   chan struct{}
 	Moved   func(v *vol.Volume, to string)
 	Wrote   func(v *vol.Volume, rel string)
+	// Changed hears about every path filebox itself created, changed, moved or removed.
+	Changed func(vol, rel string)
 	seen    map[string]time.Time
 }
 
@@ -99,6 +101,9 @@ func (x *Index) Touch(v *vol.Volume, rel string) {
 	x.poke()
 	if x.Wrote != nil {
 		x.Wrote(v, rel)
+	}
+	if x.Changed != nil {
+		x.Changed(v.Name, rel)
 	}
 }
 
@@ -193,6 +198,10 @@ func (x *Index) Rename(v *vol.Volume, from, to string) {
 		slog.Warn("index rename", "vol", v.Name, "from", from, "to", to, "err", err)
 	} else if x.Moved != nil {
 		x.Moved(v, to)
+	}
+	if x.Changed != nil {
+		x.Changed(v.Name, from)
+		x.Changed(v.Name, to)
 	}
 }
 

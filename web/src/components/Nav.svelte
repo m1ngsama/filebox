@@ -12,6 +12,7 @@
   import ChartPie from '@lucide/svelte/icons/chart-pie'
   import Users from '@lucide/svelte/icons/users'
   import { access, canWrite } from '../lib/access.svelte'
+  import NoticeBell from './NoticeBell.svelte'
   import LogOut from '@lucide/svelte/icons/log-out'
   import { link } from '../lib/router.svelte'
   import ChevronRight from '@lucide/svelte/icons/chevron-right'
@@ -70,7 +71,7 @@
 
 {#if shell.nav}<button class="scrim" aria-label={t.close} onclick={() => (shell.nav = false)}></button>{/if}
 <nav class="nav" class:open={shell.nav} aria-label={t.navigation} inert={narrow.current && !shell.nav}>
-  <div class="brand">{t.brand}</div>
+  <div class="brand">{t.brand}<NoticeBell /></div>
   <ul>
     {#if vols.length}
       <li>

@@ -11,9 +11,9 @@ A self-hosted file server in one binary. Browse, preview, upload and share files
 - **Find.** Search by name, path and the text inside documents. A photo timeline ordered by when each picture was taken, colored tags, recent files, a storage page, a duplicate finder, and a command palette on Ctrl/⌘+K.
 - **Share.** Links with a password, an expiry and a download limit, and drop boxes that receive files from people without an account.
 - **Keep.** A trash that holds deletes for 30 days, earlier versions of overwritten files, and a log of what changed.
-- **Team.** Admins and members, access set per volume as none, read or read and write, and one-time invite links.
+- **Team.** Admins and members, access set per volume as none, read or read and write, and one-time invite links. A folder on screen updates by itself when someone else changes it.
 - **Sign in.** Passwords, passkeys and app passwords, which can be read-only. Every session can be listed and ended.
-- **Notify.** Webhooks to ntfy, Gotify, Slack or your own endpoint.
+- **Notify.** A bell for downloads and uploads through your links, new members and low disk space, and webhooks to ntfy, Gotify, Slack or your own endpoint.
 
 The interface is in English and Chinese, and installs as an app on a phone.
 

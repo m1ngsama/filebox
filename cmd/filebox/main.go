@@ -23,6 +23,7 @@ import (
 	"github.com/m1ngsama/filebox/internal/db"
 	"github.com/m1ngsama/filebox/internal/extract"
 	"github.com/m1ngsama/filebox/internal/index"
+	"github.com/m1ngsama/filebox/internal/live"
 	"github.com/m1ngsama/filebox/internal/notify"
 	"github.com/m1ngsama/filebox/internal/office"
 	"github.com/m1ngsama/filebox/internal/passkey"
@@ -163,6 +164,9 @@ func serveCmd(args []string) error {
 	go ix.Date(ctx, set)
 	notifier := notify.New(d)
 	d.Observe(notifier.Event)
+	hub := live.New(d, au)
+	ix.Changed = hub.Changed
+	notifier.OnDiskLow = hub.DiskLow
 	go notifier.Run(ctx)
 	go notifier.Watch(ctx, set, 10*time.Minute)
 	go func() {
@@ -186,12 +190,13 @@ func serveCmd(args []string) error {
 	ix.Wrote = thumbs.Warm
 	streams := stream.New(*ffmpeg, filepath.Join(*data, "stream"))
 	streams.Probe(context.Background())
-	a := &app.App{Vols: set, DB: d, Auth: au, Web: webFS, Uploads: up, Thumbs: thumbs, Stream: streams, Passkeys: pk, Index: ix, Notify: notifier, Versions: vs, Office: office.New(filepath.Join(*data, "office"))}
+	a := &app.App{Vols: set, DB: d, Auth: au, Web: webFS, Uploads: up, Thumbs: thumbs, Stream: streams, Passkeys: pk, Index: ix, Notify: notifier, Live: hub, Versions: vs, Office: office.New(filepath.Join(*data, "office"))}
 	for _, o := range origins {
 		a.Origins = append(a.Origins, strings.TrimSuffix(o, "/"))
 	}
 
 	srv := &http.Server{Addr: *listen, Handler: a.Handler(), ReadHeaderTimeout: 10 * time.Second, IdleTimeout: 2 * time.Minute}
+	srv.RegisterOnShutdown(hub.Stop)
 	done := make(chan struct{})
 	go func() {
 		<-ctx.Done()

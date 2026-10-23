@@ -13,6 +13,8 @@ Each `-vol name=path` is a volume: a folder on a local disk that filebox serves.
 
 Turn off request and response buffering (nginx: `proxy_request_buffering off; proxy_buffering off;`) and forward `X-Real-IP` and `X-Forwarded-Proto` from loopback.
 
+Open tabs hear about changes over a long-lived `GET /api/events` stream (Server-Sent Events) with a keep-alive every 25 seconds. With buffering off, as above, it passes through nginx unchanged; a proxy that buffers responses or closes idle ones sooner than that delays or drops the updates, and the tabs fall back to reloading when they reconnect.
+
 filebox trusts `X-Real-IP`, then the last `X-Forwarded-For` entry, only when the direct peer is loopback, and uses the address for rate limits and the activity log. The proxy must set these headers itself (nginx: `proxy_set_header X-Real-IP $remote_addr;`) and must not pass a client-supplied value through. Caddy and Traefik pass them through by default.
 
 ## Passkeys

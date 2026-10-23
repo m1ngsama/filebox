@@ -75,6 +75,7 @@
   import { folderAction, downloadAction, actOn, saveZip } from '../lib/located'
   import { tags, loadTags } from '../lib/tags.svelte'
   import { canWrite } from '../lib/access.svelte'
+  import { onFolder, onReconnect } from '../lib/live.svelte'
   import { kind, searchKind, size, thumbable, rawThumb, arrange, parent, base, child, flip, sorts, place, prefersGrid, mostlyMedia, dated, days, sidecars, subtitleRename, stem, type Sort } from '../lib/format'
   import { t } from '../lib/i18n'
   import { load, save, viewOf, keepView, type View } from '../lib/storage'
@@ -580,6 +581,19 @@
   $effect(() => void loadShares())
   const marks = (e: Entry) => ({ starred: starred(vol, join(e.name)), shared: sharedPaths.has(`${vol}/${join(e.name)}`) })
   const quick = (e: Entry): Action[] => [act.share, act.download, starred(vol, join(e.name)) ? act.unstar : act.star]
+
+  // Someone else, or another tab, changed this folder: reload it once the burst is over.
+  let soon = 0
+  const later = () => {
+    clearTimeout(soon)
+    soon = window.setTimeout(() => !streaming && refresh(), 250)
+  }
+  $effect(() => {
+    const v = vol
+    const p = path
+    const off = [onFolder((ov, od) => ov === v && od === p && later()), onReconnect(later)]
+    return () => (off.forEach((f) => f()), clearTimeout(soon))
+  })
 
   $effect(() => {
     const mine = refresh

@@ -26,10 +26,12 @@
   const src = $derived(url(entry))
   const images = $derived(k === 'image' ? entries.filter((e) => !e.dir && kind(e.name) === 'image') : [])
   const subs = $derived(new Set([...sidecars(entries).values()].flat()))
-  const list = $derived(inline ? [] : entries.filter((e) => !e.dir && kind(e.name) && (!subs.has(e.name) || e === entry)))
-  const at = $derived(list.indexOf(entry))
+  // The folder can reload while a preview is open, handing over new objects for the same files, so files are matched by name.
+  const same = (e: Entry) => e.name === entry.name
+  const list = $derived(inline ? [] : entries.filter((e) => !e.dir && kind(e.name) && (!subs.has(e.name) || same(e))))
+  const at = $derived(list.findIndex(same))
   const songs = $derived(k === 'audio' ? list.filter((e) => kind(e.name) === 'audio') : [])
-  const song = $derived(songs.indexOf(entry))
+  const song = $derived(songs.findIndex(same))
   const tune = (e: Entry): Track => {
     const words = entries.find((x) => !x.dir && /\.lrc$/i.test(x.name) && nfcStem(x.name) === nfcStem(e.name))
     return { name: e.name, src: url(e), cover: url(e, 'large'), meta: url(e, 'meta'), lyrics: words && url(words) }
