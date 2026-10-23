@@ -10,6 +10,7 @@ A self-hosted file server in one binary. Browse, preview, upload and share files
 - Deletes from the web UI and WebDAV go to a per-volume trash that keeps items for 30 days, or less when the disk falls below 10% free, and so does a folder replaced by a WebDAV MOVE or COPY. Junk that macOS and Windows write and delete on their own (`._*`, `.DS_Store`, `.Trashes`, `Thumbs.db`, `desktop.ini`) is deleted for good and never versioned.
 - Passkey login next to the password.
 - Command palette on Ctrl/⌘+K, drag-to-select with the mouse, a storage page by type, folder and file, and a duplicate finder that compares content.
+- Webhook notifications to ntfy, Gotify, Slack or your own endpoint.
 
 ## Build
 
@@ -40,6 +41,10 @@ The index lives in `content.db` in the data directory and takes 2.5 to 4 times t
 ## Duplicates
 
 The duplicate finder (`/duplicates`) hashes only files that share a size with another file, remembers each hash in the database until the file changes, and works through a large library over several rounds of 8 seconds. Selected copies go to the trash, and at least one copy in each group always stays.
+
+## Notifications
+
+Under Settings, add a webhook URL and choose what to hear about: uploads, shared-link downloads, sign-ins, failed sign-ins, new share links, new app passwords and low disk space (under 10% free on a volume). Send either JSON or plain text, which ntfy and Gotify take as the message. A signing secret adds `X-Filebox-Signature: sha256=<hmac of the body>` to JSON messages. Failed deliveries retry twice, a webhook gets at most 30 messages a minute, and repeated downloads of one file by one visitor within an hour count once. The page shows only the host of each URL, since the path often holds a secret.
 
 ## Versions
 

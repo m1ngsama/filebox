@@ -230,7 +230,13 @@ func (w *writer) stop() {
 	})
 }
 
+// Observe calls f with every event as it is logged. f runs on the logging goroutine and must not block.
+func (d *DB) Observe(f func(Event)) { d.observer.Store(&f) }
+
 func (d *DB) Log(e Event) {
+	if f := d.observer.Load(); f != nil {
+		(*f)(e)
+	}
 	if bulk[e.Kind] {
 		d.events.send(item{ev: e})
 		return

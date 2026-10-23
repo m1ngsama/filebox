@@ -19,6 +19,7 @@ import (
 	"github.com/m1ngsama/filebox/internal/db"
 	"github.com/m1ngsama/filebox/internal/httpx"
 	"github.com/m1ngsama/filebox/internal/index"
+	"github.com/m1ngsama/filebox/internal/notify"
 	"github.com/m1ngsama/filebox/internal/serve"
 	"github.com/m1ngsama/filebox/internal/version"
 	"github.com/m1ngsama/filebox/internal/vol"
@@ -61,6 +62,7 @@ type API struct {
 	Auth     *auth.Auth
 	Jobs     *Jobs
 	Index    *index.Index
+	Notify   *notify.Notifier
 	Versions *version.Store
 	Origins  []string
 }
@@ -82,6 +84,11 @@ func (a *API) Register(mux *http.ServeMux) {
 	h("GET /api/vols", a.vols)
 	h("GET /api/size", a.size)
 	h("GET /api/usage", a.usage)
+	h("GET /api/webhooks", a.webhooks)
+	h("POST /api/webhooks", a.webhookNew)
+	h("PATCH /api/webhooks/{id}", a.webhookEdit)
+	h("DELETE /api/webhooks/{id}", a.webhookDel)
+	h("POST /api/webhooks/{id}/test", a.webhookTest)
 	h("GET /api/duplicates", a.duplicates)
 	h("GET /api/favorites", a.favorites)
 	h("POST /api/favorites", a.star)

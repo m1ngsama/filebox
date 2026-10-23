@@ -23,6 +23,7 @@ import (
 	"github.com/m1ngsama/filebox/internal/db"
 	"github.com/m1ngsama/filebox/internal/httpx"
 	"github.com/m1ngsama/filebox/internal/index"
+	"github.com/m1ngsama/filebox/internal/notify"
 	"github.com/m1ngsama/filebox/internal/office"
 	"github.com/m1ngsama/filebox/internal/passkey"
 	"github.com/m1ngsama/filebox/internal/render"
@@ -53,11 +54,15 @@ type App struct {
 	Passkeys *passkey.Service
 	Office   *office.Converter
 	Index    *index.Index
+	Notify   *notify.Notifier
 	Versions *version.Store
 	Origins  []string
 }
 
 func (a *App) Handler() http.Handler {
+	if a.Notify == nil {
+		a.Notify = notify.New(a.DB)
+	}
 	mux := http.NewServeMux()
 	mux.Handle("GET /raw/{vol}/{path...}", a.Auth.RequireAny(http.HandlerFunc(a.raw)))
 	mux.Handle("GET /thumb/{vol}/{path...}", a.Auth.RequireAny(http.HandlerFunc(a.thumb)))
@@ -66,7 +71,7 @@ func (a *App) Handler() http.Handler {
 	mux.Handle("GET /api/office", a.Auth.RequireAny(http.HandlerFunc(a.office)))
 	mux.Handle("GET /api/stream/index.m3u8", a.Auth.RequireAny(a.located(a.Stream.Playlist)))
 	mux.Handle("GET /api/stream/seg", a.Auth.RequireAny(a.located(a.Stream.Segment)))
-	(&api.API{Vols: a.Vols, DB: a.DB, Auth: a.Auth, Jobs: api.NewJobs(a.Index), Index: a.Index, Versions: a.Versions, Origins: a.Origins}).Register(mux)
+	(&api.API{Vols: a.Vols, DB: a.DB, Auth: a.Auth, Jobs: api.NewJobs(a.Index), Index: a.Index, Notify: a.Notify, Versions: a.Versions, Origins: a.Origins}).Register(mux)
 	a.Passkeys.Register(mux)
 	d := dav.Handler(a.Vols, a.Auth, a.Index, a.Versions)
 	mux.Handle("/dav", d)

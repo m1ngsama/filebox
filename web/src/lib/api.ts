@@ -28,6 +28,7 @@ export type Move = { from: Loc; to: Loc }
 export type Share = { id: number; token: string; vol: string; path: string; mode: 'read' | 'upload' | 'drop'; has_password: boolean; expires: number; created: number; hits: number; views: number; note: string; max_upload: number; dir: boolean }
 export type ShareEdit = Partial<{ mode: Share['mode']; password: string; expires_in: number; note: string; max_upload: number }>
 export type Activity = { id: number; at: number; kind: string; share_id: number; target: string; visitor: string; name: string; size: number; vol: string; path: string }
+export type Webhook = { id: number; url: string; format: string; kinds: string[]; lang: string; signed: boolean; created: number; last_at: number; last_status: string }
 export type Token = { id: number; label: string; readonly: boolean; created: number; last_used: number }
 export type Session = { id: number; user_agent: string; ip: string; created: number; last_used: number; current: boolean }
 export type Passkey = { id: number; name: string; created: number; last_used: number }
@@ -243,6 +244,14 @@ export const api = {
   versions: (vol: string, p: string) => req<{ versions: Version[] }>('GET', `/api/versions?${q({ vol, p })}`),
   restoreVersion: (vol: string, id: string) => req<{ path: string; prev: string }>('POST', '/api/versions/restore', { vol, id }),
   delVersion: (vol: string, id: string) => req<void>('POST', '/api/versions/delete', { vol, id }),
+  webhooks: () => req<{ webhooks: Webhook[]; kinds: string[]; max: number }>('GET', '/api/webhooks'),
+  newWebhook: (w: { url: string; format: string; kinds: string[]; secret: string; lang: string }) => req<{ id: number }>('POST', '/api/webhooks', w),
+  delWebhook: (id: number) => req<void>('DELETE', `/api/webhooks/${id}`),
+  async testWebhook(id: number) {
+    const r = await fetch(`/api/webhooks/${id}/test`, { method: 'POST' })
+    if (r.status === 502) throw new Error(((await r.json().catch(() => ({}))) as { error?: string }).error || t.serverError)
+    await settle<void>(r, `/api/webhooks/${id}/test`)
+  },
   tokens: () => req<{ tokens: Token[] }>('GET', '/api/tokens'),
   newToken: (label: string, readonly: boolean) => req<{ token: string }>('POST', '/api/tokens', { label, readonly }),
   delToken: (id: number) => req<void>('DELETE', `/api/tokens/${id}`),

@@ -4118,3 +4118,44 @@ test('duplicates are found by content, and all but one copy can go to the trash'
   expect(existsSync(join(server.vol, 'a/song.bin'))).toBe(true)
   expect(existsSync(join(server.vol, 'b/song copy.bin'))).toBe(false)
 })
+
+test('a webhook is added in settings, receives a test message, and can be deleted', async ({ page }) => {
+  const { createServer: http } = await import('node:http')
+  const got: { body: string; type: string | undefined }[] = []
+  const sink = http((req, res) => {
+    let body = ''
+    req.on('data', (c) => (body += c)).on('end', () => {
+      got.push({ body, type: req.headers['content-type'] })
+      res.end('ok')
+    })
+  })
+  await new Promise<void>((r) => sink.listen(0, '127.0.0.1', r))
+  const hook = `http://127.0.0.1:${(sink.address() as AddressInfo).port}/secret-topic`
+  try {
+    await login(page)
+    await page.goto('/settings')
+    const section = page.locator('#notifications')
+    await expect(section.getByText(t.noWebhooks)).toBeVisible()
+    await section.getByLabel(t.webhookURL).fill(hook)
+    await section.getByLabel(t.webhookKindNames.login).check()
+    await section.getByRole('button', { name: t.addWebhook, exact: true }).click()
+    const row = section.locator('.rows li')
+    await expect(row).toHaveCount(1)
+    await expect(row).toContainText('http://127.0.0.1')
+    await expect(row).not.toContainText('secret-topic')
+    await expect(row).toContainText(t.webhookKindNames.login)
+    await expect(row).toContainText(t.webhookNever)
+    await row.getByRole('button', { name: t.testWebhook }).click()
+    await expect(page.locator('.toast-text', { hasText: t.webhookTested })).toBeVisible()
+    expect(got).toHaveLength(1)
+    expect(got[0].type).toBe('application/json')
+    expect(JSON.parse(got[0].body)).toMatchObject({ event: 'test', text: expect.any(String) })
+    await expect(row).toContainText(t.webhookStatus('ok', '').trim())
+
+    await row.getByRole('button', { name: t.remove }).click()
+    await page.locator('.dialog').getByRole('button', { name: t.remove }).click()
+    await expect(section.getByText(t.noWebhooks)).toBeVisible()
+  } finally {
+    sink.close()
+  }
+})

@@ -11,6 +11,7 @@
   import CopyButton from '../components/CopyButton.svelte'
   import ConfirmDialog from '../components/ConfirmDialog.svelte'
   import NameDialog from '../components/NameDialog.svelte'
+  import Webhooks from '../components/Webhooks.svelte'
   import { api, session, HttpError, type Passkey, type Session, type Token } from '../lib/api'
   import { load as stored } from '../lib/storage'
   import { addPasskey, deviceName, passkeyError, validPasskeyName } from '../lib/passkey'
@@ -72,6 +73,7 @@
     ['sessions', t.sessions],
     ...(passkeysOn ? [['passkeys', t.passkeys]] : []),
     ['tokens', t.appPasswords],
+    ['notifications', t.notifications],
   ])
 
   function jump(e: MouseEvent, id: string) {
@@ -297,6 +299,7 @@
       </RowList>
     </section>
 
+    <Webhooks {head} />
   </div>
 </div>
 

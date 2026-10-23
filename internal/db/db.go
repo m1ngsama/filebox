@@ -7,6 +7,7 @@ import (
 	"net/url"
 	"strconv"
 	"strings"
+	"sync/atomic"
 
 	_ "modernc.org/sqlite"
 )
@@ -168,6 +169,18 @@ var migrations = []string{
 	`ALTER TABLE taken ADD COLUMN hidden INTEGER NOT NULL DEFAULT 0;
 	DROP INDEX taken_at;
 	CREATE INDEX taken_shown ON taken(at DESC, id DESC) WHERE hidden = 0;`,
+	`CREATE TABLE webhooks (
+		id INTEGER PRIMARY KEY AUTOINCREMENT,
+		user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+		url TEXT NOT NULL,
+		format TEXT NOT NULL DEFAULT 'json',
+		kinds TEXT NOT NULL,
+		secret TEXT NOT NULL DEFAULT '',
+		lang TEXT NOT NULL DEFAULT 'en',
+		created_at INTEGER NOT NULL,
+		last_at INTEGER NOT NULL DEFAULT 0,
+		last_status TEXT NOT NULL DEFAULT ''
+	);`,
 	`CREATE TABLE hashes (
 		vol TEXT NOT NULL,
 		path TEXT NOT NULL,
@@ -182,6 +195,7 @@ type DB struct {
 	*sql.DB
 	visitors visitorKey
 	events   *writer
+	observer atomic.Pointer[func(Event)]
 }
 
 type User struct {
