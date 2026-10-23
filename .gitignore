@@ -5,3 +5,15 @@
 /e2e/node_modules/
 /e2e/test-results/
 /e2e/playwright-report/
+
+# what a deployment leaves behind stays out of a public repository
+/test-results/
+/deploy/local/
+/data/
+*.db
+*.db-wal
+*.db-shm
+*.pem
+*.key
+.env
+.env.*

@@ -1,7 +1,7 @@
 LDFLAGS := -s -w
 GOBUILD := CGO_ENABLED=0 go build -trimpath -ldflags "$(LDFLAGS)"
 
-.PHONY: web size build linux test e2e check deploy tracked-clean
+.PHONY: web size build linux test e2e check
 
 web:
 	! git grep --untracked -nP '[\x{3000}-\x{303f}\x{4e00}-\x{9fff}\x{ff00}-\x{ffef}\x{2018}\x{2019}\x{201c}\x{201d}]' -- web/src ':!web/src/lib/i18n'
@@ -27,11 +27,3 @@ e2e: build
 	cd e2e && bun install --frozen-lockfile && bunx playwright test
 
 check: test e2e
-
-# a deployed binary should name a revision, not whatever was in the working tree
-tracked-clean:
-	@test -z "$$(git status --porcelain --untracked-files=no)" || { echo 'refusing to deploy: commit or stash your changes first'; exit 1; }
-
-deploy: tracked-clean linux
-	scp bin/filebox-linux-amd64 greenarch:/tmp/filebox
-	ssh greenarch 'sudo install -m 755 /tmp/filebox /usr/local/bin/filebox && rm /tmp/filebox && sudo systemctl restart filebox && systemctl is-active filebox'

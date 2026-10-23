@@ -1,15 +1,16 @@
+# Example systemd unit. Copy it to /etc/systemd/system/filebox.service and change the user, paths and -origin.
+#   sudo useradd --system --home /srv/filebox --shell /usr/sbin/nologin filebox
+#   sudo install -d -o filebox -g filebox /srv/filebox
 [Unit]
 Description=filebox
 After=network-online.target
 Wants=network-online.target
-Wants=mnt-backup1t.automount
-After=mnt-backup1t.automount
 
 [Service]
-User=m1ng
-Group=m1ng
-ExecStart=/usr/local/bin/filebox serve -data /srv/data/filebox -listen :5280 -ffmpeg /usr/bin/ffmpeg -origin https://cloud.m1ng.space \
-  -vol downloads=/mnt/backup1t/downloads -vol archive=/mnt/backup1t/archive -vol library=/mnt/backup1t/library
+User=filebox
+Group=filebox
+ExecStart=/usr/local/bin/filebox serve -data /srv/filebox/data -listen 127.0.0.1:5280 -ffmpeg /usr/bin/ffmpeg -origin https://files.example.com \
+  -vol files=/srv/filebox/files
 Restart=always
 RestartSec=2
 UMask=0022
@@ -17,7 +18,7 @@ NoNewPrivileges=yes
 PrivateTmp=yes
 ProtectSystem=strict
 ProtectHome=read-only
-ReadWritePaths=/mnt/backup1t /srv/data/filebox
+ReadWritePaths=/srv/filebox
 CapabilityBoundingSet=
 ProtectKernelTunables=yes
 ProtectKernelModules=yes

@@ -1,0 +1,22 @@
+# Example: copy to a new folder, edit the paths, then
+#   docker compose run --rm -T filebox passwd -data /data < password.txt   # first admin; the file holds one line, the password
+#   docker compose up -d
+services:
+  filebox:
+    image: ghcr.io/m1ngsama/filebox:latest
+    restart: unless-stopped
+    # The container runs as this user, which must be able to read and write the folders below.
+    user: "1000:1000"
+    # Reach it through a reverse proxy that serves HTTPS; see nginx.conf.example.
+    ports:
+      - "127.0.0.1:5280:5280"
+    volumes:
+      - ./data:/data            # accounts, shares and indexes: back this up
+      - /srv/files:/files       # a volume; add more lines like this one
+    command:
+      - serve
+      - -data=/data
+      - -listen=:5280
+      - -ffmpeg=/usr/bin/ffmpeg
+      - -origin=https://files.example.com
+      - -vol=files=/files
