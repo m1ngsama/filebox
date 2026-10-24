@@ -136,6 +136,7 @@ const zh = {
   filterKind: '类型',
   filterWhen: '修改时间',
   filterSize: '大小',
+  all: '全部',
   any: '不限',
   clearFilters: '清除筛选',
   kinds: { image: '图片', video: '视频', audio: '音频', doc: '文档', dir: '文件夹' } as Record<string, string>,

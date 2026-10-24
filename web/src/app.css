@@ -298,6 +298,17 @@ p.error::before { content: ''; flex: none; width: 1em; height: 1lh; background: 
 .row .sub { max-width: 100%; padding: 0 var(--space-1-5); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .sub a { color: inherit; }
 .filters { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); padding: var(--space-2) var(--space-4); border-bottom: 1px solid var(--line); }
+/* Type strip: what this folder holds, one tap to look at just that. One highlight glides between the pills;
+   the strip scrolls sideways when it doesn't fit. */
+.kinds { position: relative; display: flex; gap: var(--space-2); padding: var(--space-2) var(--space-4); border-bottom: 1px solid var(--line); overflow-x: auto; scrollbar-width: none; overscroll-behavior-x: contain; }
+.kinds::-webkit-scrollbar { display: none; }
+.kinds::before { content: ''; position: absolute; top: var(--space-2); left: 0; height: 32px; width: var(--gw, 0); translate: var(--gx, 0) 0; border-radius: var(--radius-full); background: color-mix(in srgb, var(--accent) 14%, transparent); pointer-events: none; }
+.kinds.glide::before { transition: translate var(--dur-2) var(--ease-out), width var(--dur-2) var(--ease-out); }
+.kind { position: relative; flex: none; height: 32px; padding: 0 var(--space-3); border-radius: var(--radius-full); border-color: transparent; background: none; color: var(--muted); font-size: var(--text-sm); transition: color var(--dur-1) var(--ease-out), scale var(--dur-1) var(--ease-out); }
+.kind .num { font-size: var(--text-xs); opacity: 0.8; font-variant-numeric: tabular-nums; }
+.kind:active { scale: 0.95; }
+.kind.on { color: var(--accent); font-weight: 600; }
+@media (hover: hover) and (pointer: fine) { .kind:not(.on):hover { background: var(--hover); } }
 .chip-select { position: relative; display: inline-flex; align-items: center; gap: var(--space-1); height: 32px; padding: 0 var(--space-2) 0 var(--space-3); border: 1px solid var(--line); border-radius: var(--radius-full); font-size: var(--text-sm); color: var(--fg); background: var(--panel); }
 .chip-select.on { border-color: transparent; background: color-mix(in srgb, var(--accent) 14%, transparent); color: var(--accent); font-weight: 600; }
 .chip-select select { position: absolute; inset: 0; opacity: 0; cursor: pointer; }

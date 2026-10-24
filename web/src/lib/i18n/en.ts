@@ -135,6 +135,7 @@ export default (locale: string) => {
     filterKind: 'Kind',
     filterWhen: 'Modified',
     filterSize: 'Size',
+    all: 'All',
     any: 'Any',
     clearFilters: 'Clear filters',
     kinds: { image: 'Images', video: 'Videos', audio: 'Audio', doc: 'Documents', dir: 'Folders' } as Record<string, string>,

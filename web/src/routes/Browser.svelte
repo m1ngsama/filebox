@@ -78,6 +78,7 @@
   import { canWrite } from '../lib/access.svelte'
   import { onFolder, onReconnect, report, present, live as stream } from '../lib/live.svelte'
   import { saveSearch } from '../lib/searches.svelte'
+  import { glide } from '../lib/motion'
   import { kind, searchKind, size, thumbable, rawThumb, arrange, parent, base, child, flip, sorts, place, prefersGrid, mostlyMedia, dated, days, sidecars, subtitleRename, stem, type Sort } from '../lib/format'
   import { t } from '../lib/i18n'
   import { load, save, viewOf, keepView, type View } from '../lib/storage'
@@ -168,10 +169,21 @@
   const visible = $derived(hidden.size ? entries.filter((e) => !hidden.has(e.name)) : entries)
   const local = $derived(scope === 'here' && !!(kindF || whenF || sizeF || tagF))
   const passes = (e: Entry) => (!kindF || searchKind(e) === kindF) && (!whenF || e.mtime >= Number(since(whenF))) && (!sizeF || (!e.dir && e.size >= Number(sizeF))) && (!tagF || !!e.tags?.includes(Number(tagF)))
+  // The type strip counts what this folder holds, and only appears when there is more than one thing to switch between.
+  const strip = $derived.by(() => {
+    if (scope !== 'here' || at !== here || error) return []
+    const n: Record<string, number> = {}
+    for (const e of visible) {
+      const k = searchKind(e)
+      if (k) n[k] = (n[k] ?? 0) + 1
+    }
+    const found = Object.keys(t.kinds).filter((k) => n[k] || k === kindF)
+    return found.length > 1 || (found.length === 1 && visible.length > n[found[0]]) || kindF ? found.map((k) => [k, n[k] ?? 0] as const) : []
+  })
   const shown = $derived(at !== here ? [] : streaming ? visible : arrange(local ? visible.filter(passes) : visible, query, sort, desc))
   let frozen = $state<boolean>()
   const auto = $derived(frozen ?? (at === here && (!streaming || entries.length >= 200) ? prefersGrid(visible) : undefined))
-  const grid = $derived(chosen ? chosen === 'grid' : !!auto)
+  const grid = $derived(chosen ? chosen === 'grid' : kindF === 'image' || kindF === 'video' ? scope === 'here' : !!auto)
   const byDay = $derived.by(() => {
     const day = grid && mostlyMedia(shown) ? dated() : days()
     return (e: Entry) => day(e.mtime)
@@ -1141,9 +1153,17 @@
       </DropdownMenu.Root>
     </header>
 
+    {#if strip.length}
+      <div class="kinds" role="group" aria-label={t.filterKind} use:glide={kindF + strip.length}>
+        <button type="button" class="kind" class:on={!kindF} aria-pressed={!kindF} onclick={() => (kindF = '')}>{t.all}<span class="num">{visible.length}</span></button>
+        {#each strip as [k, n] (k)}
+          <button type="button" class="kind" class:on={kindF === k} aria-pressed={kindF === k} onclick={() => (kindF = kindF === k ? '' : k)}>{t.kinds[k]}<span class="num">{n}</span></button>
+        {/each}
+      </div>
+    {/if}
     {#if scope === 'all' || !narrow.current}
       <div class="filters" role="group" aria-label={t.searchFilters}>
-        {#each [{ label: t.filterKind, get: () => kindF, set: (v: string) => (kindF = v), options: t.kinds }, { label: t.filterWhen, get: () => whenF, set: (v: string) => (whenF = v), options: t.whens }, { label: t.filterSize, get: () => sizeF, set: (v: string) => (sizeF = v), options: t.sizes }, ...(tags.list.length ? [{ label: t.filterTag, get: () => tagF, set: (v: string) => (tagF = v), options: Object.fromEntries(tags.list.map((x) => [String(x.id), x.name])) as Record<string, string> }] : [])] as f (f.label)}
+        {#each [{ label: t.filterKind, get: () => kindF, set: (v: string) => (kindF = v), options: t.kinds }, { label: t.filterWhen, get: () => whenF, set: (v: string) => (whenF = v), options: t.whens }, { label: t.filterSize, get: () => sizeF, set: (v: string) => (sizeF = v), options: t.sizes }, ...(tags.list.length ? [{ label: t.filterTag, get: () => tagF, set: (v: string) => (tagF = v), options: Object.fromEntries(tags.list.map((x) => [String(x.id), x.name])) as Record<string, string> }] : [])].filter((f) => f.label !== t.filterKind || !strip.length || scope === 'all') as f (f.label)}
           <label class="chip-select" class:on={!!f.get()}>
             <span>{f.get() ? f.options[f.get()] : f.label}</span>
             <ChevronDown size={icon.sm} aria-hidden="true" />
