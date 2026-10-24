@@ -18,7 +18,7 @@
   import FileIcon from './FileIcon.svelte'
   import { selectURL, type Entry, type Loc } from '../lib/api'
   import { link } from '../lib/router.svelte'
-  import { amount, clock, date, ago, look, fallback, flip, sorts, mostlyMedia, mostlyBooks, stem, ends, SEP, type Sort } from '../lib/format'
+  import { amount, size, clock, date, ago, look, fallback, flip, sorts, mostlyMedia, mostlyBooks, stem, ends, SEP, type Sort } from '../lib/format'
   import { t } from '../lib/i18n'
   import { narrow } from '../lib/shell.svelte'
   import { carry, drop, target, type Carried, type Target } from '../lib/dnd'
@@ -164,6 +164,13 @@
   const rows = $derived(layout ? layout.items.length : Math.ceil(entries.length / cols))
   const rowOf = (i: number) => (layout ? layout.rowOf[i] : Math.floor(i / cols))
   const tab = $derived(Math.max(0, cur ? entries.findIndex((e) => id(e) === cur) : 0))
+  // What the picked items add up to; a folder counts for what it holds when that is known.
+  const weight = $derived.by(() => {
+    if (!selected?.size) return 0
+    let n = 0
+    for (const e of entries) if (selected.has(id(e))) n += e.dir ? (e.bytes ?? 0) : e.size
+    return n
+  })
   const all = $derived(!!selected && entries.length > 0 && entries.every((e) => selected.has(id(e))))
 
   const v = createVirtualizer<HTMLDivElement, HTMLDivElement>({
@@ -614,7 +621,7 @@
     <span></span>
   {/if}
   {#if selected?.size && batch}
-    <span class="count">{t.selected(selected.size)}</span>
+    <span class="count">{t.selected(selected.size)}{#if weight}<span class="weight num"> · {size(weight)}</span>{/if}</span>
     {@render batch()}
     <button class="ghost select-all" onclick={selectAll}>{all ? t.selectNone : t.selectAll}</button>
   {:else}

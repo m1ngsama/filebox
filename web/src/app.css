@@ -221,6 +221,7 @@ p.error::before { content: ''; flex: none; width: 1em; height: 1lh; background: 
 .list-head.grid > .hit, .list-head.batch > .hit { margin: 0 var(--space-3) 0 var(--space-1-5); }
 .list-head.batch { color: var(--fg); background: var(--sel); }
 .list-head .count { font-weight: 600; margin-right: var(--space-2); white-space: nowrap; }
+.list-head .weight { font-weight: 400; color: var(--muted); }
 .list-head.batch { overflow-x: auto; }
 .list-head.batch > * { flex: none; }
 .list-head.batch > .icon-btn { margin-left: auto; }
