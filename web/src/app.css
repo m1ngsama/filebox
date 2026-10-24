@@ -467,17 +467,26 @@ p.up-title { display: flex; align-items: center; margin: 0; }
 .uploads.collapsed header { padding-inline: var(--space-2); }
 .uploads ul { animation: appear var(--dur-1) var(--ease-out); list-style: none; padding: 0 var(--space-1); margin: 0; overflow: auto; border-top: 1px solid var(--line); }
 .uploads li {
-  display: grid; grid-template-columns: 20px minmax(0, 1fr) auto 32px; grid-template-rows: auto auto; column-gap: var(--space-2);
-  align-items: center; min-height: 48px; padding: var(--space-1) var(--space-2);
+  display: grid; grid-template-columns: 36px minmax(0, 1fr) 32px; grid-template-rows: auto auto; column-gap: var(--space-3);
+  align-items: center; min-height: 56px; padding: var(--space-1-5) var(--space-2);
 }
 .uploads li + li { border-top: 1px solid var(--line); }
-.uploads li > .ficon { grid-row: 1 / 3; }
-.uploads li > .icon-btn, .uploads li > .up-ok { grid-column: 4; grid-row: 1 / 3; justify-self: center; }
+.uploads li > .ring, .uploads li > .icon-btn, .uploads li > .up-ok { grid-row: 1 / 3; }
+.uploads li > .icon-btn, .uploads li > .up-ok { grid-column: 3; justify-self: center; }
 .uploads li > .icon-btn { width: 32px; height: 32px; }
-.uploads li > .count { grid-column: 3; grid-row: 1; color: var(--muted); font-size: var(--text-xs); font-variant-numeric: tabular-nums; }
-.uploads .name { grid-column: 2; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: var(--text-sm); }
-.uploads li > progress, .uploads li > .meta { grid-column: 2 / 4; }
-.uploads .meta { color: var(--danger); font-size: var(--text-xs); overflow-wrap: anywhere; }
+/* The file's icon sits inside a ring that fills as bytes go up; before the first byte lands the ring spins instead. */
+.ring { position: relative; display: grid; place-items: center; width: 36px; height: 36px; color: var(--muted); }
+.ring > .dial { position: absolute; inset: 0; rotate: -90deg; }
+.ring circle { fill: none; stroke-width: 2.5; }
+.ring .track { stroke: var(--line); }
+.ring .arc { stroke: var(--accent); stroke-linecap: round; transition: stroke-dashoffset 400ms linear; }
+.ring.wait > .dial { animation: spin 1.2s linear infinite; }
+.ring.wait .arc { stroke-dashoffset: 0.75; transition: none; }
+.uploads li.queued .ring { opacity: 0.6; }
+.uploads li.error .arc { stroke: var(--danger); stroke-dashoffset: 0; }
+.uploads .name { grid-column: 2; align-self: end; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: var(--text-sm); }
+.uploads .meta { grid-column: 2; align-self: start; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--muted); font-size: var(--text-xs); font-variant-numeric: tabular-nums; }
+.uploads .meta.err { color: var(--danger); white-space: normal; overflow-wrap: anywhere; }
 .uploads .up-ok { color: var(--accent); }
 .uploads li.error .name { color: var(--fg); }
 .uploads li.more-rows { display: block; min-height: 0; padding: var(--space-2); color: var(--muted); font-size: var(--text-xs); }
@@ -734,6 +743,8 @@ button.busy::before { content: ''; width: 14px; height: 14px; border: 2px solid 
   :root { --dur-1: 0s; --dur-2: 0s; }
   .loading, .viewer .spinner, button.busy::before { animation-name: none, appear; }
   .sk { animation: none; }
+  .ring.wait > .dial { animation: none; }
+  .ring .arc { transition: none; }
   .row.pressing, .card.pressing { animation: none; background: var(--sel); }
 }
 

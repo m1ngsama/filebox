@@ -71,15 +71,18 @@
     {#if !collapsed}
       <ul>
         {#each rows as u (u.id)}
+          {@const pct = u.state === 'done' ? 1 : u.total ? Math.min(1, u.sent / u.total) : 0}
           <li class={u.state}>
-            <FileIcon name={u.name} dir={u.dir} size={icon.md} />
+            <span class="ring" class:wait={u.state === 'uploading' && !u.sent} role="progressbar" aria-label={u.name} aria-valuemin="0" aria-valuemax="100" aria-valuenow={Math.round(pct * 100)}>
+              <svg class="dial" viewBox="0 0 36 36" aria-hidden="true"><circle class="track" cx="18" cy="18" r="16" /><circle class="arc" cx="18" cy="18" r="16" pathLength="1" stroke-dasharray="1" stroke-dashoffset={u.state === 'error' ? 1 : 1 - pct} /></svg>
+              <FileIcon name={u.name} dir={u.dir} size={icon.md} />
+            </span>
             <span class="name" title={u.name}>{u.name}</span>
             {#if u.state === 'error'}
-              <span class="meta">{u.error}</span>
+              <span class="meta err">{u.error}</span>
             {:else}
-              <progress max={u.total || 1} value={u.state === 'done' ? u.total || 1 : u.sent}></progress>
+              <span class="meta">{u.state === 'queued' ? t.uploadQueued : u.state === 'done' ? t.uploadDone : `${size(u.sent)} / ${size(u.total)} · ${Math.floor(pct * 100)}%`}{#if u.dir} · {u.ok}/{u.files}{/if}</span>
             {/if}
-            {#if u.dir}<span class="count">{u.ok}/{u.files}</span>{/if}
             {#if u.state === 'error'}
               <button class="icon-btn" aria-label={t.retryItem(u.name)} title={t.retry} onclick={() => retry(u)}><RotateCw size={icon.sm} /></button>
             {:else if u.state === 'done'}
