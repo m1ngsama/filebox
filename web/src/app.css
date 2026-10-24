@@ -219,7 +219,7 @@ p.error::before { content: ''; flex: none; width: 1em; height: 1lh; background: 
 .list-head .sort.size, .list-head .sort.mtime { justify-content: flex-end; }
 .list-head.grid, .list-head.batch { display: flex; gap: var(--space-1); }
 .list-head.grid > .hit, .list-head.batch > .hit { margin: 0 var(--space-3) 0 var(--space-1-5); }
-.list-head.batch { color: var(--fg); background: var(--sel); }
+.list-head.batch { color: var(--fg); background: var(--sel); animation: enter var(--dur-2) var(--ease-out); }
 .list-head .count { font-weight: 600; margin-right: var(--space-2); white-space: nowrap; }
 .list-head .weight { font-weight: 400; color: var(--muted); }
 .list-head.batch { overflow-x: auto; }
@@ -257,7 +257,11 @@ p.error::before { content: ''; flex: none; width: 1em; height: 1lh; background: 
 .rows.skeleton .sk-line { width: 40%; }
 @keyframes pulse { to { opacity: 0.45; } }
 .row { position: absolute; top: 0; left: 0; right: 0; height: 48px; padding: 0 var(--space-2); border-bottom: 1px solid var(--line); cursor: default; }
+.row, .card { transition: background-color var(--dur-1) var(--ease-out); }
 .row.sel, .card.sel { background: var(--sel); }
+/* A picked media tile draws back from its edges, so the picks read at a glance in a wall of photos. */
+.tiles .card-open { transition: scale var(--dur-2) var(--ease-out), border-radius var(--dur-2) var(--ease-out); }
+.tiles .card.sel .card-open { scale: 0.86; border-radius: var(--radius-md); }
 .row { touch-action: pan-y; }
 :root[data-density='compact'] .row { height: 36px; }
 .row.swiping { background: color-mix(in srgb, var(--accent) 10%, var(--bg)); }
