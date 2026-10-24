@@ -718,3 +718,39 @@ func TestShareAsksUploaderName(t *testing.T) {
 		t.Fatalf("after edit %d %s", c, b)
 	}
 }
+
+// A file that arrives through a link has no signed-in person behind it, so a server takes such uploads only when it is
+// started to (-link-uploads). Reading through a link is not affected.
+func TestLinkUploadsOffRefusesAnonymousUploads(t *testing.T) {
+	f := newTestApp(t)
+	f.write(t, "inbox/a.txt", "a")
+	drop := mkShare(t, f, `{"vol":"v","path":"inbox","mode":"drop"}`)
+	read := mkShare(t, f, `{"vol":"v","path":"inbox","mode":"read"}`)
+
+	f.App.LinkUploads = false
+	f.H = f.App.Handler()
+	upload := func(tok string) int {
+		c, _, _ := anon(f, "POST", "/s/"+tok+"/upload/", "", "Tus-Resumable", "1.0.0", "Upload-Length", "0", "Upload-Metadata", "filename "+b64("x.txt"))
+		return c
+	}
+	if c := upload(drop); c != 403 {
+		t.Errorf("an existing drop box took an upload with link uploads off: %d", c)
+	}
+	for _, mode := range []string{"drop", "upload"} {
+		if w := f.do("POST", "/api/shares", body(`{"vol":"v","path":"inbox","mode":"`+mode+`"}`)); w.Code != 403 {
+			t.Errorf("a %s link was made with link uploads off: %d", mode, w.Code)
+		}
+	}
+	if w := f.do("POST", "/api/shares", body(`{"vol":"v","path":"inbox","mode":"read"}`)); w.Code/100 != 2 {
+		t.Errorf("a view-only link was refused: %d", w.Code)
+	}
+	if c, b, _ := anon(f, "GET", "/s/"+read+"/ls", ""); c != 200 || !strings.Contains(b, "a.txt") {
+		t.Errorf("reading through a link broke: %d %s", c, b)
+	}
+	if _, err := os.Stat(filepath.Join(f.Dir, "inbox/x.txt")); err == nil {
+		t.Error("a file arrived through a link with link uploads off")
+	}
+	if w := f.do("GET", "/api/me", nil); !strings.Contains(w.Body.String(), `"link_uploads":false`) {
+		t.Errorf("the page is not told link uploads are off: %s", w.Body)
+	}
+}
