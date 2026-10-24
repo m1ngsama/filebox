@@ -38,9 +38,9 @@ A published release is never edited or replaced. If it is wrong, mark it as such
 
 ## Deploying to production
 
-Publishing a release also starts the `deploy` workflow, which waits in the `production` environment. The maintainer approves it on the run's page on GitHub; only then does it SSH to the server and name the version. The server downloads that release from GitHub itself, checks the archive against the release's `SHA256SUMS`, checks the binary reports the same version, swaps it in, restarts the service and waits for it to answer. If it does not, it goes back to the previous binary. The workflow then checks that https://cloud.m1ng.space answers, and asks the server to go back if it does not. A prerelease is never deployed.
+Publishing a release also starts the `deploy` workflow, which waits in the `production` environment. The maintainer approves it on the run's page on GitHub; only then does it SSH to the server and name the version. The workflow downloads that release, checks the archive against the release's `SHA256SUMS` and its build attestation, and sends it over the same connection, because the server cannot reach github.com reliably. The server checks the archive's hash again, checks the binary reports the same version, swaps it in, restarts the service and waits for it to answer. If it does not, it goes back to the previous binary. The workflow then checks that https://cloud.m1ng.space answers, and asks the server to go back if it does not. A prerelease is never deployed.
 
-The deploy key can run one root-owned script, `deploy/filebox-deploy`, and the script accepts one line: a plain version, or `rollback`. The key and its host pin exist only in the `production` environment, which accepts version tags only. A pull request, a branch and the CI workflow never see them.
+The deploy key can run one root-owned script, `deploy/filebox-deploy`, and the script accepts a plain version, the archive's SHA-256 and the archive, or the single word `rollback`. The key and its host pin exist only in the `production` environment, which accepts version tags only. A pull request, a branch and the CI workflow never see them.
 
 ### One-time setup
 
@@ -67,5 +67,6 @@ In the repository's Settings → Environments → `production`:
 | secret | `DEPLOY_SSH_KEY` | the private half of the key above |
 | secret | `DEPLOY_KNOWN_HOSTS` | the server's host key line, e.g. `[host]:port ssh-ed25519 AAAA...`, taken from the server itself so the host is pinned |
 | variable | `DEPLOY_PORT` | the SSH port |
+| variable | `DEPLOY_ARCH` | `amd64` (the default) or `arm64`, whichever the server is |
 
-Updating a server by hand, or going back to an older release, still works: run `echo v0.0.1 | sudo /usr/local/sbin/filebox-deploy` on it.
+Updating a server by hand, or going back to an older release, still works: download that release's archive for the server and run `{ echo v0.0.1; sha256sum A.tar.gz | cut -d' ' -f1; cat A.tar.gz; } | sudo /usr/local/sbin/filebox-deploy` on it, or `echo rollback | sudo /usr/local/sbin/filebox-deploy` to go back one step.
