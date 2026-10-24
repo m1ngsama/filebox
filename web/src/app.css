@@ -232,7 +232,7 @@ p.error::before { content: ''; flex: none; width: 1em; height: 1lh; background: 
 .list-head .hit { justify-self: center; }
 .row > .cell { display: grid; place-items: center; min-width: 0; }
 .row > .name-cell { justify-items: start; }
-.scroller { flex: 1; min-height: 0; overflow: auto; position: relative; }
+.scroller { flex: 1; min-height: 0; overflow: auto; position: relative; animation: appear var(--dur-2) var(--ease-out); }
 .scroller.banding { user-select: none; }
 .band { position: absolute; z-index: 5; pointer-events: none; border: 1px solid var(--accent); border-radius: var(--radius-xs); background: color-mix(in srgb, var(--accent) 18%, transparent); }
 .spacer { position: relative; width: 100%; }
