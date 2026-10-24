@@ -9,7 +9,7 @@ RUN bun install --frozen-lockfile
 COPY web/ ./
 RUN bun run build
 
-FROM --platform=$BUILDPLATFORM golang:1.27-alpine AS build
+FROM --platform=$BUILDPLATFORM golang:1.26-alpine AS build
 ENV GOTOOLCHAIN=local
 WORKDIR /src
 COPY go.mod go.sum ./
@@ -18,8 +18,9 @@ COPY . .
 COPY --from=web /src/web/dist web/dist
 ARG TARGETOS TARGETARCH
 ARG VERSION=dev
+ARG REVISION=
 RUN CGO_ENABLED=0 GOOS=$TARGETOS GOARCH=$TARGETARCH \
-    go build -trimpath -ldflags "-s -w -X main.buildTag=$VERSION" -o /out/filebox ./cmd/filebox
+    go build -trimpath -ldflags "-s -w -X main.buildTag=$VERSION -X main.revision=$REVISION" -o /out/filebox ./cmd/filebox
 
 FROM alpine:3
 # ffmpeg makes thumbnails and streams video; poppler-utils reads text out of PDFs for search.

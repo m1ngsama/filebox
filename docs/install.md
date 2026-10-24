@@ -15,7 +15,7 @@ The attestation proves that GitHub Actions built the archive from this repositor
 
 ## Docker
 
-`ghcr.io/m1ngsama/filebox` for amd64 and arm64. [deploy/docker-compose.yml](../deploy/docker-compose.yml) is a starting point. Make the first account with:
+`ghcr.io/m1ngsama/filebox` for amd64 and arm64. [deploy/docker-compose.yml](../deploy/docker-compose.yml) is a starting point. On macOS with colima, which shares only your home folder with its virtual machine, keep the data and volume folders under it; a folder outside it looks empty and unwritable to the container. Make the first account with:
 
 ```sh
 docker compose run --rm -T filebox passwd -data /data < password.txt

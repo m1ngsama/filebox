@@ -39,6 +39,8 @@ jobs:
           platforms: linux/amd64,linux/arm64
           push: true
           tags: ${{ steps.tags.outputs.list }}
-          build-args: VERSION=${{ github.event.release.tag_name }}
+          build-args: |
+            VERSION=${{ github.event.release.tag_name }}
+            REVISION=${{ github.sha }}
           provenance: true
           sbom: true

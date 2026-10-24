@@ -47,17 +47,25 @@ const usage = `usage:
 -user may be omitted when the database has exactly one user; passwd creates "admin" in an empty one.
 The first user is an admin; others made with passwd are members who reach no volume until user access gives them one.`
 
-// buildTag is set at build time with -ldflags -X main.buildTag=...
-var buildTag = "dev"
+// buildTag and revision are set at build time with -ldflags -X; revision is for builds made without version control,
+// such as inside a container image.
+var (
+	buildTag = "dev"
+	revision = ""
+)
 
 func buildVersion() string {
 	v := buildTag
 	if info, ok := debug.ReadBuildInfo(); ok {
-		v += " (" + info.GoVersion
+		rev := revision
 		for _, s := range info.Settings {
-			if s.Key == "vcs.revision" && len(s.Value) >= 7 {
-				v += ", " + s.Value[:7]
+			if s.Key == "vcs.revision" && rev == "" {
+				rev = s.Value
 			}
+		}
+		v += " (" + info.GoVersion
+		if len(rev) >= 7 {
+			v += ", " + rev[:7]
 		}
 		v += ")"
 	}

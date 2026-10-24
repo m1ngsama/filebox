@@ -94,5 +94,6 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - run: docker build -t filebox:ci .
-      - run: docker run --rm filebox:ci version
+      - run: docker build --build-arg VERSION=ci --build-arg REVISION=$GITHUB_SHA -t filebox:ci .
+      - name: The image reports the commit it was built from
+        run: docker run --rm filebox:ci version | grep -F "${GITHUB_SHA::7}"
