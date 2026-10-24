@@ -36,4 +36,22 @@ Publish the draft by hand on GitHub. Publishing triggers the `image` workflow, w
 
 A published release is never edited or replaced. If it is wrong, mark it as such in a new release's notes, or delete it if it is dangerous.
 
-Updating a server is always done by hand; no workflow reaches one.
+## Deploying to production
+
+After the image is pushed, the `deploy` job of the same workflow waits in the `production` environment. The maintainer approves it on the run's page on GitHub; only then does it SSH to the server, pull the image, restart, and check that the site answers. If it does not, it goes back to the image that was running. A prerelease is never deployed.
+
+The deploy job is the only thing that holds the server's credentials, and they exist only in that environment, which accepts version tags only. A pull request, a branch and the CI workflow never see them.
+
+One-time setup, in the repository's Settings → Environments → `production`:
+
+| Kind | Name | Value |
+| --- | --- | --- |
+| secret | `DEPLOY_HOST` | the server's host name |
+| secret | `DEPLOY_USER` | the account that runs docker compose |
+| secret | `DEPLOY_SSH_KEY` | a private key used for nothing else |
+| secret | `DEPLOY_KNOWN_HOSTS` | the server's line from `ssh-keyscan`, checked by you, so the host key is pinned |
+| variable | `DEPLOY_DIR` | the folder on the server that holds `docker-compose.yml` |
+
+On the server, restrict the key in `~/.ssh/authorized_keys` with `restrict` so it can run commands but not forward ports or an agent.
+
+Updating a server by hand with `docker compose pull && docker compose up -d` still works and is how you roll back.
