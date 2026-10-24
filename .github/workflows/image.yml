@@ -1,5 +1,7 @@
 name: image
-# Builds and pushes the Docker image when a maintainer publishes a release, never on a tag alone.
+# Builds and pushes the Docker images when a maintainer publishes a release, never on a tag alone.
+# Then the `deploy` job offers the release to production: it waits in the `production` environment until the maintainer
+# approves it on GitHub, so nothing reaches the server without a person saying yes to that exact version.
 on:
   release:
     types: [published]
@@ -60,3 +62,48 @@ jobs:
             REVISION=${{ github.sha }}
           provenance: true
           sbom: true
+
+  deploy:
+    needs: image
+    # A prerelease is never deployed.
+    if: ${{ !github.event.release.prerelease }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions: {}
+    concurrency:
+      group: deploy-production
+      cancel-in-progress: false
+    # The SSH credentials exist in this environment only, and it accepts version tags only: no pull request,
+    # branch or CI job can read them.
+    environment:
+      name: production
+      url: https://cloud.m1ng.space
+    env:
+      TAG: ${{ github.event.release.tag_name }}
+      HOST: ${{ secrets.DEPLOY_HOST }}
+      PORT: ${{ vars.DEPLOY_PORT }}
+      USER_: ${{ secrets.DEPLOY_USER }}
+      URL: https://cloud.m1ng.space
+    steps:
+      - name: Trust only the server we pinned
+        env:
+          KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+          KNOWN: ${{ secrets.DEPLOY_KNOWN_HOSTS }}
+        run: |
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$KEY" > ~/.ssh/id && chmod 600 ~/.ssh/id
+          printf '%s\n' "$KNOWN" > ~/.ssh/known_hosts
+      # The key can only run the server's deploy script, which reads one line: a version, or `rollback`. The server
+      # pulls that version's image from ghcr, restarts, waits for it to be healthy, and goes back if it is not.
+      - name: Run that version
+        run: echo "$TAG" | ssh -p "$PORT" -i ~/.ssh/id -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes "$USER_@$HOST"
+      - name: It answers, or it goes back
+        run: |
+          for i in $(seq 1 30); do
+            code=$(curl -s -o /dev/null -w '%{http_code}' --max-time 5 "$URL/" || true)
+            case "$code" in 2*|3*) echo "up after $i tries"; exit 0 ;; esac
+            sleep 2
+          done
+          echo "::error::$URL did not answer, going back to the previous version"
+          echo rollback | ssh -p "$PORT" -i ~/.ssh/id -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes "$USER_@$HOST"
+          exit 1

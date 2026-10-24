@@ -1,6 +1,6 @@
 # filebox on greenArch, as a container. It is the systemd unit's setup made into compose: the same user, the same
 # flags, the same folders at the same paths inside, and a read-only root. Copy it to /srv/apps/filebox/compose.yml
-# beside a .env that says which version to run:
+# beside seccomp.json (deploy/filebox-seccomp.json) and a .env that says which version to run:
 #   FILEBOX_TAG=v0.1.0-full
 # Update: change FILEBOX_TAG, then `docker compose pull && docker compose up -d`. Go back: put the old tag back.
 services:
@@ -14,18 +14,23 @@ services:
     tmpfs:
       - /tmp:size=1g
     cap_drop: [ALL]
-    security_opt: [no-new-privileges:true]
+    # Docker's default profile plus `unshare`, so filebox can run LibreOffice with no network, as the old systemd unit did.
+    security_opt:
+      - no-new-privileges:true
+      - seccomp=/srv/apps/filebox/seccomp.json
     pids_limit: 512
     # Reached through the reverse proxy, which serves HTTPS.
     ports:
       - "5280:5280"
     environment:
       HOME: /tmp
+    # The media folders are mounts made at boot by filebox-media-mounts.service. If one is not there yet, the container
+    # must fail to start rather than have Docker create an empty folder in its place: filebox-container.service waits for the mounts.
     volumes:
       - /srv/data/filebox:/data
-      - /run/filebox-media/downloads:/mnt/backup1t/downloads
-      - /run/filebox-media/archive:/mnt/backup1t/archive
-      - /run/filebox-media/library:/mnt/backup1t/library
+      - {type: bind, source: /run/filebox-media/downloads, target: /mnt/backup1t/downloads, bind: {create_host_path: false}}
+      - {type: bind, source: /run/filebox-media/archive, target: /mnt/backup1t/archive, bind: {create_host_path: false}}
+      - {type: bind, source: /run/filebox-media/library, target: /mnt/backup1t/library, bind: {create_host_path: false}}
     command:
       - serve
       - -data=/data

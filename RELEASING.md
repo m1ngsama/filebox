@@ -38,35 +38,24 @@ A published release is never edited or replaced. If it is wrong, mark it as such
 
 ## Deploying to production
 
-Publishing a release also starts the `deploy` workflow, which waits in the `production` environment. The maintainer approves it on the run's page on GitHub; only then does it SSH to the server and name the version. The workflow downloads that release, checks the archive against the release's `SHA256SUMS` and its build attestation, and sends it over the same connection, because the server cannot reach github.com reliably. The server checks the archive's hash again, checks the binary reports the same version, swaps it in, restarts the service and waits for it to answer. If it does not, it goes back to the previous binary. The workflow then checks that https://cloud.m1ng.space answers, and asks the server to go back if it does not. A prerelease is never deployed.
+Publishing a release builds the Docker images (the small one, and `-full` with Office previews and OCR) and then starts the `deploy` job, which waits in the `production` environment. The maintainer approves it on the run's page on GitHub; only then does it SSH to the server and name the version. The server pulls that version's `-full` image from ghcr, restarts the container, waits for its health check, and goes back to the previous version if it does not come up. The workflow then checks that https://cloud.m1ng.space answers, and asks the server to go back if it does not. A prerelease is never deployed.
 
-The deploy key can run one root-owned script, `deploy/filebox-deploy`, and the script accepts a plain version, the archive's SHA-256 and the archive, or the single word `rollback`. The key and its host pin exist only in the `production` environment, which accepts version tags only. A pull request, a branch and the CI workflow never see them.
+The deploy key can run one root-owned script, `deploy/filebox-deploy`, and the script accepts one line: a plain version, or `rollback`. The key and its host pin exist only in the `production` environment, which accepts version tags only. A pull request, a branch and the CI workflow never see them.
 
-### One-time setup
+### The server
 
-On the server, as root:
+filebox runs on greenArch from `/srv/apps/filebox`, as a container started by `filebox-container.service` once the media folders are mounted:
 
-```sh
-install -m 755 -o root -g root deploy/filebox-deploy /usr/local/sbin/filebox-deploy
-echo 'm1ng ALL=(root) NOPASSWD: /usr/local/sbin/filebox-deploy' > /etc/sudoers.d/filebox-deploy
-chmod 440 /etc/sudoers.d/filebox-deploy && visudo -c
-```
+| File | From |
+| --- | --- |
+| `compose.yml` | `deploy/greenarch.compose.yml` |
+| `seccomp.json` | `deploy/filebox-seccomp.json`: Docker's default profile plus `unshare`, so LibreOffice runs with no network |
+| `.env` | `FILEBOX_TAG=vX.Y.Z-full`, written by the deploy script |
+| `/etc/systemd/system/filebox-container.service` | `deploy/filebox-container.service` |
+| `/usr/local/sbin/filebox-deploy` | `deploy/filebox-deploy`, owned by root |
 
-Generate a key used for nothing else (`ssh-keygen -t ed25519 -N '' -f deploy-key -C filebox-deploy`) and add the public half to the service account's `~/.ssh/authorized_keys` as
+The deploy key is in the service account's `~/.ssh/authorized_keys` as `restrict,command="sudo /usr/local/sbin/filebox-deploy" ssh-ed25519 AAAA... filebox-deploy`, and sudoers lets that account run only that script without a password.
 
-```
-restrict,command="sudo /usr/local/sbin/filebox-deploy" ssh-ed25519 AAAA... filebox-deploy
-```
+In the repository's Settings → Environments → `production`: secrets `DEPLOY_HOST`, `DEPLOY_USER`, `DEPLOY_SSH_KEY` and `DEPLOY_KNOWN_HOSTS` (the server's host key line, e.g. `[host]:port ssh-ed25519 AAAA...`, taken from the server itself so the host is pinned), and variable `DEPLOY_PORT`.
 
-In the repository's Settings → Environments → `production`:
-
-| Kind | Name | Value |
-| --- | --- | --- |
-| secret | `DEPLOY_HOST` | the address the server's SSH is reachable on from the internet |
-| secret | `DEPLOY_USER` | the service account |
-| secret | `DEPLOY_SSH_KEY` | the private half of the key above |
-| secret | `DEPLOY_KNOWN_HOSTS` | the server's host key line, e.g. `[host]:port ssh-ed25519 AAAA...`, taken from the server itself so the host is pinned |
-| variable | `DEPLOY_PORT` | the SSH port |
-| variable | `DEPLOY_ARCH` | `amd64` (the default) or `arm64`, whichever the server is |
-
-Updating a server by hand, or going back to an older release, still works: download that release's archive for the server and run `{ echo v0.0.1; sha256sum A.tar.gz | cut -d' ' -f1; cat A.tar.gz; } | sudo /usr/local/sbin/filebox-deploy` on it, or `echo rollback | sudo /usr/local/sbin/filebox-deploy` to go back one step.
+Updating by hand, or going back to an older release: `echo v0.0.2 | sudo /usr/local/sbin/filebox-deploy`, or `echo rollback | sudo /usr/local/sbin/filebox-deploy` to go back one step.
