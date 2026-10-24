@@ -3805,7 +3805,9 @@ test('file changes show up in activity, grouped per folder, and follow the item 
   await page.getByLabel(t.activityKinds['']).selectOption('files')
   await expect(list).toHaveCount(4)
   await list.nth(1).getByRole('link', { name: t.fileEvents.rename('plan.txt', 'a.txt') }).click()
-  await expect(page).toHaveURL(/\/files\/v\/notes\/\?select=plan\.txt$/)
+  // The folder opens with the item picked; the ?select= it arrived with is dropped at once, so the URL is not what to wait for.
+  await expect(page).toHaveURL(/\/files\/v\/notes\//)
+  await expect(row(page, 'plan.txt')).toHaveAttribute('aria-selected', 'true')
   await page.goto('/files/v/notes/?details=plan.txt')
   const details = page.getByRole('complementary', { name: t.details })
   await details.getByRole('tab', { name: t.activity }).click()
