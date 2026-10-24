@@ -38,20 +38,34 @@ A published release is never edited or replaced. If it is wrong, mark it as such
 
 ## Deploying to production
 
-After the image is pushed, the `deploy` job of the same workflow waits in the `production` environment. The maintainer approves it on the run's page on GitHub; only then does it SSH to the server, pull the image, restart, and check that the site answers. If it does not, it goes back to the image that was running. A prerelease is never deployed.
+Publishing a release also starts the `deploy` workflow, which waits in the `production` environment. The maintainer approves it on the run's page on GitHub; only then does it SSH to the server and name the version. The server downloads that release from GitHub itself, checks the archive against the release's `SHA256SUMS`, checks the binary reports the same version, swaps it in, restarts the service and waits for it to answer. If it does not, it goes back to the previous binary. The workflow then checks that https://cloud.m1ng.space answers, and asks the server to go back if it does not. A prerelease is never deployed.
 
-The deploy job is the only thing that holds the server's credentials, and they exist only in that environment, which accepts version tags only. A pull request, a branch and the CI workflow never see them.
+The deploy key can run one root-owned script, `deploy/filebox-deploy`, and the script accepts one line: a plain version, or `rollback`. The key and its host pin exist only in the `production` environment, which accepts version tags only. A pull request, a branch and the CI workflow never see them.
 
-One-time setup, in the repository's Settings → Environments → `production`:
+### One-time setup
+
+On the server, as root:
+
+```sh
+install -m 755 -o root -g root deploy/filebox-deploy /usr/local/sbin/filebox-deploy
+echo 'm1ng ALL=(root) NOPASSWD: /usr/local/sbin/filebox-deploy' > /etc/sudoers.d/filebox-deploy
+chmod 440 /etc/sudoers.d/filebox-deploy && visudo -c
+```
+
+Generate a key used for nothing else (`ssh-keygen -t ed25519 -N '' -f deploy-key -C filebox-deploy`) and add the public half to the service account's `~/.ssh/authorized_keys` as
+
+```
+restrict,command="sudo /usr/local/sbin/filebox-deploy" ssh-ed25519 AAAA... filebox-deploy
+```
+
+In the repository's Settings → Environments → `production`:
 
 | Kind | Name | Value |
 | --- | --- | --- |
-| secret | `DEPLOY_HOST` | the server's host name |
-| secret | `DEPLOY_USER` | the account that runs docker compose |
-| secret | `DEPLOY_SSH_KEY` | a private key used for nothing else |
-| secret | `DEPLOY_KNOWN_HOSTS` | the server's line from `ssh-keyscan`, checked by you, so the host key is pinned |
-| variable | `DEPLOY_DIR` | the folder on the server that holds `docker-compose.yml` |
+| secret | `DEPLOY_HOST` | the address the server's SSH is reachable on from the internet |
+| secret | `DEPLOY_USER` | the service account |
+| secret | `DEPLOY_SSH_KEY` | the private half of the key above |
+| secret | `DEPLOY_KNOWN_HOSTS` | the server's host key line, e.g. `[host]:port ssh-ed25519 AAAA...`, taken from the server itself so the host is pinned |
+| variable | `DEPLOY_PORT` | the SSH port |
 
-On the server, restrict the key in `~/.ssh/authorized_keys` with `restrict` so it can run commands but not forward ports or an agent.
-
-Updating a server by hand with `docker compose pull && docker compose up -d` still works and is how you roll back.
+Updating a server by hand, or going back to an older release, still works: run `echo v0.0.1 | sudo /usr/local/sbin/filebox-deploy` on it.

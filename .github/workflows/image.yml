@@ -1,7 +1,5 @@
 name: image
 # Builds and pushes the Docker image when a maintainer publishes a release, never on a tag alone.
-# Then the `deploy` job offers it to production: it waits in the `production` environment until the maintainer
-# approves it on GitHub, so nothing reaches the server without a person saying yes to that exact version.
 on:
   release:
     types: [published]
@@ -46,50 +44,3 @@ jobs:
             REVISION=${{ github.sha }}
           provenance: true
           sbom: true
-
-  deploy:
-    needs: image
-    # A prerelease is never deployed.
-    if: ${{ !github.event.release.prerelease }}
-    runs-on: ubuntu-latest
-    timeout-minutes: 15
-    # Holds here for the required reviewer. The SSH secrets live in this environment only, so no other job can read them,
-    # and the environment accepts version tags only, never a branch or a pull request.
-    environment:
-      name: production
-      url: https://cloud.m1ng.space
-    permissions: {}
-    concurrency:
-      group: deploy-production
-      cancel-in-progress: false
-    env:
-      HOST: ${{ secrets.DEPLOY_HOST }}
-      USER_: ${{ secrets.DEPLOY_USER }}
-      DIR: ${{ vars.DEPLOY_DIR }}
-      URL: https://cloud.m1ng.space
-    steps:
-      - name: Trust only the server we pinned
-        env:
-          KEY: ${{ secrets.DEPLOY_SSH_KEY }}
-          KNOWN: ${{ secrets.DEPLOY_KNOWN_HOSTS }}
-        run: |
-          install -m 700 -d ~/.ssh
-          printf '%s\n' "$KEY" > ~/.ssh/id && chmod 600 ~/.ssh/id
-          printf '%s\n' "$KNOWN" > ~/.ssh/known_hosts
-      - name: Pull the new image and restart, keeping the old one to go back to
-        run: |
-          ssh -i ~/.ssh/id -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes "$USER_@$HOST" "cd '$DIR' && set -e
-            prev=\$(docker compose images -q filebox | head -n1)
-            echo \"\$prev\" > .previous-image
-            docker compose pull filebox
-            docker compose up -d --remove-orphans filebox"
-      - name: It answers, or it goes back
-        run: |
-          for i in $(seq 1 30); do
-            code=$(curl -s -o /dev/null -w '%{http_code}' --max-time 5 "$URL/" || true)
-            case "$code" in 2*|3*) echo "up after $i tries"; exit 0 ;; esac
-            sleep 2
-          done
-          echo "::error::$URL did not answer, going back to the previous image"
-          ssh -i ~/.ssh/id -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes "$USER_@$HOST" "cd '$DIR' && prev=\$(cat .previous-image) && [ -n \"\$prev\" ] && docker tag \"\$prev\" ghcr.io/m1ngsama/filebox:latest && docker compose up -d --no-deps --pull never filebox"
-          exit 1
