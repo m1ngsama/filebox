@@ -9,7 +9,7 @@ A self-hosted file server in one binary. Browse, preview, upload and share files
 - **Files.** Resumable uploads over [tus](https://tus.io/protocols/resumable-upload), downloads with HTTP Range, WebDAV with per-device app passwords, zip and unzip, and a text editor in the browser.
 - **Preview.** Images, video, audio, PDF, EPUB, comics, code and Markdown, and Word, Excel and PowerPoint through LibreOffice. Thumbnails and video streaming use ffmpeg when it is installed.
 - **Find.** Search by name, path and the text inside documents. A photo timeline ordered by when each picture was taken, colored tags that also color folders, saved searches, recent files, a storage page, a duplicate finder, and a command palette on Ctrl/⌘+K. With `-ocr`, the words in screenshots and scans too.
-- **Share.** Links with a password, an expiry and a download limit, and drop boxes that receive files from people without an account.
+- **Share.** Links with a password, an expiry and a download limit, and, only if you start the server with `-link-uploads`, upload and drop-box links that receive files from people without an account. They are off by default: a file that arrives through a link has no signed-in person behind it.
 - **Keep.** A trash that holds deletes for 30 days, earlier versions of overwritten files, and a log of what changed.
 - **Team.** Admins and members, access set per volume as none, read or read and write, and one-time invite links. A folder on screen updates by itself when someone else changes it and shows who else is in it, files and folders carry comments where @ names a member, and an admin sees what the whole team changed.
 - **Sign in.** Passwords, passkeys and app passwords, which can be read-only. Every session can be listed and ended.

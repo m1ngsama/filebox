@@ -7,7 +7,7 @@
   import { t } from '../lib/i18n'
   import { toast } from '../lib/toast.svelte'
   import { copyLater } from '../lib/clipboard'
-  import { canWrite } from '../lib/access.svelte'
+  import { access, canWrite } from '../lib/access.svelte'
 
   let { vol, path, dir }: { vol: string; path: string; dir: boolean } = $props()
 
@@ -17,7 +17,8 @@
   let expires = $state(7 * 86400)
   let error = $state('')
   let busy = $state(false)
-  const modes = $derived(canWrite(vol) ? (['read', 'upload', 'drop'] as const) : (['read'] as const))
+  // Upload and drop-box links need the server to be started to take uploads from people without an account.
+  const modes = $derived(canWrite(vol) && access.linkUploads ? (['read', 'upload', 'drop'] as const) : (['read'] as const))
 
   async function load() {
     try {

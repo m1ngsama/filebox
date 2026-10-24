@@ -35,6 +35,9 @@ type Service struct {
 	Thumbs  *thumb.Service
 	Stream  *stream.Service
 	Office  *office.Converter
+	// LinkUploads lets a link take uploads from people who have no account. It is off unless the server is started to allow it:
+	// a file that arrives through a link has no signed-in person behind it.
+	LinkUploads bool
 }
 
 func (s *Service) Register(mux *http.ServeMux) {
@@ -72,6 +75,8 @@ func (s *Service) allow(owner string, size int64) error {
 	}
 	sh, ok := s.owner(owner)
 	switch {
+	case !s.LinkUploads:
+		return upload.ErrRevoked
 	case !ok || (sh.ExpiresAt != 0 && sh.ExpiresAt <= time.Now().Unix()) || (sh.Mode != "upload" && sh.Mode != "drop"):
 		return upload.ErrRevoked
 	case sh.MaxUpload > 0 && size > sh.MaxUpload:
@@ -141,6 +146,10 @@ func (s *Service) create(w http.ResponseWriter, r *http.Request) {
 	}
 	if err := httpx.Read(r, &in); err != nil || !modes[in.Mode] || in.ExpiresIn < 0 || in.MaxUpload < 0 || len(in.Note) > maxNote || in.MaxDownloads < 0 || in.MaxDownloads > maxDownloads {
 		httpx.Fail(w, 400, "bad request")
+		return
+	}
+	if in.Mode != "read" && !s.LinkUploads {
+		httpx.Fail(w, 403, "uploads through links are turned off on this server")
 		return
 	}
 	if err := auth.Allow(r.Context(), in.Vol, in.Mode != "read"); err != nil {
@@ -570,6 +579,10 @@ func (s *Service) thumb(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Service) upload(w http.ResponseWriter, r *http.Request) {
+	if !s.LinkUploads {
+		httpx.Fail(w, 403, "uploads through links are turned off on this server")
+		return
+	}
 	if r.Method == http.MethodOptions {
 		s.Uploads.Handler("/", upload.Policy{}).ServeHTTP(w, r)
 		return

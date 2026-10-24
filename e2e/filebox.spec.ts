@@ -21,7 +21,9 @@ function freePort() {
   })
 }
 
-const test = base.extend<{ server: { url: string; vol: string } }, { template: string }>({
+const test = base.extend<{ server: { url: string; vol: string }; linkUploads: boolean }, { template: string }>({
+  // Whether the server takes uploads through share links; a test that is about the default turns it off.
+  linkUploads: [true, { option: true }],
   template: [
     async ({}, use) => {
       const dir = mkdtempSync(join(tmpdir(), 'filebox-e2e-'))
@@ -31,14 +33,14 @@ const test = base.extend<{ server: { url: string; vol: string } }, { template: s
     },
     { scope: 'worker' },
   ],
-  server: async ({ template }, use) => {
+  server: async ({ template, linkUploads }, use) => {
     const dir = mkdtempSync(join(tmpdir(), 'filebox-e2e-'))
     const vol = join(dir, 'vol')
     mkdirSync(join(vol, 'docs'), { recursive: true })
     writeFileSync(join(vol, 'docs/readme.txt'), 'hello\n')
     cpSync(template, join(dir, 'data'), { recursive: true })
     const port = await freePort()
-    const proc = spawn(BIN, ['serve', '-data', join(dir, 'data'), '-listen', `127.0.0.1:${port}`, '-origin', `http://localhost:${port}`, '-vol', `v=${vol}`], { stdio: 'ignore' })
+    const proc = spawn(BIN, ['serve', '-data', join(dir, 'data'), '-listen', `127.0.0.1:${port}`, '-origin', `http://localhost:${port}`, '-vol', `v=${vol}`, ...(linkUploads ? ['-link-uploads'] : [])], { stdio: 'ignore' })
     const exited = new Promise((r) => proc.once('exit', r))
     const url = `http://127.0.0.1:${port}`
     await expect.poll(() => fetch(url).then((r) => r.ok, () => false)).toBe(true)
@@ -3560,6 +3562,22 @@ test('dragging rows moves them onto a folder or a breadcrumb and undo brings the
   await expect.poll(() => at('box/inner/a.txt')).toBe(true)
 })
 
+test.describe('a server that takes no uploads through links', () => {
+  test.use({ linkUploads: false })
+  test('offers only view-only links, and refuses the others', async ({ page }) => {
+    await login(page)
+    await row(page, 'docs').locator('button.more').click()
+    const loaded = page.waitForResponse((r) => r.request().method() === 'GET' && new URL(r.url()).pathname === '/api/shares')
+    await page.getByRole('menuitem', { name: t.details, exact: true }).click()
+    await loaded
+    await expect(page.getByRole('button', { name: t.newShare, exact: true })).toBeVisible()
+    await expect(page.getByRole('radio', { name: t.modes.upload, exact: true })).toHaveCount(0)
+    await expect(page.getByRole('radio', { name: t.modes.drop, exact: true })).toHaveCount(0)
+    expect((await page.request.post('/api/shares', { data: { vol: 'v', path: 'docs', mode: 'drop' } })).status()).toBe(403)
+    expect((await page.request.post('/api/shares', { data: { vol: 'v', path: 'docs', mode: 'read' } })).status()).toBeLessThan(300)
+  })
+})
+
 test('a share can be reused, edited and shown as a QR code', async ({ page }) => {
   await login(page)
   await shareDocs(page, 'read')
@@ -4010,7 +4028,7 @@ test('logout works on a plain-HTTP origin without Cache Storage', async ({ brows
   cpSync(template, join(dir, 'data'), { recursive: true })
   const port = await freePort()
   const url = `http://${lan}:${port}`
-  const proc = spawn(BIN, ['serve', '-data', join(dir, 'data'), '-listen', `${lan}:${port}`, '-vol', `v=${join(dir, 'vol')}`], { stdio: 'ignore' })
+  const proc = spawn(BIN, ['serve', '-data', join(dir, 'data'), '-listen', `${lan}:${port}`, '-vol', `v=${join(dir, 'vol')}`, '-link-uploads'], { stdio: 'ignore' })
   const exited = new Promise((r) => proc.once('exit', r))
   try {
     await expect.poll(() => fetch(url).then((r) => r.ok, () => false)).toBe(true)

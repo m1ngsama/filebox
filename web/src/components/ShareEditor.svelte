@@ -4,7 +4,7 @@
   import { api, type Share, type ShareEdit } from '../lib/api'
   import { t } from '../lib/i18n'
   import { toast } from '../lib/toast.svelte'
-  import { canWrite } from '../lib/access.svelte'
+  import { access, canWrite } from '../lib/access.svelte'
 
   let { share, dir, onclose, onsaved }: { share: Share; dir: boolean; onclose: () => void; onsaved: () => void } = $props()
 
@@ -47,7 +47,7 @@
   <fieldset class="modes">
     <legend>{t.permission}</legend>
     {#each modes as m (m)}
-      <label class="radio"><input type="radio" name="edit-mode" value={m} bind:group={mode} disabled={m !== 'read' && (!dir || !canWrite(share.vol))} />{t.modes[m]}</label>
+      <label class="radio"><input type="radio" name="edit-mode" value={m} bind:group={mode} disabled={m !== 'read' && (!dir || !canWrite(share.vol) || (!access.linkUploads && m !== share.mode))} />{t.modes[m]}</label>
     {/each}
   </fieldset>
   <label class="radio"><input type="checkbox" bind:checked={protect} />{t.requirePassword}</label>

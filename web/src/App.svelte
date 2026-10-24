@@ -36,7 +36,7 @@
   async function load() {
     try {
       me = await api.me()
-      setAccess(me.admin, me.access)
+      setAccess(me.admin, me.access, me.link_uploads)
       usePrefs(me.prefs)
       connect(me.name)
       save('user', me.name)

@@ -67,6 +67,8 @@ type API struct {
 	Live     *live.Hub
 	Versions *version.Store
 	Origins  []string
+	// LinkUploads tells the page whether a share link may take uploads, so it offers those modes only then.
+	LinkUploads bool
 }
 
 func (a *API) Register(mux *http.ServeMux) {
@@ -238,7 +240,7 @@ func (a *API) me(w http.ResponseWriter, r *http.Request) {
 		levels[v] = p.Level(v)
 	}
 	prefs, _ := a.DB.Prefs(p.UserID)
-	httpx.JSON(w, 200, map[string]any{"name": u.Name, "admin": p.Admin, "vols": vols, "access": levels, "prefs": prefs, "origins": append([]string{}, a.Origins...)})
+	httpx.JSON(w, 200, map[string]any{"name": u.Name, "admin": p.Admin, "vols": vols, "access": levels, "prefs": prefs, "origins": append([]string{}, a.Origins...), "link_uploads": a.LinkUploads})
 }
 
 func (a *API) setPrefs(w http.ResponseWriter, r *http.Request) {
