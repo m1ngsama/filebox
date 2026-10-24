@@ -1,17 +1,15 @@
 #!/bin/bash
-# Installs a released filebox on this server. Run as root through sudo, by the deploy key's forced command:
+# Moves filebox on this server to a released image. Run as root through sudo, by the deploy key's forced command:
 #   authorized_keys:  restrict,command="sudo /usr/local/sbin/filebox-deploy" ssh-ed25519 AAAA... filebox-deploy
-# Standard input is, in order: a line with a version such as v0.1.0 (or just `rollback`), a line with the SHA-256 of
-# the release archive, and then the archive itself. The deploy workflow checks the archive against the release's
-# SHA256SUMS and its build attestation before it sends it, because this server cannot reach github.com reliably.
-# Nothing else is accepted, so the key can install a checked release archive and go back one step, and do nothing more.
+# Standard input is one line: a version such as v0.1.0, or `rollback`. Nothing else is accepted, so the key can run the
+# image this repository published for a version, and go back one step, and do nothing more.
 set -euo pipefail
 
-bin=/usr/local/bin/filebox
-unit=filebox
+dir=/srv/apps/filebox
 answer=http://127.0.0.1:5280/
 
 read -r -t 10 want || exit 2
+cd "$dir"
 
 healthy() {
   for _ in $(seq 1 30); do
@@ -21,11 +19,20 @@ healthy() {
   return 1
 }
 
+run() {
+  docker compose pull filebox
+  docker compose up -d --remove-orphans --wait --wait-timeout 120 filebox && healthy
+}
+
 back() {
-  [ -x "$bin.prev" ] || { echo "no previous version to go back to" >&2; exit 1; }
-  mv -f "$bin.prev" "$bin"
-  systemctl restart "$unit"
-  if healthy; then echo "went back to the previous version"; else echo "the previous version does not answer either" >&2; exit 1; fi
+  [ -s .env.prev ] || { echo "no previous version to go back to" >&2; exit 1; }
+  cp -f .env.prev .env
+  if docker compose up -d --remove-orphans --wait --wait-timeout 120 filebox && healthy; then
+    echo "went back to $(cat .env)"
+  else
+    echo "the previous version does not answer either" >&2
+    exit 1
+  fi
 }
 
 if [ "$want" = rollback ]; then
@@ -34,27 +41,13 @@ if [ "$want" = rollback ]; then
 fi
 
 [[ "$want" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]] || { echo "not a version: $want" >&2; exit 2; }
-read -r -t 10 sum || exit 2
-[[ "$sum" =~ ^[0-9a-f]{64}$ ]] || { echo "not a SHA-256: $sum" >&2; exit 2; }
 
-work=$(mktemp -d)
-trap 'rm -rf "$work"' EXIT
-cd "$work"
-head -c $((200 << 20)) > release.tar.gz
-echo "$sum  release.tar.gz" | sha256sum -c -
-tar xzf release.tar.gz
-dir=$(find . -maxdepth 1 -mindepth 1 -type d -name "filebox_${want}_linux_*" | head -n1)
-[ -n "$dir" ] || { echo "the archive does not hold filebox_${want}_linux_*" >&2; exit 1; }
-"$dir/filebox" version | grep -F "$want" > /dev/null || { echo "the binary does not say it is $want" >&2; exit 1; }
-
-cp -p "$bin" "$bin.prev"
-install -m 755 -o root -g root "$dir/filebox" "$bin.new"
-mv -f "$bin.new" "$bin"
-systemctl restart "$unit"
-if healthy; then
-  echo "now running $("$bin" version)"
+[ -f .env ] && cp -f .env .env.prev
+echo "FILEBOX_TAG=${want}-full" > .env
+if run; then
+  echo "now running ${want}-full"
 else
-  echo "$want does not answer, going back" >&2
+  echo "${want}-full does not answer, going back" >&2
   back
   exit 1
 fi
