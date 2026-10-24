@@ -1,0 +1,37 @@
+# filebox on greenArch, as a container. It is the systemd unit's setup made into compose: the same user, the same
+# flags, the same folders at the same paths inside, and a read-only root. Copy it to /srv/apps/filebox/compose.yml
+# beside a .env that says which version to run:
+#   FILEBOX_TAG=v0.1.0-full
+# Update: change FILEBOX_TAG, then `docker compose pull && docker compose up -d`. Go back: put the old tag back.
+services:
+  filebox:
+    image: ghcr.io/m1ngsama/filebox:${FILEBOX_TAG:?set FILEBOX_TAG in .env}
+    container_name: filebox
+    restart: unless-stopped
+    # The user that owns /srv/data/filebox today, so nothing has to be re-owned.
+    user: "947:947"
+    read_only: true
+    tmpfs:
+      - /tmp:size=1g
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    pids_limit: 512
+    # Reached through the reverse proxy, which serves HTTPS.
+    ports:
+      - "5280:5280"
+    environment:
+      HOME: /tmp
+    volumes:
+      - /srv/data/filebox:/data
+      - /run/filebox-media/downloads:/mnt/backup1t/downloads
+      - /run/filebox-media/archive:/mnt/backup1t/archive
+      - /run/filebox-media/library:/mnt/backup1t/library
+    command:
+      - serve
+      - -data=/data
+      - -listen=:5280
+      - -ffmpeg=/usr/bin/ffmpeg
+      - -origin=https://cloud.m1ng.space
+      - -vol=downloads=/mnt/backup1t/downloads
+      - -vol=archive=/mnt/backup1t/archive
+      - -vol=library=/mnt/backup1t/library
