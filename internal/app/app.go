@@ -59,6 +59,8 @@ type App struct {
 	Live     *live.Hub
 	Versions *version.Store
 	Origins  []string
+	// LinkUploads lets share links take uploads from people without an account; off by default.
+	LinkUploads bool
 }
 
 func (a *App) Handler() http.Handler {
@@ -79,14 +81,14 @@ func (a *App) Handler() http.Handler {
 	mux.Handle("GET /api/office", a.Auth.RequireAny(http.HandlerFunc(a.office)))
 	mux.Handle("GET /api/stream/index.m3u8", a.Auth.RequireAny(a.located(a.Stream.Playlist)))
 	mux.Handle("GET /api/stream/seg", a.Auth.RequireAny(a.located(a.Stream.Segment)))
-	(&api.API{Vols: a.Vols, DB: a.DB, Auth: a.Auth, Jobs: api.NewJobs(a.Index), Index: a.Index, Notify: a.Notify, Live: a.Live, Versions: a.Versions, Origins: a.Origins}).Register(mux)
+	(&api.API{Vols: a.Vols, DB: a.DB, Auth: a.Auth, Jobs: api.NewJobs(a.Index), Index: a.Index, Notify: a.Notify, Live: a.Live, Versions: a.Versions, Origins: a.Origins, LinkUploads: a.LinkUploads}).Register(mux)
 	a.Passkeys.Register(mux)
 	a.Live.Register(mux)
 	d := dav.Handler(a.Vols, a.Auth, a.Index, a.Versions)
 	mux.Handle("/dav", d)
 	mux.Handle("/dav/", d)
 	mux.Handle("/upload/", a.Uploads.Handler("/upload/", a.userUploads()))
-	shares := &share.Service{DB: a.DB, Vols: a.Vols, Auth: a.Auth, Uploads: a.Uploads, Thumbs: a.Thumbs, Stream: a.Stream, Office: a.Office}
+	shares := &share.Service{DB: a.DB, Vols: a.Vols, Auth: a.Auth, Uploads: a.Uploads, Thumbs: a.Thumbs, Stream: a.Stream, Office: a.Office, LinkUploads: a.LinkUploads}
 	shares.Register(mux)
 	mux.HandleFunc("POST /share-target", func(w http.ResponseWriter, r *http.Request) {
 		http.Redirect(w, r, "/?share-target", http.StatusSeeOther)

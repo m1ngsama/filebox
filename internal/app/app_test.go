@@ -74,7 +74,7 @@ func newTestApp(t *testing.T) *fixture {
 	vs := &version.Store{DB: d}
 	up.Versions = vs
 	ix.Moved = vs.Moved
-	ap := &App{Vols: vols, DB: d, Auth: a, Web: web, Uploads: up, Thumbs: thumb.New("", t.TempDir()), Stream: stream.New("", t.TempDir()), Passkeys: pk, Index: ix, Versions: vs}
+	ap := &App{Vols: vols, DB: d, Auth: a, Web: web, Uploads: up, Thumbs: thumb.New("", t.TempDir()), Stream: stream.New("", t.TempDir()), Passkeys: pk, Index: ix, Versions: vs, LinkUploads: true}
 	return &fixture{App: ap, H: ap.Handler(), Dir: dir, Dir2: dir2, Bearer: bearer,
 		Cookie: &http.Cookie{Name: auth.CookieName, Value: sess}, UserID: uid}
 }

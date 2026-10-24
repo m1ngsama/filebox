@@ -14,7 +14,7 @@ export class HttpError extends Error {
 export type Entry = { name: string; dir: boolean; size: number; mtime: number; items?: number; bytes?: number; tags?: number[] }
 export type Tag = { id: number; name: string; color: string; count: number }
 export type Photo = { id: number; vol: string; path: string; name: string; size: number; mtime: number; taken: number }
-export type Me = { name: string; admin: boolean; vols: string[]; access: Record<string, string>; prefs?: { accent?: string; density?: string }; origins?: string[] }
+export type Me = { name: string; admin: boolean; vols: string[]; access: Record<string, string>; prefs?: { accent?: string; density?: string }; origins?: string[]; link_uploads?: boolean }
 export type Notice = { id: number; at: number; kind: string; name: string; vol: string; path: string; share: string; count: number; read: boolean; actor: string }
 export type SavedSearch = { id: number; name: string; params: string }
 export type Comment = { id: number; at: number; author: string; body: string; mine: boolean; removable: boolean }
