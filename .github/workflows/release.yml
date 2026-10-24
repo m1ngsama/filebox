@@ -1,7 +1,8 @@
 name: release
 # A pushed version tag builds the binaries and opens a DRAFT release. Nothing is public until the
 # maintainer reviews the draft and publishes it by hand; publishing then builds the Docker image (image.yml).
-# Nothing here deploys anywhere: updating a server is a manual step, see "Update" in the README.
+# Nothing here deploys anywhere. Publishing the release builds the image, and that workflow then asks the maintainer
+# to approve the deploy to production (image.yml).
 # The rules for a release are in RELEASING.md.
 on:
   push:

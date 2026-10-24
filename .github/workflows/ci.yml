@@ -3,8 +3,8 @@ on:
   push:
     branches: [main]
     paths-ignore: ['**.md', 'deploy/**', 'LICENSE', '.gitignore']
+  # Every pull request runs the checks, even one that only touches docs: main requires them, and a check that is skipped never reports.
   pull_request:
-    paths-ignore: ['**.md', 'deploy/**', 'LICENSE', '.gitignore']
   workflow_dispatch:
 # CI never receives a secret, and its token can only read the repository.
 permissions:
