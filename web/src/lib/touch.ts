@@ -1,5 +1,7 @@
 // Touch gestures for lists, loaded only on touch screens: swipe a row sideways to act on it,
-// and pull the list down from the top to reload it. Both give a short buzz where the phone allows.
+// pull the list down from the top to reload it, and, after a long press has picked an item, slide the finger over
+// others to pick the whole stretch (the list scrolls itself when the finger nears an edge).
+// The first two give a short buzz where the phone allows.
 
 const lock = 12
 const arm = 64
@@ -9,17 +11,24 @@ export type Gestures = {
   scroller: HTMLElement
   onswipe: (i: number, dir: 1 | -1) => void
   onpull?: () => Promise<unknown> | void
+  // Is a long press holding the finger down on a picked item right now?
+  ranging?: () => boolean
+  // The finger is over the item at this index, or -1 once it has lifted.
+  onrange?: (i: number) => void
 }
 
 const buzz = () => navigator.vibrate?.(8)
 
-export function attach({ scroller, onswipe, onpull }: Gestures) {
+export function attach({ scroller, onswipe, onpull, ranging, onrange }: Gestures) {
   let x0 = 0
   let y0 = 0
-  let mode: '' | 'swipe' | 'pull' | 'scroll' = ''
+  let mode: '' | 'swipe' | 'pull' | 'range' | 'scroll' = ''
   let row: HTMLElement | null = null
   let armed = false
   let pulled = 0
+  let fx = 0
+  let fy = 0
+  let frame = 0
   const pull = document.createElement('div')
   pull.className = 'pull'
   pull.setAttribute('aria-hidden', 'true')
@@ -36,10 +45,36 @@ export function attach({ scroller, onswipe, onpull }: Gestures) {
     row = (e.target as Element).closest<HTMLElement>('.row[data-i]')
   }
 
+  function over() {
+    const i = document.elementFromPoint(fx, fy)?.closest<HTMLElement>('[data-i]')?.dataset.i
+    if (i !== undefined) onrange?.(Number(i))
+  }
+
+  function follow() {
+    const r = scroller.getBoundingClientRect()
+    const edge = 56
+    const v = fy < r.top + edge ? -(r.top + edge - fy) : fy > r.bottom - edge ? fy - (r.bottom - edge) : 0
+    if (v) {
+      scroller.scrollTop += Math.sign(v) * Math.min(18, 3 + Math.abs(v) / 4)
+      over()
+    }
+    frame = requestAnimationFrame(follow)
+  }
+
   function move(e: TouchEvent) {
     if (mode === 'scroll' || e.touches.length !== 1) return
     const dx = e.touches[0].clientX - x0
     const dy = e.touches[0].clientY - y0
+    if (!mode && ranging?.() && (Math.abs(dx) > 4 || Math.abs(dy) > 4)) {
+      mode = 'range'
+      frame = requestAnimationFrame(follow)
+    }
+    if (mode === 'range') {
+      fx = e.touches[0].clientX
+      fy = e.touches[0].clientY
+      e.preventDefault()
+      return over()
+    }
     if (!mode) {
       if (row && Math.abs(dx) > lock && Math.abs(dx) > Math.abs(dy) * 1.5) mode = 'swipe'
       else if (onpull && scroller.scrollTop <= 0 && dy > lock && dy > Math.abs(dx) * 1.5) mode = 'pull'
@@ -71,6 +106,8 @@ export function attach({ scroller, onswipe, onpull }: Gestures) {
   async function end(e: TouchEvent) {
     const was = mode
     mode = ''
+    cancelAnimationFrame(frame)
+    if (was === 'range') onrange?.(-1)
     if (e.type === 'touchcancel') armed = false
     if (was === 'swipe' && row) {
       const r = row

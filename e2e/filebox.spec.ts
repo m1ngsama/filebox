@@ -4372,6 +4372,44 @@ test('on a phone, swiping a row opens its actions or selects it, and pulling the
   await ctx.close()
 })
 
+test('on a phone, a long press picks a row and sliding on picks everything the finger passes, and back again', async ({ browser, server }) => {
+  test.skip(browser.browserType().name() !== 'chromium', 'touch is driven through the Chrome DevTools Protocol')
+  for (const n of ['a', 'b', 'c', 'd', 'e']) writeFileSync(join(server.vol, 'docs', `zz${n}.log`), n)
+  const ctx = await browser.newContext({ baseURL: server.url, hasTouch: true, isMobile: true, viewport: { width: 390, height: 780 }, locale: 'zh-CN' })
+  const page = await ctx.newPage()
+  await login(page)
+  await row(page, 'docs').locator('button.name').click()
+  await expect(row(page, 'zze.log')).toBeVisible()
+  await page.waitForTimeout(300)
+  const cdp = await ctx.newCDPSession(page)
+  const send = (type: string, x = 0, y = 0) => cdp.send('Input.dispatchTouchEvent', { type, touchPoints: type === 'touchEnd' ? [] : [{ x, y }] })
+  const mid = async (n: string) => {
+    const b = (await row(page, n).boundingBox())!
+    return { x: b.x + b.width * 0.6, y: b.y + b.height / 2 }
+  }
+  const [a, c, e] = [await mid('zza.log'), await mid('zzc.log'), await mid('zze.log')]
+  const glide = async (from: { x: number; y: number }, to: { x: number; y: number }) => {
+    for (let i = 1; i <= 6; i++) await send('touchMove', from.x, from.y + ((to.y - from.y) * i) / 6)
+  }
+  const picked = async () => page.locator('.row[aria-selected="true"]').evaluateAll((l) => l.map((r) => r.getAttribute('data-name') ?? r.querySelector('[data-name]')?.getAttribute('data-name')))
+
+  await send('touchStart', a.x, a.y)
+  await page.waitForTimeout(600)
+  await expect(row(page, 'zza.log')).toHaveAttribute('aria-selected', 'true')
+  await glide(a, e)
+  await expect(row(page, 'zze.log')).toHaveAttribute('aria-selected', 'true')
+  await expect(page.locator('.row[aria-selected="true"]')).toHaveCount(5)
+  await glide(e, c)
+  await expect(page.locator('.row[aria-selected="true"]')).toHaveCount(3)
+  expect(await picked()).toEqual(['zza.log', 'zzb.log', 'zzc.log'])
+  await send('touchEnd')
+  await page.waitForTimeout(200)
+  // lifting the finger leaves the picks as they were, and the list scrolls and opens nothing
+  await expect(page.locator('.row[aria-selected="true"]')).toHaveCount(3)
+  await expect(page.getByRole('dialog')).toHaveCount(0)
+  await ctx.close()
+})
+
 test('an accent color and a compact list follow the account to another browser', async ({ page, browser }) => {
   await login(page)
   await page.goto('/settings')

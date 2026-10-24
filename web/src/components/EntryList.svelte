@@ -244,6 +244,8 @@
           else if (dir < 0) sheet = e
         },
         onpull: onrefresh,
+        ranging: () => range !== null,
+        onrange: reach,
       })
     })
     return () => {
@@ -251,6 +253,20 @@
       off?.()
     }
   })
+
+  // After a long press has picked an item, the finger sliding over others picks everything between.
+  let range: Set<string> | null = null
+  function reach(i: number) {
+    if (i < 0) return release()
+    const a = entries.findIndex((e) => id(e) === anchor)
+    if (!range || !selected || a < 0) return
+    const want = new Set(range)
+    for (const e of entries.slice(Math.min(a, i), Math.max(a, i) + 1)) want.add(id(e))
+    let changed = false
+    for (const k of [...selected]) if (!want.has(k)) (selected.delete(k), (changed = true))
+    for (const k of want) if (!selected.has(k)) (selected.add(k), (changed = true))
+    if (changed) navigator.vibrate?.(4)
+  }
 
   function toggle(n: string) {
     if (!selected) return
@@ -276,6 +292,7 @@
         return
       }
       anchor = key
+      range = new Set(selected)
       selected.add(key)
     }, 450)
   }
@@ -360,6 +377,7 @@
   })
 
   function release() {
+    range = null
     clearTimeout(timer)
     pressing = -1
     held = false
