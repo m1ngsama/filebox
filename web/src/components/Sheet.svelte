@@ -10,6 +10,7 @@
     let t0 = 0
     let dy = 0
     let on = false
+    let began = false
     const down = (e: PointerEvent) => {
       if (e.pointerType === 'mouse' || node.scrollTop > 0) return
       y0 = e.clientY
@@ -30,16 +31,22 @@
       if (dy > 90 || dy / Math.max(1, e.timeStamp - t0) > 0.6) onclose()
       else node.style.translate = ''
     }
+    const press = () => (began = true)
+    // A finger that went down before the sheet opened (the long press that opened it) must not press whatever slid in under it.
     const click = (e: MouseEvent) => {
-      if (dy > 4) e.stopPropagation(), e.preventDefault()
+      const stray = e.detail > 0 && !began
+      began = false
+      if (stray || dy > 4) e.stopPropagation(), e.preventDefault()
     }
     requestAnimationFrame(() => node.scrollHeight <= node.clientHeight && (node.style.touchAction = 'pan-x'))
+    node.addEventListener('pointerdown', press, true)
     node.addEventListener('pointerdown', down)
     node.addEventListener('pointermove', move)
     node.addEventListener('pointerup', up)
     node.addEventListener('pointercancel', up)
     node.addEventListener('click', click, true)
     return () => {
+      node.removeEventListener('pointerdown', press, true)
       node.removeEventListener('pointerdown', down)
       node.removeEventListener('pointermove', move)
       node.removeEventListener('pointerup', up)
