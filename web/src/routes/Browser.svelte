@@ -1205,7 +1205,7 @@
         {/snippet}
       </EntryList>
     {:else}
-    {#key here}
+    {#key `${here}|${kindF}`}
       <EntryList
         entries={shown}
         {grid}
