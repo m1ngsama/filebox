@@ -1,20 +1,21 @@
 #!/bin/bash
 # Installs a released filebox on this server. Run as root through sudo, by the deploy key's forced command:
 #   authorized_keys:  restrict,command="sudo /usr/local/sbin/filebox-deploy" ssh-ed25519 AAAA... filebox-deploy
-# It reads one line from standard input: a version such as v0.1.0, or `rollback`. Nothing else is accepted, so the key
-# can install an official release of this repository and go back one step, and do nothing more.
+# Standard input is, in order: a line with a version such as v0.1.0 (or just `rollback`), a line with the SHA-256 of
+# the release archive, and then the archive itself. The deploy workflow checks the archive against the release's
+# SHA256SUMS and its build attestation before it sends it, because this server cannot reach github.com reliably.
+# Nothing else is accepted, so the key can install a checked release archive and go back one step, and do nothing more.
 set -euo pipefail
 
-repo=m1ngsama/filebox
 bin=/usr/local/bin/filebox
 unit=filebox
-local=http://127.0.0.1:5280/
+answer=http://127.0.0.1:5280/
 
 read -r -t 10 want || exit 2
 
 healthy() {
   for _ in $(seq 1 30); do
-    curl -fsS -o /dev/null --max-time 3 "$local" && return 0
+    curl -fsS -o /dev/null --max-time 3 "$answer" && return 0
     sleep 1
   done
   return 1
@@ -33,25 +34,21 @@ if [ "$want" = rollback ]; then
 fi
 
 [[ "$want" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]] || { echo "not a version: $want" >&2; exit 2; }
-case "$(uname -m)" in
-  x86_64) arch=amd64 ;;
-  aarch64) arch=arm64 ;;
-  *) echo "unsupported machine $(uname -m)" >&2; exit 2 ;;
-esac
+read -r -t 10 sum || exit 2
+[[ "$sum" =~ ^[0-9a-f]{64}$ ]] || { echo "not a SHA-256: $sum" >&2; exit 2; }
 
-name="filebox_${want}_linux_${arch}"
-base="https://github.com/$repo/releases/download/$want"
 work=$(mktemp -d)
 trap 'rm -rf "$work"' EXIT
 cd "$work"
-curl -fsSL --proto '=https' --max-time 180 -o "$name.tar.gz" "$base/$name.tar.gz"
-curl -fsSL --proto '=https' --max-time 60 -o SHA256SUMS "$base/SHA256SUMS"
-grep -F " $name.tar.gz" SHA256SUMS | sha256sum -c -
-tar xzf "$name.tar.gz"
-"./$name/filebox" version | grep -F "$want" > /dev/null || { echo "the binary does not say it is $want" >&2; exit 1; }
+head -c $((200 << 20)) > release.tar.gz
+echo "$sum  release.tar.gz" | sha256sum -c -
+tar xzf release.tar.gz
+dir=$(find . -maxdepth 1 -mindepth 1 -type d -name "filebox_${want}_linux_*" | head -n1)
+[ -n "$dir" ] || { echo "the archive does not hold filebox_${want}_linux_*" >&2; exit 1; }
+"$dir/filebox" version | grep -F "$want" > /dev/null || { echo "the binary does not say it is $want" >&2; exit 1; }
 
 cp -p "$bin" "$bin.prev"
-install -m 755 -o root -g root "./$name/filebox" "$bin.new"
+install -m 755 -o root -g root "$dir/filebox" "$bin.new"
 mv -f "$bin.new" "$bin"
 systemctl restart "$unit"
 if healthy; then
