@@ -801,6 +801,18 @@ button.busy::before { content: ''; width: 14px; height: 14px; border: 2px solid 
 .empty-state:not(.compact) .empty-icon { animation: pop-in var(--dur-3) var(--ease-spring) both; }
 .empty-state:not(.compact) > :not(.empty-icon) { animation: rise var(--dur-3) var(--ease-out) both; animation-delay: calc(var(--dur-3) / 5); }
 .empty-state:not(.compact) > :is(button, a):last-child { animation-delay: calc(var(--dur-3) / 3); }
+/* The scroll thumb of a long list (lib/scrub.ts): a pill on the right edge that fades in while the list moves, and a bubble that names the spot while it is dragged. */
+.scrub { position: sticky; top: 0; z-index: 6; height: 0; pointer-events: none; }
+.scrub-thumb, .scrub-bubble { position: absolute; top: 0; translate: 0 var(--y, 0px); }
+.scrub-thumb { right: 0; width: 24px; height: 56px; pointer-events: auto; touch-action: none; cursor: grab; opacity: 0; transition: opacity var(--dur-2) var(--ease-out); }
+.scrub-thumb::before { content: ''; position: absolute; right: 3px; top: 0; bottom: 0; width: 4px; border-radius: var(--radius-full); background: color-mix(in srgb, var(--muted) 75%, transparent); transition: width var(--dur-1) var(--ease-out), background-color var(--dur-1) var(--ease-out); }
+.scrub.active .scrub-thumb, .scrub.drag .scrub-thumb { opacity: 1; }
+@media (hover: hover) and (pointer: fine) { .scroller:hover .scrub-thumb { opacity: 1; } }
+.scrub.drag .scrub-thumb { cursor: grabbing; }
+.scrub.drag .scrub-thumb::before { width: 8px; background: var(--accent); }
+.scrub-bubble { right: 36px; height: 56px; display: grid; place-items: center; padding: 0 var(--space-4); border-radius: var(--radius-full); background: color-mix(in srgb, var(--panel) 82%, transparent); box-shadow: var(--shadow); font-weight: 600; white-space: nowrap; pointer-events: none; opacity: 0; scale: 0.9; transform-origin: right center; transition: opacity var(--dur-1) var(--ease-out), scale var(--dur-2) var(--ease-spring); }
+@supports (backdrop-filter: blur(1px)) { .scrub-bubble { backdrop-filter: blur(20px) saturate(1.8); } }
+.scrub.drag .scrub-bubble:not(:empty) { opacity: 1; scale: 1; }
 @media (prefers-reduced-motion: reduce) {
   :root { --dur-1: 0s; --dur-2: 0s; --dur-3: 0s; }
   .loading, .viewer .spinner, button.busy::before { animation-name: none, appear; }
