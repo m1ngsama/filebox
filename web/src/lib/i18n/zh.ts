@@ -321,6 +321,8 @@ const zh = {
   downloadsOf: (n: number, max: number) => `已下载 ${n}/${max} 次`,
   downloadsLeft: (n: number) => `还可以下载 ${n} 次`,
   maxUpload: (s: string) => `单个文件最大 ${s}`,
+  sendLink: '发送…',
+  hidePassword: '隐藏密码',
   qrCode: '二维码',
   qrHint: '用手机扫码打开链接',
   save: '保存',

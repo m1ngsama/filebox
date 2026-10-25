@@ -4,6 +4,7 @@
   import { DropdownMenu } from 'bits-ui'
   import Ellipsis from '@lucide/svelte/icons/ellipsis'
   import QrCode from '@lucide/svelte/icons/qr-code'
+  import Send from '@lucide/svelte/icons/send'
   import Pencil from '@lucide/svelte/icons/pencil'
   import Trash from '@lucide/svelte/icons/trash'
   import ConfirmDialog from './ConfirmDialog.svelte'
@@ -13,13 +14,23 @@
   import { api, shareLink, type Share } from '../lib/api'
   import { shareSummary, lapsed } from '../lib/format'
   import { t } from '../lib/i18n'
-  import { toast } from '../lib/toast.svelte'
+  import { toast, fail } from '../lib/toast.svelte'
 
   let { share, dir, onchange, children }: { share: Share; dir: boolean; onchange: () => void; children?: Snippet } = $props()
   let editing = $state(false)
   let removing = $state(false)
   let qr = $state(false)
   let more = $state<HTMLElement | null>(null)
+
+  // Where the system has a share sheet (a phone, a Mac), the link can go straight to a chat or to AirDrop. The password is sent separately.
+  const canSend = typeof navigator.share === 'function'
+  async function send() {
+    try {
+      await navigator.share({ url: shareLink(share.token), title: share.path.split('/').pop() || share.vol })
+    } catch (e) {
+      if ((e as DOMException).name !== 'AbortError') fail(e)
+    }
+  }
 </script>
 
 {#snippet summary()}{#each shareSummary(share) as part, i (i)}{#if i}{' · '}{/if}<span>{part}</span>{/each}{/snippet}
@@ -38,6 +49,7 @@
   <DropdownMenu.Trigger class="icon-btn" aria-label={t.shareActions} title={t.shareActions} bind:ref={more}><Ellipsis size={icon.md} /></DropdownMenu.Trigger>
   <DropdownMenu.Portal to="main">
     <DropdownMenu.Content class="menu" preventScroll={false} align="end" sideOffset={4}>
+      {#if canSend && !lapsed(share)}<DropdownMenu.Item class="menu-item" onSelect={send}><Send size={icon.sm} />{t.sendLink}</DropdownMenu.Item>{/if}
       <DropdownMenu.Item class="menu-item" onSelect={() => (qr = true)}><QrCode size={icon.sm} />{t.qrCode}</DropdownMenu.Item>
       <DropdownMenu.Item class="menu-item" onSelect={() => (editing = true)}><Pencil size={icon.sm} />{t.editShare}</DropdownMenu.Item>
       <DropdownMenu.Separator class="menu-sep" />

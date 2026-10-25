@@ -320,6 +320,8 @@ export default (locale: string) => {
     downloadsOf: (n: number, max: number) => `${n} of ${max} downloads`,
     downloadsLeft: (n: number) => `${count(n, 'download')} left`,
     maxUpload: (s: string) => `Max ${s} per file`,
+    sendLink: 'Send…',
+    hidePassword: 'Hide password',
     qrCode: 'QR code',
     qrHint: 'Scan with your phone to open the link',
     save: 'Save',
