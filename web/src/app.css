@@ -257,7 +257,10 @@ p.error::before { content: ''; flex: none; width: 1em; height: 1lh; background: 
 .rows.skeleton .sk-line { width: 40%; }
 @keyframes pulse { to { opacity: 0.45; } }
 .row { position: absolute; top: 0; left: 0; right: 0; height: 48px; padding: 0 var(--space-2); border-bottom: 1px solid var(--line); cursor: default; }
-.row, .card { transition: background-color var(--dur-1) var(--ease-out); }
+.row { transition: background-color var(--dur-1) var(--ease-out), transform var(--dur-2) var(--ease-out); }
+.card { transition: background-color var(--dur-1) var(--ease-out); }
+/* When an item goes, comes or the sort changes, the rest of the list glides to its new place instead of jumping. */
+.cards, .group-head { transition: transform var(--dur-2) var(--ease-out); }
 .row.sel, .card.sel { background: var(--sel); }
 /* A picked media tile draws back from its edges, so the picks read at a glance in a wall of photos. */
 .tiles .card-open { transition: scale var(--dur-2) var(--ease-out), border-radius var(--dur-2) var(--ease-out); }
@@ -518,6 +521,7 @@ body:has(.text-bar, .pdf-bar, .viewer video) .toasts { bottom: calc(var(--hit) +
 .toast.success > svg { color: var(--toast-ok); }
 .toast.error > svg { color: var(--toast-err); }
 .toast-text { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+.toast { touch-action: pan-y; transition: translate var(--dur-2) var(--ease-out), opacity var(--dur-2) var(--ease-out); }
 .toast .icon-btn { color: inherit; opacity: 0.7; width: 32px; height: 32px; }
 .toast-action { border: 0; background: none; color: var(--toast-link); font-weight: 600; padding: var(--space-1-5) var(--space-2); }
 @keyframes rise { from { opacity: 0; translate: 0 var(--space-2); } }

@@ -4432,6 +4432,36 @@ test('on a phone, a long press picks a row and sliding on picks everything the f
   await ctx.close()
 })
 
+test('on a phone, a notice is thrown off the screen with a swipe', async ({ browser, server }) => {
+  test.skip(browser.browserType().name() !== 'chromium', 'touch is driven through the Chrome DevTools Protocol')
+  writeFileSync(join(server.vol, 'docs', 'x.txt'), 'x')
+  const ctx = await browser.newContext({ baseURL: server.url, hasTouch: true, isMobile: true, viewport: { width: 390, height: 780 }, locale: 'zh-CN' })
+  const page = await ctx.newPage()
+  await login(page)
+  await row(page, 'docs').locator('button.name').tap()
+  await row(page, 'x.txt').locator('button.more').tap()
+  await page.getByRole('dialog', { name: 'x.txt' }).getByRole('button', { name: t.star }).tap()
+  const toast = page.locator('.toast', { hasText: t.starred(t.what(['x.txt'])) })
+  await expect(toast).toBeVisible()
+  await page.evaluate(() => Promise.all(document.getAnimations().filter((a) => a.timeline instanceof DocumentTimeline && Number.isFinite(a.effect!.getComputedTiming().iterations)).map((a) => a.finished.catch(() => {}))))
+  const cdp = await ctx.newCDPSession(page)
+  const b = (await toast.boundingBox())!
+  const [x, y] = [b.x + 30, b.y + b.height / 2]
+  const send = (type: string, px = 0) => cdp.send('Input.dispatchTouchEvent', { type, touchPoints: type === 'touchEnd' ? [] : [{ x: px, y }] })
+  // a short drag springs back
+  await send('touchStart', x)
+  for (let i = 1; i <= 4; i++) await send('touchMove', x + i * 10)
+  await send('touchEnd')
+  await expect(toast).toBeVisible()
+  await expect(toast).toHaveCSS('opacity', '1')
+  // a long one throws it away
+  await send('touchStart', x)
+  for (let i = 1; i <= 8; i++) await send('touchMove', x + i * 25)
+  await send('touchEnd')
+  await expect(toast).toHaveCount(0)
+  await ctx.close()
+})
+
 test('an accent color and a compact list follow the account to another browser', async ({ page, browser }) => {
   await login(page)
   await page.goto('/settings')
