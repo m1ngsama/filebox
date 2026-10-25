@@ -1221,6 +1221,7 @@
         {batch}
         dnd={writable ? dnd : undefined}
         {reveal}
+        place={kindF ? undefined : here}
         tag={(e) => (side.has(e.name) && !subs ? (kind(e.name) === 'audio' ? t.lyrics : t.subtitles) : undefined)}
         loading={at !== here}
         busy={streaming}

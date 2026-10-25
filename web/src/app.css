@@ -797,6 +797,10 @@ button.busy::before { content: ''; width: 14px; height: 14px; border: 2px solid 
 ::view-transition-new(root) { z-index: 1; }
 .uploads .up-ok { animation: pop-in var(--dur-3) var(--ease-spring); }
 @media (display-mode: standalone) { html, body { overscroll-behavior: none; } }
+/* An empty page arrives in order: the icon pops, then the words and the button rise a moment after it. Delays are fractions of the duration token, so reduced motion has none. */
+.empty-state:not(.compact) .empty-icon { animation: pop-in var(--dur-3) var(--ease-spring) both; }
+.empty-state:not(.compact) > :not(.empty-icon) { animation: rise var(--dur-3) var(--ease-out) both; animation-delay: calc(var(--dur-3) / 5); }
+.empty-state:not(.compact) > :is(button, a):last-child { animation-delay: calc(var(--dur-3) / 3); }
 @media (prefers-reduced-motion: reduce) {
   :root { --dur-1: 0s; --dur-2: 0s; --dur-3: 0s; }
   .loading, .viewer .spinner, button.busy::before { animation-name: none, appear; }

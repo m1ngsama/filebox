@@ -1,5 +1,7 @@
 <script lang="ts" module>
   import type { Component } from 'svelte'
+  // Where each folder's list was scrolled to, so the back button returns you to it.
+  const places = new Map<string, number>()
   export type Action = { id: string; label: string; icon: Component<{ size?: number }>; danger?: boolean }
 </script>
 
@@ -17,7 +19,7 @@
   import Play from '@lucide/svelte/icons/play'
   import FileIcon from './FileIcon.svelte'
   import { selectURL, type Entry, type Loc } from '../lib/api'
-  import { link } from '../lib/router.svelte'
+  import { link, route } from '../lib/router.svelte'
   import { amount, size, clock, date, ago, look, fallback, flip, sorts, mostlyMedia, mostlyBooks, stem, ends, SEP, type Sort } from '../lib/format'
   import { t } from '../lib/i18n'
   import { narrow } from '../lib/shell.svelte'
@@ -48,6 +50,7 @@
     loc,
     group,
     reveal,
+    place,
     dim,
     tag,
     expanded,
@@ -81,6 +84,7 @@
     loc?: (e: Entry) => Loc
     group?: (e: Entry) => string
     reveal?: { name: string; center?: boolean }
+    place?: string
     dim?: (e: Entry) => string | undefined
     tag?: (e: Entry) => string | undefined
     expanded?: (e: Entry) => boolean | undefined
@@ -196,6 +200,14 @@
       $v.setOptions({ ...opts, scrollMargin: margin })
       $v.measure()
     })
+  })
+
+  let restored = false
+  $effect(() => {
+    if (restored || !scroller || !place || !route.back || busy || loading || !entries.length || reveal) return
+    restored = true
+    const y = places.get(place)
+    if (y) tick().then(() => scroller && (scroller.scrollTop = y))
   })
 
   let lastCols = 0
@@ -645,6 +657,11 @@
           release()
           top = ($v.range?.startIndex ?? 0) * cols
           collapsed = off > 0 && scroller!.scrollTop > off - 12
+          if (place) {
+            places.delete(place)
+            places.set(place, scroller!.scrollTop)
+            if (places.size > 60) places.delete(places.keys().next().value!)
+          }
         }} onfocusin={() => (inside = true)} onfocusout={(ev) => (inside = !ev.relatedTarget || !!scroller?.contains(ev.relatedTarget as Node))}>
         {#if large}<div class="large-title" aria-hidden="true" bind:offsetHeight={titleH}>{title}</div>{/if}
         {#if !entries.length && loading}
