@@ -744,8 +744,44 @@ button.busy::before { content: ''; width: 14px; height: 14px; border: 2px solid 
   .public-inline { padding: 0; }
   .viewer.inline { border-radius: 0; }
 }
+/* Motion. Menus, dialogs, toasts and the new-button pop in with a little spring; cards lift under a mouse; a photo settles in as it loads;
+   skeletons shimmer. Only transform, opacity and shadows move, and every duration is a token, so reduced motion silences all of it. */
+:root { --dur-3: 320ms; --ease-spring: cubic-bezier(0.32, 1.25, 0.5, 1); }
+@supports (transition-timing-function: linear(0, 1)) {
+  :root { --ease-spring: linear(0, 0.039 4.2%, 0.1348 8.3%, 0.2608 12.5%, 0.3975 16.7%, 0.5313 20.8%, 0.6534 25%, 0.7589 29.2%, 0.8458 33.3%, 0.9141 37.5%, 0.9653 41.7%, 1.0015 45.8%, 1.0251 50%, 1.0388 54.2%, 1.045 58.3%, 1.0458 62.5%, 1.0429 66.7%, 1.0379 70.8%, 1.0319 75%, 1.0256 79.2%, 1.0196 83.3%, 1.0142 87.5%, 1.0096 91.7%, 1.0059 95.8%, 1); }
+}
+@keyframes pop { from { opacity: 0; scale: 0.94; } }
+@keyframes pop-soft { from { opacity: 0; scale: 0.97; } }
+@keyframes pop-in { from { opacity: 0; scale: 0.6; } }
+@keyframes shimmer { to { background-position: -50% 0; } }
+@keyframes bar { from { scale: 1 0; } }
+.menu:not([data-state='closed']), .notices-pop:not(.leaving) {
+  transform-origin: var(--bits-dropdown-menu-content-transform-origin, var(--bits-context-menu-content-transform-origin, var(--bits-popover-content-transform-origin, top)));
+  animation: pop var(--dur-2) var(--ease-spring);
+}
+.dialog:not(.leaving) { animation: pop-soft var(--dur-2) var(--ease-out); }
+.toast:not(.leaving) { animation: rise var(--dur-3) var(--ease-spring); }
+.fab { animation: pop-in var(--dur-3) var(--ease-spring) 80ms both; transition: scale var(--dur-1) var(--ease-out); }
+.fab:active, .icon-btn:active, button.primary:active, button.danger-fill:active { scale: 0.94; }
+.icon-btn, button.primary, button.danger-fill { transition: scale var(--dur-1) var(--ease-out); }
+.card { transition: background-color var(--dur-1) var(--ease-out), translate var(--dur-2) var(--ease-out), box-shadow var(--dur-2) var(--ease-out); }
+@media (hover: hover) and (pointer: fine) {
+  .cards:not(.tiles) .card:hover:not(.sel) { translate: 0 -2px; box-shadow: var(--shadow-sm); }
+}
+.card-open img { scale: 1.04; transition: opacity var(--dur-2) var(--ease-out), scale var(--dur-3) var(--ease-out); }
+.card-open img.ok { scale: 1; }
+.sk { background: linear-gradient(100deg, var(--hover) 30%, color-mix(in srgb, var(--hover) 35%, var(--bg)) 50%, var(--hover) 70%) 150% 0 / 300% 100%; animation: shimmer 1.4s ease-in-out infinite; }
+.nav :is(li, .vol-row) > a { position: relative; }
+/* Menus, sheets and the palette are frosted glass over what is behind them, as on Apple's systems. */
+@supports (backdrop-filter: blur(1px)) {
+  .menu, .notices-pop, .bottom-sheet, .dialog.palette { background: color-mix(in srgb, var(--panel) 78%, transparent); backdrop-filter: blur(24px) saturate(1.8); }
+}
+@supports (corner-shape: squircle) {
+  .card-open, .fab, .dialog, .menu, .toast, .notices-pop { corner-shape: squircle; }
+}
+.nav :is(li, .vol-row) > a[aria-current='page']::before { content: ''; position: absolute; left: -6px; top: 22%; bottom: 22%; width: 3px; border-radius: var(--radius-full); background: var(--accent); animation: bar var(--dur-3) var(--ease-spring); }
 @media (prefers-reduced-motion: reduce) {
-  :root { --dur-1: 0s; --dur-2: 0s; }
+  :root { --dur-1: 0s; --dur-2: 0s; --dur-3: 0s; }
   .loading, .viewer .spinner, button.busy::before { animation-name: none, appear; }
   .sk { animation: none; }
   .ring.wait > .dial { animation: none; }
