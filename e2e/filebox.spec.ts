@@ -2167,6 +2167,9 @@ test('a delete and a new folder during a streamed listing survive every chunk an
 test('a delete counts items that are already gone as done and rolls back a failed request', async ({ page, server }) => {
   writeFileSync(join(server.vol, 'gone-a.txt'), 'a')
   writeFileSync(join(server.vol, 'gone-b.txt'), 'b')
+  // The point is a file that is gone on disk but still on the page. The folder updates itself when it notices a change, so a slow
+  // machine could drop the row between the removal below and the click; without that channel the page cannot find out early.
+  await page.route('**/api/events', (r) => r.abort())
   await login(page)
   await row(page, 'gone-a.txt').locator('input[type=checkbox]').check()
   await row(page, 'gone-b.txt').locator('input[type=checkbox]').check()
