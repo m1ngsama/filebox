@@ -63,6 +63,16 @@
   let renaming = $state<Passkey | null>(null)
   let removing = $state<Passkey | null>(null)
   let mode = $state(theme())
+
+  // The other theme spreads out from the button that was pressed, like Telegram's; where the browser cannot do that, it simply switches.
+  function reveal(ev: MouseEvent, change: () => void) {
+    if (!document.startViewTransition || matchMedia('(prefers-reduced-motion: reduce)').matches) return change()
+    const { clientX: x, clientY: y } = ev
+    const r = Math.hypot(Math.max(x, innerWidth - x), Math.max(y, innerHeight - y))
+    document.startViewTransition(change).ready.then(() =>
+      document.documentElement.animate({ clipPath: [`circle(0 at ${x}px ${y}px)`, `circle(${r}px at ${x}px ${y}px)`] }, { duration: 460, easing: 'cubic-bezier(0.2, 0, 0, 1)', pseudoElement: '::view-transition-new(root)' }),
+    )
+  }
   const language = langPref()
   const origin = $derived(origins.includes(location.origin) ? location.origin : (origins.find((o) => o.startsWith('https://')) ?? location.origin))
   const dav = $derived(`${origin}/dav/`)
@@ -152,7 +162,7 @@
       {@render head('appearance', t.appearance, t.appearanceHint)}
       <div class="chips" role="group" aria-label={t.appearance}>
         {#each Object.entries(t.themes) as [k, label] (k)}
-          <button type="button" class="chip" aria-pressed={mode === k} onclick={() => setTheme((mode = k as Theme))}>{label}</button>
+          <button type="button" class="chip" aria-pressed={mode === k} onclick={(ev) => reveal(ev, () => setTheme((mode = k as Theme)))}>{label}</button>
         {/each}
       </div>
       <div class="pref" role="group" aria-labelledby="accent-title">
