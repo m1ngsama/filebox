@@ -21,8 +21,10 @@ build: web
 linux: web
 	GOOS=linux GOARCH=amd64 $(GOBUILD) -o bin/filebox-linux-amd64 ./cmd/filebox
 
+# Race detection is slow, so a pull request runs without it (GOTESTFLAGS= make test) and every push to main runs with it.
+GOTESTFLAGS ?= -race
 test:
-	go test -race ./...
+	go test $(GOTESTFLAGS) ./...
 
 e2e: build
 	cd e2e && bun install --frozen-lockfile && bunx playwright test

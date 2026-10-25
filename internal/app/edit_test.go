@@ -5,11 +5,18 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 )
 
 func TestEditSavesOverTheOpenedCopyOnly(t *testing.T) {
 	f := newTestApp(t)
 	f.write(t, "notes.md", "# old")
+	// The copy's tag is its size and modified time to the millisecond, so a save of the same size in the same millisecond would not change it.
+	// Make the old copy old rather than rely on the test being slow enough.
+	past := time.Now().Add(-time.Hour)
+	if err := os.Chtimes(filepath.Join(f.Dir, "notes.md"), past, past); err != nil {
+		t.Fatal(err)
+	}
 	tag := f.do("GET", "/raw/v/notes.md", nil).Header().Get("ETag")
 
 	if w := f.do("PUT", "/api/file?vol=v&path=notes.md", body("# new"), "If-Match", `"0-0"`); w.Code != 412 || w.Header().Get("ETag") != tag {
