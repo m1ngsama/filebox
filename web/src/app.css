@@ -780,6 +780,16 @@ button.busy::before { content: ''; width: 14px; height: 14px; border: 2px solid 
   .card-open, .fab, .dialog, .menu, .toast, .notices-pop { corner-shape: squircle; }
 }
 .nav :is(li, .vol-row) > a[aria-current='page']::before { content: ''; position: absolute; left: -6px; top: 22%; bottom: 22%; width: 3px; border-radius: var(--radius-full); background: var(--accent); animation: bar var(--dur-3) var(--ease-spring); }
+/* A hairline under the bar fades in once the list has scrolled beneath it (browsers without scroll-driven animations just don't show it). */
+@supports (animation-timeline: scroll()) {
+  .scroller::before { content: ''; position: sticky; top: 0; display: block; height: 1px; margin-bottom: -1px; z-index: 4; background: var(--line); opacity: 0; animation: edge linear both; animation-timeline: scroll(self); animation-range: 0 32px; }
+}
+@keyframes edge { to { opacity: 1; } }
+/* The theme change in Settings is a circle growing from the button: the old and new pictures are layered, and the new one is clipped by script. */
+::view-transition-old(root), ::view-transition-new(root) { animation: none; mix-blend-mode: normal; }
+::view-transition-new(root) { z-index: 1; }
+.uploads .up-ok { animation: pop-in var(--dur-3) var(--ease-spring); }
+@media (display-mode: standalone) { html, body { overscroll-behavior: none; } }
 @media (prefers-reduced-motion: reduce) {
   :root { --dur-1: 0s; --dur-2: 0s; --dur-3: 0s; }
   .loading, .viewer .spinner, button.busy::before { animation-name: none, appear; }
