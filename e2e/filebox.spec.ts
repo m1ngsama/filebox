@@ -4503,6 +4503,30 @@ test('the person opening a password-protected link can look at what they typed',
   await guest.close()
 })
 
+test('the back button returns a long list to where it was, and a fresh visit starts at the top', async ({ page, server }) => {
+  mkdirSync(join(server.vol, 'many'))
+  for (let i = 0; i < 400; i++) writeFileSync(join(server.vol, 'many', `file-${String(i).padStart(4, '0')}.txt`), 'x')
+  await login(page)
+  await page.goto('/files/v/many/')
+  const list = page.locator('.scroller')
+  await expect(page.locator('.row[data-i]').first()).toBeVisible()
+  await list.evaluate((el) => (el.scrollTop = 6000))
+  await expect.poll(() => list.evaluate((el) => el.scrollTop)).toBe(6000)
+  // up to the volume by the breadcrumb, then back
+  await page.locator('.crumbs a', { hasText: 'v' }).click()
+  await expect(page).toHaveURL(/\/files\/v\/$/)
+  await expect(row(page, 'many')).toBeVisible()
+  await page.goBack()
+  await expect(page).toHaveURL(/\/files\/v\/many\/$/)
+  await expect.poll(() => list.evaluate((el) => el.scrollTop)).toBe(6000)
+  // going there afresh starts at the top
+  await page.locator('.crumbs a', { hasText: 'v' }).click()
+  await row(page, 'many').locator('button.name').click()
+  await expect(page).toHaveURL(/\/files\/v\/many\/$/)
+  await expect(page.locator('.row[data-i]').first()).toBeVisible()
+  await expect.poll(() => list.evaluate((el) => el.scrollTop)).toBe(0)
+})
+
 test('an accent color and a compact list follow the account to another browser', async ({ page, browser }) => {
   await login(page)
   await page.goto('/settings')

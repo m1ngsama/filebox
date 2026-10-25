@@ -1,12 +1,14 @@
 import { tick } from 'svelte'
 
-export const route = $state({ path: location.pathname, search: location.search })
+// `back` is true when the page got here by the back or forward button, so a list can return you to where you were.
+export const route = $state({ path: location.pathname, search: location.search, back: false })
 
 const still = matchMedia('(prefers-reduced-motion: reduce)')
 
 const narrow = matchMedia('(max-width: 767px)')
 
-function sync() {
+function sync(back = false) {
+  route.back = back
   const from = route.path
   const to = location.pathname
   route.path = to
@@ -29,4 +31,4 @@ export function link(e: MouseEvent) {
   navigate(a.pathname + a.search)
 }
 
-addEventListener('popstate', sync)
+addEventListener('popstate', () => sync(true))
