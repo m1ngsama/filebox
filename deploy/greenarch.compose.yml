@@ -1,7 +1,7 @@
 # filebox on greenArch, as a container. It is the systemd unit's setup made into compose: the same user, the same
 # flags, the same folders at the same paths inside, and a read-only root. Copy it to /srv/apps/filebox/compose.yml
-# beside seccomp.json (deploy/filebox-seccomp.json) and a .env that says which version to run:
-#   FILEBOX_TAG=v0.1.0-full
+# beside a .env that says which version to run:
+#   FILEBOX_TAG=v0.1.0
 # Update: change FILEBOX_TAG, then `docker compose pull && docker compose up -d`. Go back: put the old tag back.
 services:
   filebox:
@@ -14,10 +14,7 @@ services:
     tmpfs:
       - /tmp:size=1g
     cap_drop: [ALL]
-    # Docker's default profile plus `unshare`, so filebox can run LibreOffice with no network, as the old systemd unit did.
-    security_opt:
-      - no-new-privileges:true
-      - seccomp=/srv/apps/filebox/seccomp.json
+    security_opt: [no-new-privileges:true]
     pids_limit: 512
     # Reached through the reverse proxy, which serves HTTPS.
     ports:

@@ -38,7 +38,7 @@ A published release is never edited or replaced. If it is wrong, mark it as such
 
 ## Deploying to production
 
-Publishing a release builds the Docker images (the small one, and `-full` with Office previews and OCR) and then starts the `deploy` job, which waits in the `production` environment. The maintainer approves it on the run's page on GitHub; only then does it SSH to the server and name the version. The server pulls that version's `-full` image from ghcr, restarts the container, waits for its health check, and goes back to the previous version if it does not come up. The workflow then checks that https://cloud.m1ng.space answers, and asks the server to go back if it does not. A prerelease is never deployed.
+Publishing a release builds the Docker image and then starts the `deploy` job, which waits in the `production` environment. The maintainer approves it on the run's page on GitHub; only then does it SSH to the server and name the version. The server pulls that version's image from ghcr, restarts the container, waits for its health check, and goes back to the previous version if it does not come up. The workflow then checks that https://cloud.m1ng.space answers, and asks the server to go back if it does not. A prerelease is never deployed.
 
 The deploy key can run one root-owned script, `deploy/filebox-deploy`, and the script accepts one line: a plain version, or `rollback`. The key and its host pin exist only in the `production` environment, which accepts version tags only. A pull request, a branch and the CI workflow never see them.
 
@@ -49,8 +49,7 @@ filebox runs on greenArch from `/srv/apps/filebox`, as a container started by `f
 | File | From |
 | --- | --- |
 | `compose.yml` | `deploy/greenarch.compose.yml` |
-| `seccomp.json` | `deploy/filebox-seccomp.json`: Docker's default profile plus `unshare`, so LibreOffice runs with no network |
-| `.env` | `FILEBOX_TAG=vX.Y.Z-full`, written by the deploy script |
+| `.env` | `FILEBOX_TAG=vX.Y.Z`, written by the deploy script |
 | `/etc/systemd/system/filebox-container.service` | `deploy/filebox-container.service` |
 | `/usr/local/sbin/filebox-deploy` | `deploy/filebox-deploy`, owned by root |
 
