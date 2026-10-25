@@ -10,6 +10,8 @@ answer=http://127.0.0.1:5280/
 
 read -r -t 10 want || exit 2
 cd "$dir"
+# A dropped connection or a cancelled job must not stop a deploy halfway.
+trap '' HUP
 
 healthy() {
   for _ in $(seq 1 30); do
@@ -20,7 +22,6 @@ healthy() {
 }
 
 run() {
-  docker compose pull filebox
   docker compose up -d --remove-orphans --wait --wait-timeout 120 filebox && healthy
 }
 
@@ -42,6 +43,9 @@ fi
 
 [[ "$want" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]] || { echo "not a version: $want" >&2; exit 2; }
 
+# Fetch the new image first, with the version given by the environment (which wins over .env), so that a slow or failed pull
+# leaves .env and the running container exactly as they were.
+FILEBOX_TAG="$want" docker compose pull filebox
 [ -f .env ] && cp -f .env .env.prev
 echo "FILEBOX_TAG=${want}" > .env
 if run; then

@@ -52,7 +52,8 @@ jobs:
     # A prerelease is never deployed.
     if: ${{ !github.event.release.prerelease }}
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    # The server pulls the image over a slow link: v0.0.3 took longer than 15 minutes before its proxy was fixed.
+    timeout-minutes: 40
     permissions: {}
     concurrency:
       group: deploy-production
@@ -80,7 +81,7 @@ jobs:
       # The key can only run the server's deploy script, which reads one line: a version, or `rollback`. The server
       # pulls that version's image from ghcr, restarts, waits for it to be healthy, and goes back if it is not.
       - name: Run that version
-        run: echo "$TAG" | ssh -p "$PORT" -i ~/.ssh/id -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes "$USER_@$HOST"
+        run: echo "$TAG" | ssh -p "$PORT" -i ~/.ssh/id -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o ServerAliveInterval=30 "$USER_@$HOST"
       - name: It answers, or it goes back
         run: |
           for i in $(seq 1 30); do
@@ -89,5 +90,5 @@ jobs:
             sleep 2
           done
           echo "::error::$URL did not answer, going back to the previous version"
-          echo rollback | ssh -p "$PORT" -i ~/.ssh/id -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes "$USER_@$HOST"
+          echo rollback | ssh -p "$PORT" -i ~/.ssh/id -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o ServerAliveInterval=30 "$USER_@$HOST"
           exit 1
