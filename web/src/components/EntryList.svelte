@@ -21,10 +21,11 @@
   import { selectURL, type Entry, type Loc } from '../lib/api'
   import { link, route } from '../lib/router.svelte'
   import { amount, size, clock, date, ago, look, fallback, flip, sorts, mostlyMedia, mostlyBooks, stem, ends, SEP, type Sort } from '../lib/format'
-  import { t } from '../lib/i18n'
+  import { t, locale } from '../lib/i18n'
   import { narrow } from '../lib/shell.svelte'
   import { carry, drop, target, type Carried, type Target } from '../lib/dnd'
   import { tagOf } from '../lib/tags.svelte'
+  import { scrub } from '../lib/scrub'
   import { prefs } from '../lib/prefs.svelte'
 
   const inert: Target = { accepts: () => false, drop: () => {} }
@@ -176,6 +177,21 @@
     return n
   })
   const all = $derived(!!selected && entries.length > 0 && entries.every((e) => selected.has(id(e))))
+
+  // What the bubble beside the scroll thumb says about the item at the top of the list: its day, its month, its size, or its first letter.
+  const month = new Intl.DateTimeFormat(locale, { year: 'numeric', month: 'long' })
+  const spot = () => {
+    let r = $v.range?.startIndex ?? 0
+    let item = layout ? layout.items[r] : r
+    if (typeof item === 'string') return item
+    const i = Array.isArray(item) ? item[0] : layout || !grid ? (item as number) : r * cols
+    const e = entries[Math.min(entries.length - 1, i)]
+    if (!e) return ''
+    if (group) return group(e)
+    if (sort === 'mtime') return month.format(e.mtime)
+    if (sort === 'size') return e.dir ? '' : amount(e)
+    return [...e.name][0]?.toUpperCase() ?? ''
+  }
 
   const v = createVirtualizer<HTMLDivElement, HTMLDivElement>({
     count: 0,
@@ -663,6 +679,7 @@
             if (places.size > 60) places.delete(places.keys().next().value!)
           }
         }} onfocusin={() => (inside = true)} onfocusout={(ev) => (inside = !ev.relatedTarget || !!scroller?.contains(ev.relatedTarget as Node))}>
+        {#if scroller}<div class="scrub" aria-hidden="true" hidden use:scrub={{ el: scroller, label: spot }}><div class="scrub-thumb"></div><div class="scrub-bubble"></div></div>{/if}
         {#if large}<div class="large-title" aria-hidden="true" bind:offsetHeight={titleH}>{title}</div>{/if}
         {#if !entries.length && loading}
           <div class="skeleton" class:grid role="status" aria-label={t.loading}>

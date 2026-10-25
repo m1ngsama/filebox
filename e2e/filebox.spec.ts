@@ -4527,6 +4527,46 @@ test('the back button returns a long list to where it was, and a fresh visit sta
   await expect.poll(() => list.evaluate((el) => el.scrollTop)).toBe(0)
 })
 
+test('a long list has a scroll thumb that names the spot while it is dragged, and a short one has none', async ({ page, server }) => {
+  mkdirSync(join(server.vol, 'many'))
+  for (let i = 0; i < 600; i++) writeFileSync(join(server.vol, 'many', `file-${String(i).padStart(4, '0')}.txt`), 'x')
+  await login(page)
+  await page.goto('/files/v/docs/')
+  await expect(row(page, 'readme.txt')).toBeVisible()
+  await page.locator('.scroller').hover()
+  await expect(page.locator('.scrub')).toHaveAttribute('hidden', '')
+  await page.goto('/files/v/many/')
+  await expect(page.locator('.row[data-i]').first()).toBeVisible()
+  const list = page.locator('.scroller')
+  await list.hover()
+  await expect(page.locator('.scrub')).not.toHaveAttribute('hidden', '')
+  // it appears while the list moves, and follows it
+  await list.evaluate((el) => (el.scrollTop = 4000))
+  const thumb = page.locator('.scrub-thumb')
+  await expect(thumb).toHaveCSS('opacity', '1')
+  const at = async () => list.evaluate((el) => el.scrollTop / (el.scrollHeight - el.clientHeight))
+  const lower = await at()
+  expect(lower).toBeGreaterThan(0)
+  // dragging it halfway moves the list halfway, and the bubble names where that is
+  const t = (await thumb.boundingBox())!
+  const area = (await list.boundingBox())!
+  await page.mouse.move(t.x + t.width / 2, t.y + t.height / 2)
+  await page.mouse.down()
+  await page.mouse.move(t.x + t.width / 2, area.y + area.height / 2, { steps: 6 })
+  expect(Math.abs((await at()) - 0.5)).toBeLessThan(0.12)
+  await expect(page.locator('.scrub-bubble')).toHaveText(/^[A-Za-z0-9]$/)
+  await expect(page.locator('.scrub')).toHaveClass(/drag/)
+  await page.mouse.up()
+  await expect(page.locator('.scrub')).not.toHaveClass(/drag/)
+  // dragging it to the end puts the list at the end
+  const t2 = (await thumb.boundingBox())!
+  await page.mouse.move(t2.x + t2.width / 2, t2.y + t2.height / 2)
+  await page.mouse.down()
+  await page.mouse.move(t2.x + t2.width / 2, area.y + area.height + 40, { steps: 4 })
+  await page.mouse.up()
+  expect(await at()).toBeGreaterThan(0.98)
+})
+
 test('an accent color and a compact list follow the account to another browser', async ({ page, browser }) => {
   await login(page)
   await page.goto('/settings')
