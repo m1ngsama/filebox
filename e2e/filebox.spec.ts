@@ -4462,6 +4462,47 @@ test('on a phone, a notice is thrown off the screen with a swipe', async ({ brow
   await ctx.close()
 })
 
+test('a share link goes to the system share sheet where there is one, and the menu has no such item where there is not', async ({ page }) => {
+  await login(page)
+  const link = await shareDocs(page, 'read')
+  await page.goto('/shares')
+  await page.getByRole('button', { name: t.shareActions }).click()
+  await expect(page.getByRole('menuitem', { name: t.qrCode })).toBeVisible()
+  await expect(page.getByRole('menuitem', { name: t.sendLink })).toHaveCount(0)
+  await page.keyboard.press('Escape')
+
+  await page.addInitScript(() => {
+    ;(navigator as unknown as { share: (d: ShareData) => Promise<void> }).share = async (d) => {
+      ;(window as unknown as { shared: ShareData }).shared = d
+    }
+  })
+  await page.reload()
+  await page.getByRole('button', { name: t.shareActions }).click()
+  await page.getByRole('menuitem', { name: t.sendLink }).click()
+  const shared = await page.evaluate(() => (window as unknown as { shared: ShareData }).shared)
+  expect(shared.url).toBe(link)
+  expect(shared.title).toBe('docs')
+})
+
+test('the person opening a password-protected link can look at what they typed', async ({ page, browser, server }) => {
+  await login(page)
+  const link = await shareDocs(page, 'read', 'zwr233')
+  const guest = await browser.newContext({ baseURL: server.url, locale: 'zh-CN' })
+  const g = await guest.newPage()
+  await g.goto(link)
+  const field = g.locator('.unlock input')
+  await field.fill('zwr233')
+  await expect(field).toHaveAttribute('type', 'password')
+  await g.getByRole('button', { name: t.showPassword }).click()
+  await expect(field).toHaveAttribute('type', 'text')
+  await expect(field).toHaveValue('zwr233')
+  await g.getByRole('button', { name: t.hidePassword }).click()
+  await expect(field).toHaveAttribute('type', 'password')
+  await field.press('Enter')
+  await expect(g.getByText('readme.txt').first()).toBeVisible()
+  await guest.close()
+})
+
 test('an accent color and a compact list follow the account to another browser', async ({ page, browser }) => {
   await login(page)
   await page.goto('/settings')

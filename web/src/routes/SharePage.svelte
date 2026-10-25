@@ -4,6 +4,7 @@
   import Download from '@lucide/svelte/icons/download'
   import Upload from '@lucide/svelte/icons/upload'
   import Eye from '@lucide/svelte/icons/eye'
+  import EyeOff from '@lucide/svelte/icons/eye-off'
   import FolderOpen from '@lucide/svelte/icons/folder-open'
   import ChevronRight from '@lucide/svelte/icons/chevron-right'
   import Lock from '@lucide/svelte/icons/lock'
@@ -32,6 +33,7 @@
   let info = $state<ShareInfo | null>(null)
   let fatal = $state<'gone' | 'expired' | 'error' | ''>('')
   let password = $state('')
+  let peek = $state(false)
   let unlockError = $state('')
   let unlocking = $state(false)
   let entries = $state.raw<Entry[]>([])
@@ -306,15 +308,23 @@
         <form class="unlock" onsubmit={unlock}>
           <label class="field">
             <span>{t.password}</span>
-            <input
-              type="password"
-              bind:value={password}
-              autocomplete="off"
-              required
-              aria-invalid={!!unlockError}
-              aria-describedby={unlockError ? 'unlock-error' : undefined}
-              oninput={() => (unlockError = '')}
-            />
+            <span class="reveal">
+              <input
+                type={peek ? 'text' : 'password'}
+                bind:value={password}
+                autocomplete="off"
+                autocapitalize="none"
+                autocorrect="off"
+                spellcheck="false"
+                required
+                aria-invalid={!!unlockError}
+                aria-describedby={unlockError ? 'unlock-error' : undefined}
+                oninput={() => (unlockError = '')}
+              />
+              <button type="button" class="icon-btn" aria-label={peek ? t.hidePassword : t.showPassword} aria-pressed={peek} onclick={() => (peek = !peek)}>
+                {#if peek}<EyeOff size={icon.md} />{:else}<Eye size={icon.md} />{/if}
+              </button>
+            </span>
           </label>
           {#if unlockError}<p class="error" id="unlock-error" role="alert">{unlockError}</p>{/if}
           <button class="primary" class:busy={unlocking} disabled={unlocking} type="submit">{t.unlock}</button>
