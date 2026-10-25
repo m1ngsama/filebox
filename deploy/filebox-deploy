@@ -43,11 +43,11 @@ fi
 [[ "$want" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]] || { echo "not a version: $want" >&2; exit 2; }
 
 [ -f .env ] && cp -f .env .env.prev
-echo "FILEBOX_TAG=${want}-full" > .env
+echo "FILEBOX_TAG=${want}" > .env
 if run; then
-  echo "now running ${want}-full"
+  echo "now running ${want}"
 else
-  echo "${want}-full does not answer, going back" >&2
+  echo "${want} does not answer, going back" >&2
   back
   exit 1
 fi

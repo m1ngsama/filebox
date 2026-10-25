@@ -1,5 +1,5 @@
 name: image
-# Builds and pushes the Docker images when a maintainer publishes a release, never on a tag alone.
+# Builds and pushes the Docker image when a maintainer publishes a release, never on a tag alone.
 # Then the `deploy` job offers the release to production: it waits in the `production` environment until the maintainer
 # approves it on GitHub, so nothing reaches the server without a person saying yes to that exact version.
 on:
@@ -35,28 +35,12 @@ jobs:
           tags="ghcr.io/${REPO,,}:$TAG"
           [ "$PRERELEASE" = true ] || tags="$tags,ghcr.io/${REPO,,}:latest"
           echo "list=$tags" >> "$GITHUB_OUTPUT"
-          # The image with Office previews and text-in-images search: vX.Y.Z-full, and `full` for a release that is not a prerelease.
-          full="ghcr.io/${REPO,,}:$TAG-full"
-          [ "$PRERELEASE" = true ] || full="$full,ghcr.io/${REPO,,}:full"
-          echo "full=$full" >> "$GITHUB_OUTPUT"
       - uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
         with:
           context: .
           platforms: linux/amd64,linux/arm64
           push: true
           tags: ${{ steps.tags.outputs.list }}
-          build-args: |
-            VERSION=${{ github.event.release.tag_name }}
-            REVISION=${{ github.sha }}
-          provenance: true
-          sbom: true
-      - uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
-        with:
-          context: .
-          target: full
-          platforms: linux/amd64,linux/arm64
-          push: true
-          tags: ${{ steps.tags.outputs.full }}
           build-args: |
             VERSION=${{ github.event.release.tag_name }}
             REVISION=${{ github.sha }}
