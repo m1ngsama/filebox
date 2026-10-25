@@ -3023,7 +3023,7 @@ test.describe('on a phone', () => {
     await login(page)
     const tall = async (l: Locator) => {
       // Menus scale in; measure them once they have settled.
-      await page.evaluate(() => Promise.all(document.getAnimations().filter((a) => Number.isFinite(a.effect!.getComputedTiming().iterations)).map((a) => a.finished.catch(() => {}))))
+      await page.evaluate(() => Promise.all(document.getAnimations().filter((a) => a.timeline instanceof DocumentTimeline && Number.isFinite(a.effect!.getComputedTiming().iterations)).map((a) => a.finished.catch(() => {}))))
       const all = await l.all()
       expect(all.length).toBeGreaterThan(0)
       for (const x of all) if (await x.isVisible()) expect(Math.round((await x.boundingBox())!.height), await x.evaluate((e) => e.outerHTML.slice(0, 80))).toBeGreaterThanOrEqual(44)
